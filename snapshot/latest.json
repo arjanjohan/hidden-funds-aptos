@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "generatedAt": "2026-10-18T19:11:17.342Z",
+  "generatedAt": "2026-10-18T19:35:17.723Z",
   "prices": {
     "0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.766688,
+      "usd": 0.762764,
       "decimals": 8,
-      "at": "2026-10-18T19:09:36.000Z",
+      "at": "2026-10-18T19:30:17.000Z",
       "source": "coingecko simple/price"
     }
   },
@@ -34,30 +34,30 @@
         "scope": "current_delegator_balances rows with pool_type=inactive_shares and shares>0 (stake_processor)",
         "enumeration": {
           "pages": 123,
-          "newCandidates": 2,
-          "candidates": 8695,
-          "start": "2026-10-18T19:09:52.710Z",
-          "end": "2026-10-18T19:09:57.142Z"
+          "newCandidates": 1,
+          "candidates": 8696,
+          "start": "2026-10-18T19:30:29.382Z",
+          "end": "2026-10-18T19:30:33.949Z"
         },
         "verification": {
-          "read": 7818,
+          "read": 7817,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-18T19:09:57.672Z",
-          "ledgerFrom": "7669361984",
-          "end": "2026-10-18T19:11:08.377Z",
-          "ledgerTo": "7669371506"
+          "start": "2026-10-18T19:30:34.756Z",
+          "ledgerFrom": "7669534291",
+          "end": "2026-10-18T19:32:52.718Z",
+          "ledgerTo": "7669561914"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "7669361156",
-          "timestamp": "2026-10-18T19:09:50.907103Z"
+          "version": "7669533132",
+          "timestamp": "2026-10-18T19:30:26.994577Z"
         },
         "watermarkAfter": {
-          "version": "7669361755",
-          "timestamp": "2026-10-18T19:09:55.763118Z"
+          "version": "7669533897",
+          "timestamp": "2026-10-18T19:30:32.395262Z"
         },
         "sanity": {
           "check": "per pool: sum of delegator inactive stake <= stake::get_stake(pool).inactive",
@@ -65,22 +65,22 @@
           "detail": "66 pools, 0 violations"
         }
       },
-      "lastSuccessAt": "2026-10-18T19:11:08.377Z",
+      "lastSuccessAt": "2026-10-18T19:32:52.718Z",
       "totals": {
         "face": {
-          "positions": 8490,
-          "owners": 7816,
-          "usd": 2624041.4214641894,
+          "positions": 8487,
+          "owners": 7813,
+          "usd": 2610581.7628321894,
           "unpriced": 0,
-          "ownersMin10": 1732
+          "ownersMin10": 1707
         },
         "byStatus": {
           "recoverable": {
-            "positions": 8490,
-            "owners": 7816,
-            "usd": 2624041.4214641894,
+            "positions": 8470,
+            "owners": 7796,
+            "usd": 2598808.594037918,
             "unpriced": 0,
-            "ownersMin10": 1732
+            "ownersMin10": 1703
           },
           "team_gated": {
             "positions": 0,
@@ -97,66 +97,66 @@
             "ownersMin10": 0
           },
           "unknown": {
-            "positions": 0,
-            "owners": 0,
-            "usd": 0,
+            "positions": 17,
+            "owners": 17,
+            "usd": 11773.168794272167,
             "unpriced": 0,
-            "ownersMin10": 0
+            "ownersMin10": 4
           }
         },
         "aged": {
           "ge30": {
-            "positions": 7934,
-            "owners": 7279,
-            "usd": 693023.5208387717,
+            "positions": 7919,
+            "owners": 7264,
+            "usd": 689343.0881551261,
             "unpriced": 0,
-            "ownersMin10": 1477
+            "ownersMin10": 1455
           },
           "ge90": {
-            "positions": 7810,
-            "owners": 7163,
-            "usd": 679596.1005790591,
+            "positions": 7795,
+            "owners": 7148,
+            "usd": 675984.3910228115,
             "unpriced": 0,
-            "ownersMin10": 1423
+            "ownersMin10": 1401
           },
           "ge180": {
-            "positions": 7624,
-            "owners": 6989,
-            "usd": 582294.9423395048,
+            "positions": 7610,
+            "owners": 6975,
+            "usd": 579181.2355780752,
             "unpriced": 0,
-            "ownersMin10": 1341
+            "ownersMin10": 1319
           }
         },
         "agedEstimated": {
           "ge30": {
             "positions": 85,
             "owners": 85,
-            "usd": 6338.278644895861,
+            "usd": 6305.838584007244,
             "unpriced": 0,
-            "ownersMin10": 38
+            "ownersMin10": 37
           },
           "ge90": {
             "positions": 79,
             "owners": 79,
-            "usd": 5188.447183596579,
+            "usd": 5161.892096327136,
             "unpriced": 0,
-            "ownersMin10": 36
+            "ownersMin10": 35
           },
           "ge180": {
             "positions": 64,
             "owners": 64,
-            "usd": 5029.555001810603,
+            "usd": 5003.813143548694,
             "unpriced": 0,
-            "ownersMin10": 33
+            "ownersMin10": 32
           }
         },
         "byAgeBasis": {
           "onchain_maturity": {
-            "positions": 8371,
-            "owners": 7702,
-            "usd": 2472372.3541260352,
+            "positions": 8353,
+            "owners": 7684,
+            "usd": 2459555.499532501,
             "unpriced": 0,
-            "ownersMin10": 1673
+            "ownersMin10": 1647
           },
           "protocol_closure": {
             "positions": 0,
@@ -166,44 +166,45 @@
             "ownersMin10": 0
           },
           "position_interaction": {
-            "positions": 103,
-            "owners": 103,
-            "usd": 150367.70707867187,
+            "positions": 101,
+            "owners": 101,
+            "usd": 137958.3947618925,
             "unpriced": 0,
-            "ownersMin10": 55
+            "ownersMin10": 52
           },
           "unknown": {
             "positions": 16,
             "owners": 16,
-            "usd": 1301.3602594818053,
+            "usd": 1294.6997435245885,
             "unpriced": 0,
             "ownersMin10": 5
           }
         },
         "headline": {
-          "positions": 7810,
-          "owners": 7163,
-          "usd": 679596.1005790591,
+          "positions": 7795,
+          "owners": 7148,
+          "usd": 675984.3910228115,
           "unpriced": 0,
-          "ownersMin10": 1423
-        }
+          "ownersMin10": 1401
+        },
+        "headlineTopOwnerShare": 0.4974934700710012
       },
       "sizeBands": [
         {
           "upTo": 1,
-          "positions": 4177
+          "positions": 4175
         },
         {
           "upTo": 10,
-          "positions": 2513
+          "positions": 2524
         },
         {
           "upTo": 100,
-          "positions": 1585
+          "positions": 1559
         },
         {
           "upTo": 1000,
-          "positions": 168
+          "positions": 166
         },
         {
           "upTo": 10000,
@@ -211,7 +212,7 @@
         },
         {
           "upTo": null,
-          "positions": 13
+          "positions": 12
         }
       ]
     },
@@ -236,34 +237,34 @@
       ],
       "run": {
         "processor": "user_transaction_processor",
-        "scope": "senders of 0xfaf4e633ae9eb31366c9ca24214231760926576c7b625313b3688b5e900731f6::scripts::request_unstake_APT entry calls (requests made by other contracts excluded)",
+        "scope": "senders of 0xfaf4e633ae9eb31366c9ca24214231760926576c7b625313b3688b5e900731f6::scripts::request_unstake_APT entry calls (calls made by other contracts excluded)",
         "enumeration": {
-          "pages": 1,
+          "pages": 69,
           "newCandidates": 0,
           "candidates": 2466,
-          "start": "2026-10-18T19:11:09.245Z",
-          "end": "2026-10-18T19:11:09.582Z",
-          "cursor": "7665701707"
+          "start": "2026-10-18T19:32:53.953Z",
+          "end": "2026-10-18T19:33:09.262Z",
+          "cursor": "{\"0xfaf4e633ae9eb31366c9ca24214231760926576c7b625313b3688b5e900731f6::scripts::request_unstake_APT\":\"7665701707\"}"
         },
         "verification": {
           "read": 951,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-18T19:11:09.840Z",
-          "ledgerFrom": "7669371703",
-          "end": "2026-10-18T19:11:17.175Z",
-          "ledgerTo": "7669372670"
+          "start": "2026-10-18T19:33:09.672Z",
+          "ledgerFrom": "7669565305",
+          "end": "2026-10-18T19:33:25.255Z",
+          "ledgerTo": "7669569833"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "7669371357",
-          "timestamp": "2026-10-18T19:11:07.157892Z"
+          "version": "7669561638",
+          "timestamp": "2026-10-18T19:32:50.905408Z"
         },
         "watermarkAfter": {
-          "version": "7669371506",
-          "timestamp": "2026-10-18T19:11:08.218071Z"
+          "version": "7669564631",
+          "timestamp": "2026-10-18T19:33:07.949097Z"
         },
         "sanity": {
           "check": "matured requests found <= TLSD.apt_pending_withdrawal (APT held for claims)",
@@ -271,12 +272,12 @@
           "detail": "matured 3840020838541 of 5461988122123 held (70.30%)"
         }
       },
-      "lastSuccessAt": "2026-10-18T19:11:17.175Z",
+      "lastSuccessAt": "2026-10-18T19:33:25.255Z",
       "totals": {
         "face": {
           "positions": 1094,
           "owners": 951,
-          "usd": 29440.97896659326,
+          "usd": 29290.296548888862,
           "unpriced": 0,
           "ownersMin10": 90
         },
@@ -284,7 +285,7 @@
           "recoverable": {
             "positions": 1094,
             "owners": 951,
-            "usd": 29440.97896659326,
+            "usd": 29290.296548888862,
             "unpriced": 0,
             "ownersMin10": 90
           },
@@ -314,21 +315,21 @@
           "ge30": {
             "positions": 1080,
             "owners": 939,
-            "usd": 27489.15282238648,
+            "usd": 27348.46008208655,
             "unpriced": 0,
             "ownersMin10": 86
           },
           "ge90": {
             "positions": 1066,
             "owners": 925,
-            "usd": 27457.036024032863,
+            "usd": 27316.507661311207,
             "unpriced": 0,
             "ownersMin10": 85
           },
           "ge180": {
             "positions": 1029,
             "owners": 890,
-            "usd": 26033.890162477932,
+            "usd": 25900.645628850685,
             "unpriced": 0,
             "ownersMin10": 80
           }
@@ -360,7 +361,7 @@
           "onchain_maturity": {
             "positions": 1094,
             "owners": 951,
-            "usd": 29440.97896659326,
+            "usd": 29290.296548888862,
             "unpriced": 0,
             "ownersMin10": 90
           },
@@ -389,10 +390,11 @@
         "headline": {
           "positions": 1066,
           "owners": 925,
-          "usd": 27457.036024032863,
+          "usd": 27316.507661311207,
           "unpriced": 0,
           "ownersMin10": 85
-        }
+        },
+        "headlineTopOwnerShare": 0.5545870176282702
       },
       "sizeBands": [
         {
@@ -420,14 +422,635 @@
           "positions": 1
         }
       ]
+    },
+    {
+      "id": "kofi-withdrawals",
+      "title": "Kofi withdrawal never finalized",
+      "summary": "You asked Kofi to turn kAPT into APT. The ticket unlocked, but the APT was never collected. Kofi is winding down.",
+      "category": "closed_app",
+      "inclusionRule": "R2 ended position: withdrawal ticket unlocked (unlock_timestamp passed); the protocol is also winding down.",
+      "protocolStatus": {
+        "state": "wound_down",
+        "evidence": "config::is_winddown became true at version 6,429,705,721 (multisig transaction); deposits and staking paused.",
+        "checkedAt": "2026-10-18",
+        "effectiveAt": "2026-07-24T07:55:53Z"
+      },
+      "howTo": [
+        "Open the Kofi app while it is still online and finalize the unlocked withdrawal.",
+        "Or call 0x2cc52445acc4c5e5817a0ac475976fbef966fedb6e30e7db792e10619c76181f::gateway::finalize_withdrawals_entry([ticket_id]) from the account that requested it."
+      ],
+      "officialUrl": "https://app.kofi.finance",
+      "headlineAgeBases": [
+        "onchain_maturity"
+      ],
+      "run": {
+        "processor": "user_transaction_processor",
+        "scope": "senders of 0x2cc52445acc4c5e5817a0ac475976fbef966fedb6e30e7db792e10619c76181f::gateway::request_withdrawal_entry, 0x2cc52445acc4c5e5817a0ac475976fbef966fedb6e30e7db792e10619c76181f::gateway::unstake_and_request_withdrawal_entry entry calls (calls made by other contracts excluded)",
+        "enumeration": {
+          "pages": 24,
+          "newCandidates": 1258,
+          "candidates": 1258,
+          "start": "2026-10-18T19:33:25.644Z",
+          "end": "2026-10-18T19:33:31.612Z",
+          "cursor": "{\"0x2cc52445acc4c5e5817a0ac475976fbef966fedb6e30e7db792e10619c76181f::gateway::request_withdrawal_entry\":\"7652867821\",\"0x2cc52445acc4c5e5817a0ac475976fbef966fedb6e30e7db792e10619c76181f::gateway::unstake_and_request_withdrawal_entry\":\"7467829604\"}"
+        },
+        "verification": {
+          "read": 1258,
+          "incomplete": 0,
+          "notReread": 0,
+          "start": "2026-10-18T19:33:32.061Z",
+          "ledgerFrom": "7669571247",
+          "end": "2026-10-18T19:33:46.720Z",
+          "ledgerTo": "7669574772"
+        },
+        "completeness": "complete",
+        "degradedReasons": [],
+        "errors": [],
+        "watermarkBefore": {
+          "version": "7669569650",
+          "timestamp": "2026-10-18T19:33:24.325513Z"
+        },
+        "watermarkAfter": {
+          "version": "7669570957",
+          "timestamp": "2026-10-18T19:33:30.504909Z"
+        },
+        "sanity": {
+          "check": "matured tickets found vs vault::get_unlocked_apt_balance (APT ready for withdrawals)",
+          "ok": null,
+          "detail": "matured 1683114150199 vs 28951138828169 unlocked (5.81%)"
+        }
+      },
+      "lastSuccessAt": "2026-10-18T19:33:46.720Z",
+      "totals": {
+        "face": {
+          "positions": 504,
+          "owners": 394,
+          "usd": 12838.188816623897,
+          "unpriced": 0,
+          "ownersMin10": 25
+        },
+        "byStatus": {
+          "recoverable": {
+            "positions": 504,
+            "owners": 394,
+            "usd": 12838.188816623897,
+            "unpriced": 0,
+            "ownersMin10": 25
+          },
+          "team_gated": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "blocked": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "aged": {
+          "ge30": {
+            "positions": 502,
+            "owners": 392,
+            "usd": 12833.217995174877,
+            "unpriced": 0,
+            "ownersMin10": 25
+          },
+          "ge90": {
+            "positions": 395,
+            "owners": 287,
+            "usd": 12769.46636259193,
+            "unpriced": 0,
+            "ownersMin10": 23
+          },
+          "ge180": {
+            "positions": 381,
+            "owners": 273,
+            "usd": 3190.321289803044,
+            "unpriced": 0,
+            "ownersMin10": 21
+          }
+        },
+        "agedEstimated": {
+          "ge30": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "byAgeBasis": {
+          "onchain_maturity": {
+            "positions": 504,
+            "owners": 394,
+            "usd": 12838.188816623897,
+            "unpriced": 0,
+            "ownersMin10": 25
+          },
+          "protocol_closure": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "position_interaction": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "headline": {
+          "positions": 395,
+          "owners": 287,
+          "usd": 12769.46636259193,
+          "unpriced": 0,
+          "ownersMin10": 23
+        },
+        "headlineTopOwnerShare": 0.7459835565767116
+      },
+      "sizeBands": [
+        {
+          "upTo": 1,
+          "positions": 443
+        },
+        {
+          "upTo": 10,
+          "positions": 34
+        },
+        {
+          "upTo": 100,
+          "positions": 18
+        },
+        {
+          "upTo": 1000,
+          "positions": 7
+        },
+        {
+          "upTo": 10000,
+          "positions": 2
+        },
+        {
+          "upTo": null,
+          "positions": 0
+        }
+      ]
+    },
+    {
+      "id": "tortuga-tickets",
+      "title": "Tortuga unstake ticket never claimed",
+      "summary": "You unstaked tAPT on Tortuga. The cooldown ended, but the APT ticket was never claimed.",
+      "category": "liquid_staking",
+      "inclusionRule": "R2 ended position: ticket cooldown passed. Tickets the reserve cannot cover yet are blocked.",
+      "protocolStatus": {
+        "state": "live",
+        "evidence": "Contracts still respond; no closure notice verified. Reserve is short of outstanding tickets.",
+        "checkedAt": "2026-10-18"
+      },
+      "howTo": [
+        "Open the Tortuga app if it is online and claim the ticket.",
+        "Or call 0x8f396e4246b2ba87b51c0739ef5ea4f26515a98375308c31ac2ec1e42142a57f::stake_router::claim(index) from the account that unstaked, where index is the ticket's position in your ticket list (0 = first)."
+      ],
+      "officialUrl": "https://tortuga.finance",
+      "headlineAgeBases": [
+        "onchain_maturity"
+      ],
+      "run": {
+        "processor": "user_transaction_processor",
+        "scope": "senders of 0x8f396e4246b2ba87b51c0739ef5ea4f26515a98375308c31ac2ec1e42142a57f::stake_router::unstake entry calls (calls made by other contracts excluded)",
+        "enumeration": {
+          "pages": 112,
+          "newCandidates": 4460,
+          "candidates": 4460,
+          "start": "2026-10-18T19:33:47.135Z",
+          "end": "2026-10-18T19:34:12.118Z",
+          "cursor": "{\"0x8f396e4246b2ba87b51c0739ef5ea4f26515a98375308c31ac2ec1e42142a57f::stake_router::unstake\":\"7496840494\"}"
+        },
+        "verification": {
+          "read": 4460,
+          "incomplete": 0,
+          "notReread": 0,
+          "start": "2026-10-18T19:34:12.446Z",
+          "ledgerFrom": "7669579607",
+          "end": "2026-10-18T19:34:57.420Z",
+          "ledgerTo": "7669587294"
+        },
+        "completeness": "complete",
+        "degradedReasons": [],
+        "errors": [],
+        "watermarkBefore": {
+          "version": "7669574284",
+          "timestamp": "2026-10-18T19:33:44.234901Z"
+        },
+        "watermarkAfter": {
+          "version": "7669579270",
+          "timestamp": "2026-10-18T19:34:10.650997Z"
+        },
+        "sanity": {
+          "check": "tickets found <= outstanding claims (total_claims_balance - total_claims_balance_cleared)",
+          "ok": true,
+          "detail": "found 1608782966656 of 1608784960656 outstanding (99.99%)"
+        }
+      },
+      "lastSuccessAt": "2026-10-18T19:34:57.420Z",
+      "totals": {
+        "face": {
+          "positions": 839,
+          "owners": 822,
+          "usd": 12271.217307783976,
+          "unpriced": 0,
+          "ownersMin10": 82
+        },
+        "byStatus": {
+          "recoverable": {
+            "positions": 835,
+            "owners": 818,
+            "usd": 12099.832010052562,
+            "unpriced": 0,
+            "ownersMin10": 79
+          },
+          "team_gated": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "blocked": {
+            "positions": 4,
+            "owners": 4,
+            "usd": 171.38529773141576,
+            "unpriced": 0,
+            "ownersMin10": 3
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "aged": {
+          "ge30": {
+            "positions": 835,
+            "owners": 818,
+            "usd": 12099.832010052562,
+            "unpriced": 0,
+            "ownersMin10": 79
+          },
+          "ge90": {
+            "positions": 835,
+            "owners": 818,
+            "usd": 12099.832010052562,
+            "unpriced": 0,
+            "ownersMin10": 79
+          },
+          "ge180": {
+            "positions": 835,
+            "owners": 818,
+            "usd": 12099.832010052562,
+            "unpriced": 0,
+            "ownersMin10": 79
+          }
+        },
+        "agedEstimated": {
+          "ge30": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "byAgeBasis": {
+          "onchain_maturity": {
+            "positions": 835,
+            "owners": 818,
+            "usd": 12099.832010052562,
+            "unpriced": 0,
+            "ownersMin10": 79
+          },
+          "protocol_closure": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "position_interaction": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "headline": {
+          "positions": 835,
+          "owners": 818,
+          "usd": 12099.832010052562,
+          "unpriced": 0,
+          "ownersMin10": 79
+        },
+        "headlineTopOwnerShare": 0.5396120201577871
+      },
+      "sizeBands": [
+        {
+          "upTo": 1,
+          "positions": 542
+        },
+        {
+          "upTo": 10,
+          "positions": 215
+        },
+        {
+          "upTo": 100,
+          "positions": 70
+        },
+        {
+          "upTo": 1000,
+          "positions": 7
+        },
+        {
+          "upTo": 10000,
+          "positions": 1
+        },
+        {
+          "upTo": null,
+          "positions": 0
+        }
+      ]
+    },
+    {
+      "id": "amnis-withdrawals",
+      "title": "Amnis withdrawal never redeemed",
+      "summary": "You asked Amnis to turn amAPT into APT and received a withdrawal NFT. The lockup ended, but the APT was never redeemed.",
+      "category": "liquid_staking",
+      "inclusionRule": "R2 ended position: withdrawal token lockup passed (locked_until_secs).",
+      "protocolStatus": {
+        "state": "live",
+        "evidence": "Amnis liquid staking is operating.",
+        "checkedAt": "2026-10-18"
+      },
+      "howTo": [
+        "Open Amnis, go to your withdrawals and redeem the finished withdrawal NFT.",
+        "Or call 0x111ae3e5bc816a5e63c2da97d0aa3886519e0cd5e4b046659fa35796bd11542a::router::withdraw_entry(token) from the account holding the \"Amnis Withdrawal Tokens\" NFT."
+      ],
+      "officialUrl": "https://stake.amnis.finance",
+      "headlineAgeBases": [
+        "onchain_maturity"
+      ],
+      "run": {
+        "processor": "token_v2_processor",
+        "scope": "current owners of tokens in collection 0x40fb9ce6950a90c3677b9c4e1fcd75d2ac2933ae86efdb768955adc6730c6b8d (current_token_ownerships_v2, amount > 0)",
+        "enumeration": {
+          "pages": 5,
+          "newCandidates": 455,
+          "candidates": 455,
+          "start": "2026-10-18T19:34:58.003Z",
+          "end": "2026-10-18T19:35:09.480Z"
+        },
+        "verification": {
+          "read": 455,
+          "incomplete": 0,
+          "notReread": 0,
+          "start": "2026-10-18T19:35:09.797Z",
+          "ledgerFrom": "7669589556",
+          "end": "2026-10-18T19:35:17.497Z",
+          "ledgerTo": "7669591001"
+        },
+        "completeness": "complete",
+        "degradedReasons": [],
+        "errors": [],
+        "watermarkBefore": {
+          "version": "7669587100",
+          "timestamp": "2026-10-18T19:34:55.993537Z"
+        },
+        "watermarkAfter": {
+          "version": "7669589346",
+          "timestamp": "2026-10-18T19:35:08.376089Z"
+        },
+        "sanity": {
+          "check": "matured withdrawal tokens found <= withdrawal::total_pending_withdrawal (all open tokens)",
+          "ok": true,
+          "detail": "matured 163465849075123 of 164977436406151 pending (99.08%)"
+        }
+      },
+      "lastSuccessAt": "2026-10-18T19:35:17.497Z",
+      "totals": {
+        "face": {
+          "positions": 445,
+          "owners": 438,
+          "usd": 1246858.6490393716,
+          "unpriced": 0,
+          "ownersMin10": 290
+        },
+        "byStatus": {
+          "recoverable": {
+            "positions": 442,
+            "owners": 435,
+            "usd": 943437.5418410727,
+            "unpriced": 0,
+            "ownersMin10": 288
+          },
+          "team_gated": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "blocked": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 3,
+            "owners": 3,
+            "usd": 303421.10719829844,
+            "unpriced": 0,
+            "ownersMin10": 2
+          }
+        },
+        "aged": {
+          "ge30": {
+            "positions": 431,
+            "owners": 424,
+            "usd": 938115.0212931517,
+            "unpriced": 0,
+            "ownersMin10": 279
+          },
+          "ge90": {
+            "positions": 411,
+            "owners": 404,
+            "usd": 937367.5463041164,
+            "unpriced": 0,
+            "ownersMin10": 271
+          },
+          "ge180": {
+            "positions": 378,
+            "owners": 372,
+            "usd": 907022.7928108553,
+            "unpriced": 0,
+            "ownersMin10": 257
+          }
+        },
+        "agedEstimated": {
+          "ge30": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "byAgeBasis": {
+          "onchain_maturity": {
+            "positions": 442,
+            "owners": 435,
+            "usd": 943437.5418410727,
+            "unpriced": 0,
+            "ownersMin10": 288
+          },
+          "protocol_closure": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "position_interaction": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "headline": {
+          "positions": 411,
+          "owners": 404,
+          "usd": 937367.5463041164,
+          "unpriced": 0,
+          "ownersMin10": 271
+        },
+        "headlineTopOwnerShare": 0.8770212363613525
+      },
+      "sizeBands": [
+        {
+          "upTo": 1,
+          "positions": 3
+        },
+        {
+          "upTo": 10,
+          "positions": 150
+        },
+        {
+          "upTo": 100,
+          "positions": 245
+        },
+        {
+          "upTo": 1000,
+          "positions": 33
+        },
+        {
+          "upTo": 10000,
+          "positions": 8
+        },
+        {
+          "upTo": null,
+          "positions": 3
+        }
+      ]
     }
   ],
   "global": {
-    "headlineUsd": 707053.136603092,
-    "headlineOwners": 8064,
-    "headlineOwnersMin10": 1511,
-    "recoverableUsd": 2653482.4004307827,
-    "requests": 9803,
+    "headlineUsd": 1665537.7433608836,
+    "headlineOwners": 9496,
+    "headlineOwnersMin10": 1861,
+    "recoverableUsd": 3596474.4532545563,
+    "requests": 27007,
     "requestCap": 100000
   }
 }
