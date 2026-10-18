@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { delegation } from '../src/shared/sources/delegation.ts';
 import { kofiWithdrawals } from '../src/shared/sources/kofi-withdrawals.ts';
 import { THALA_LSD, thalaUnstake } from '../src/shared/sources/thala-unstake.ts';
+import { tortugaTickets } from '../src/shared/sources/tortuga-tickets.ts';
 import { addr, context, fakeChain, memoryMemo } from './fake-chain.ts';
 
 const OWNER = addr('abc');
@@ -120,5 +121,32 @@ describe('kofi withdrawals', () => {
   it('blocks unlocked tickets while withdrawals are paused', async () => {
     const r = await kofiWithdrawals.read(context(chain([ticket(1, NOW - 100)], true)), OWNER);
     expect(r.positions[0].status).toBe('blocked');
+  });
+});
+
+describe('tortuga tickets', () => {
+  // Outstanding queue: cleared up to 1000, reserve 500 → queue positions up to 1500 are funded.
+  const chain = (tickets: unknown[]) => fakeChain({
+    resource: (_a, type) => type.endsWith('::stake_router::TicketStore') ? { tickets }
+      : type.endsWith('::stake_router::StakingStatus') ? { total_claims_balance: '2000', total_claims_balance_cleared: '1000', cooldown_period: '3600' }
+      : type.endsWith('::validator_router::AptosCoinReserve') ? { coin: { value: '500' } } : null,
+  });
+  const ticket = (id: number, amount: number, created: number) => ({ id: String(id), amount: String(amount), timestamp: String(created) });
+
+  it('splits cooled-down tickets into funded (recoverable) and queued behind the reserve (blocked)', async () => {
+    const r = await tortugaTickets.read(context(chain([ticket(1400, 100, NOW - 7200), ticket(1900, 100, NOW - 7200), ticket(1950, 50, NOW - 60)])), OWNER);
+    expect(r.positions.map(p => [p.locator, p.status])).toEqual([['1400', 'recoverable'], ['1900', 'blocked']]);
+    expect(r.positions[1].blockers[0].code).toBe('reserve_short');
+    expect(r.positions[0].claimableSince).toBe(new Date((NOW - 7200 + 3600) * 1000).toISOString());
+  });
+
+  it('claims by index in the owner\'s ticket list', async () => {
+    const r = await tortugaTickets.read(context(chain([ticket(1950, 50, NOW - 60), ticket(1400, 100, NOW - 7200)])), OWNER);
+    expect(r.positions[0].steps[0].arguments).toEqual(['1']);
+  });
+
+  it('reads nothing more for an account without tickets', async () => {
+    const r = await tortugaTickets.read(context(fakeChain({ resource: () => null })), OWNER);
+    expect(r).toMatchObject({ positions: [], complete: true });
   });
 });

@@ -2,6 +2,7 @@
 import { mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
 import { THALA_LSD } from '../shared/sources/thala-unstake.ts';
+import { TORTUGA, TORTUGA_STATE } from '../shared/sources/tortuga-tickets.ts';
 import type { Sanity } from '../shared/snapshot.ts';
 import type { ChainReader, Ledger, Position } from '../shared/types.ts';
 
@@ -138,4 +139,13 @@ export const kofiWithdrawalsEnumerator = entrySenders('kofi-withdrawals',
       detail: `matured ${matured} vs ${held} unlocked (${pct(matured, held)})` };
   });
 
-export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator];
+export const tortugaTicketsEnumerator = entrySenders('tortuga-tickets',
+  [{ contract: TORTUGA, module: 'stake_router', name: 'unstake' }],
+  async (chain, ledger, positions) => {
+    const status = await chain.resource(TORTUGA_STATE, `${TORTUGA}::stake_router::StakingStatus`, ledger.version);
+    const outstanding = BigInt(status.total_claims_balance) - BigInt(status.total_claims_balance_cleared), found = sumGross(positions);
+    return { check: 'tickets found <= outstanding claims (total_claims_balance - total_claims_balance_cleared)', ok: found <= outstanding,
+      detail: `found ${found} of ${outstanding} outstanding (${pct(found, outstanding)})` };
+  });
+
+export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator];
