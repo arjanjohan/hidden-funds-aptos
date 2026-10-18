@@ -52,7 +52,7 @@ export const thalaUnstake: SourceDef = {
   category: 'liquid_staking',
   inclusionRule: 'R2 ended position: unstake request matured (end_sec passed).',
   protocolStatus: { state: 'live', evidence: 'Thala liquid staking PauseFlag false on 2026-10-18.', checkedAt: '2026-10-18' },
-  refresh: { nonZero: 'every_run', zero: 'weekly' },
+  refresh: { nonZero: 'every_run', zero: 'monthly' },
   headlineAgeBases: ['onchain_maturity'],
   howTo: [
     'Open Thala liquid staking and claim the finished unstake request.',

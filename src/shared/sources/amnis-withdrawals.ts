@@ -58,7 +58,7 @@ export const amnisWithdrawals: SourceDef<TokensHint> = {
   category: 'liquid_staking',
   inclusionRule: 'R2 ended position: withdrawal token lockup passed (locked_until_secs).',
   protocolStatus: { state: 'live', evidence: 'Amnis liquid staking is operating.', checkedAt: '2026-10-18' },
-  refresh: { nonZero: 'every_run', zero: 'weekly' },
+  refresh: { nonZero: 'every_run', zero: 'monthly' },
   headlineAgeBases: ['onchain_maturity'],
   howTo: [
     'Open Amnis, go to your withdrawals and redeem the finished withdrawal NFT.',

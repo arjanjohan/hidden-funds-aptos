@@ -67,7 +67,7 @@ export const tortugaTickets: SourceDef = {
   category: 'liquid_staking',
   inclusionRule: 'R2 ended position: ticket cooldown passed. Tickets the reserve cannot cover yet are blocked.',
   protocolStatus: { state: 'live', evidence: 'Contracts still respond; no closure notice verified. Reserve is short of outstanding tickets.', checkedAt: '2026-10-18' },
-  refresh: { nonZero: 'every_run', zero: 'weekly' },
+  refresh: { nonZero: 'every_run', zero: 'monthly' },
   headlineAgeBases: ['onchain_maturity'],
   howTo: [
     'Open the Tortuga app if it is online and claim the ticket.',

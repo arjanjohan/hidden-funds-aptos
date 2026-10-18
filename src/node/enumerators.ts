@@ -2,6 +2,7 @@
 import { mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
+import { THALA_VE, THALA_VEST } from '../shared/sources/thala-thl.ts';
 import { THALA_LSD } from '../shared/sources/thala-unstake.ts';
 import { TORTUGA, TORTUGA_STATE } from '../shared/sources/tortuga-tickets.ts';
 import type { Sanity } from '../shared/snapshot.ts';
@@ -13,6 +14,8 @@ export interface Enumeration {
   candidates: Candidate[];
   cursor?: string;
   pages: number;
+  /** True when every returned candidate had new activity since the stored cursor (so it is due for a read). */
+  incremental?: boolean;
 }
 
 export interface Enumerator {
@@ -32,7 +35,7 @@ const DELEGATION_QUERY = `query($lo:String!,$hi:String!,$d:String!,$p:String!,$t
     _or:[{delegator_address:{_gt:$d}}, {delegator_address:{_eq:$d}, pool_address:{_gt:$p}},
          {delegator_address:{_eq:$d}, pool_address:{_eq:$p}, table_handle:{_gt:$t}}]},
     order_by:[{delegator_address:asc},{pool_address:asc},{table_handle:asc}], limit:${PAGE}){
-    delegator_address pool_address table_handle } }`;
+    delegator_address pool_address table_handle last_transaction_version } }`;
 
 export const delegationEnumerator: Enumerator = {
   sourceId: 'native-delegation',
@@ -53,13 +56,16 @@ export const delegationEnumerator: Enumerator = {
         cursor = { d: last.delegator_address, p: last.pool_address, t: last.table_handle };
       }
     })).flat();
-    const pools = new Map<string, Set<string>>();
+    const pools = new Map<string, { set: Set<string>; version: number }>();
     for (const r of rows) {
       const owner = normalizeAddress(r.delegator_address);
-      if (!pools.has(owner)) pools.set(owner, new Set());
-      pools.get(owner)!.add(normalizeAddress(r.pool_address));
+      const entry = pools.get(owner) ?? { set: new Set<string>(), version: 0 };
+      entry.set.add(normalizeAddress(r.pool_address));
+      entry.version = Math.max(entry.version, Number(r.last_transaction_version));
+      pools.set(owner, entry);
     }
-    return { candidates: [...pools].map(([owner, set]) => ({ owner, hint: { pools: [...set].sort() } })), pages };
+    // The latest row version is in the hint so that any change to an owner's rows marks the owner due.
+    return { candidates: [...pools].map(([owner, e]) => ({ owner, hint: { pools: [...e.set].sort(), version: e.version } })), pages };
   },
   async sanity(chain, ledger, positions) {
     const perPool = new Map<string, bigint>();
@@ -104,7 +110,7 @@ async function senders(chain: ChainReader, fns: EntryFunction[], cursor: string 
     }
     cursors[key] = after;
   }
-  return { candidates: [...owners].map(owner => ({ owner })), cursor: JSON.stringify(cursors), pages };
+  return { candidates: [...owners].map(owner => ({ owner })), cursor: JSON.stringify(cursors), pages, incremental: true };
 }
 
 function entrySenders(sourceId: string, fns: EntryFunction[], sanity: Enumerator['sanity']): Enumerator {
@@ -186,4 +192,16 @@ export const amnisWithdrawalsEnumerator = collectionOwners('amnis-withdrawals', 
       detail: `matured ${matured} of ${total} pending (${pct(matured, total)})` };
   });
 
-export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator, amnisWithdrawalsEnumerator];
+const noContractTotal: Enumerator['sanity'] = async () =>
+  ({ check: 'none', ok: null, detail: 'no contract total available: balances are stored per account' });
+
+export const thalaVethlEnumerator = entrySenders('thala-vethl-expired',
+  [{ contract: THALA_VE, module: 'scripts', name: 'lock' }, { contract: THALA_VEST, module: 'farming_vesting', name: 'convert_to_vethl' }],
+  noContractTotal);
+
+export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
+  [{ contract: THALA_VEST, module: 'farming_vesting', name: 'start_vesting' }],
+  noContractTotal);
+
+export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
+  amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator];

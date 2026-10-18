@@ -57,7 +57,7 @@ export const kofiWithdrawals: SourceDef = {
     checkedAt: '2026-10-18',
     effectiveAt: '2026-07-24T07:55:53Z',
   },
-  refresh: { nonZero: 'every_run', zero: 'weekly' },
+  refresh: { nonZero: 'every_run', zero: 'monthly' },
   headlineAgeBases: ['onchain_maturity'],
   howTo: [
     'Open the Kofi app while it is still online and finalize the unlocked withdrawal.',

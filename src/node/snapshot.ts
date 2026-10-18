@@ -12,7 +12,7 @@ import { keyedReader, processorWatermark, RequestCapReached } from './client.ts'
 import { ENUMERATORS, type Enumerator } from './enumerators.ts';
 import type { Snapshot, SnapshotSource, SourceRun } from '../shared/snapshot.ts';
 import { fetchPrices } from './prices.ts';
-import { State } from './state.ts';
+import { AGE_LIMIT_MS, State } from './state.ts';
 
 const args = process.argv.slice(2);
 const opt = (name: string) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
@@ -48,7 +48,7 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
     run.enumeration.start = new Date().toISOString();
     const before = state.candidateCount(def.id);
     const result = await en.run(chain, state.cursor(def.id));
-    state.upsertCandidates(def.id, result.candidates, runStart);
+    state.upsertCandidates(def.id, result.candidates, runStart, result.incremental);
     if (result.cursor) state.setCursor(def.id, result.cursor);
     Object.assign(run.enumeration, { end: new Date().toISOString(), pages: result.pages, cursor: result.cursor,
       candidates: state.candidateCount(def.id), newCandidates: state.candidateCount(def.id) - before });
@@ -89,7 +89,7 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
     if (err instanceof RequestCapReached) capHit.hit = true;
     run.degradedReasons.push(`run failed: ${String(err).slice(0, 200)}`);
   }
-  run.verification.notReread = state.staleCount(def.id, runStart);
+  run.verification.notReread = state.staleCount(def.id, new Date(Date.parse(runStart) - AGE_LIMIT_MS[def.refresh.nonZero]).toISOString());
   if (run.verification.incomplete) run.degradedReasons.push(`${run.verification.incomplete} owners read incompletely; their previous positions are kept`);
   if (run.verification.notReread) run.degradedReasons.push(`${run.verification.notReread} positions not re-read this run`);
   run.errors = [...new Set(run.errors)].slice(0, 20);

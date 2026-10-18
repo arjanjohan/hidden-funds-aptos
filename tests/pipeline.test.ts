@@ -1,3 +1,7 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RequestCapReached } from '../src/node/client.ts';
 import type { Enumerator } from '../src/node/enumerators.ts';
@@ -97,6 +101,39 @@ describe('state', () => {
     expect(due).toContain(addr(1));      // non-zero
     expect(due).not.toContain(addr(2));  // zero, read just now
     expect(due).toContain(addr(3));      // never read
+  });
+});
+
+describe('state changes', () => {
+  const def = () => source(async () => { throw new Error(); });
+
+  it('makes a zero owner due again when an activity scan returns it', () => {
+    const state = new State(':memory:');
+    state.upsertCandidates('t', [{ owner: addr(1) }], '2026-10-01T00:00:00Z');
+    state.recordRead('t', addr(1), [], true, '2026-10-01T00:00:01Z');
+    expect(state.due(def(), Date.parse('2026-10-02T00:00:00Z'), new Set())).toEqual([]);
+    state.upsertCandidates('t', [{ owner: addr(1) }], '2026-10-02T00:00:00Z', true);
+    expect(state.due(def(), Date.parse('2026-10-02T00:00:00Z'), new Set()).map(d => d.owner)).toEqual([addr(1)]);
+  });
+
+  it('makes an owner due when its hint changes, and not when it stays the same', () => {
+    const state = new State(':memory:');
+    state.upsertCandidates('t', [{ owner: addr(1), hint: { version: 1 } }], '2026-10-01T00:00:00Z');
+    state.recordRead('t', addr(1), [], true, '2026-10-01T00:00:01Z');
+    state.upsertCandidates('t', [{ owner: addr(1), hint: { version: 1 } }], '2026-10-02T00:00:00Z');
+    expect(state.due(def(), Date.parse('2026-10-02T00:00:00Z'), new Set())).toEqual([]);
+    state.upsertCandidates('t', [{ owner: addr(1), hint: { version: 2 } }], '2026-10-03T00:00:00Z');
+    expect(state.due(def(), Date.parse('2026-10-03T00:00:00Z'), new Set()).map(d => d.owner)).toEqual([addr(1)]);
+  });
+
+  it('adds the changed_at column to a state file written before it existed', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'state-')), 'old.sqlite');
+    const old = new DatabaseSync(path);
+    old.exec('create table candidates (source text, owner text, hint text, first_seen text, last_read_at text, last_nonzero integer, last_complete integer, primary key (source, owner))');
+    old.close();
+    const state = new State(path);
+    state.upsertCandidates('t', [{ owner: addr(1) }], '2026-10-01T00:00:00Z');
+    expect(state.candidateCount('t')).toBe(1);
   });
 });
 

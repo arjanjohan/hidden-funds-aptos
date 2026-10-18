@@ -30,7 +30,20 @@ function primaryStore(owner: string, metadata: string): string {
   return '0x' + createHash('sha3-256').update(Buffer.concat([bytes(owner), bytes(metadata), Buffer.from([0xfc])])).digest('hex');
 }
 
-const raw = (p: Position) => BigInt(p.expectedPayout.find(a => a.asset === APT)?.raw ?? '0');
+// Sources pay one asset per position; the check follows that asset.
+const payout = (p: Position) => p.expectedPayout[0] ?? { asset: APT, raw: '0' };
+const raw = (p: Position) => BigInt(payout(p).raw);
+
+// FA metadata address for an asset id: itself for an FA, the paired metadata for a Coin type.
+const metadataCache = new Map<string, string>();
+async function metadataOf(asset: string): Promise<string> {
+  if (!asset.includes('::')) return normalizeAddress(asset);
+  if (!metadataCache.has(asset)) {
+    const [m] = await aptos.view({ payload: { function: '0x1::coin::paired_metadata', typeArguments: [asset], functionArguments: [] } }) as any[];
+    metadataCache.set(asset, normalizeAddress(m.vec[0].inner));
+  }
+  return metadataCache.get(asset)!;
+}
 
 function stratified(positions: Position[], rand: () => number): Position[] {
   const sorted = [...positions].sort((a, b) => (raw(a) < raw(b) ? -1 : raw(a) > raw(b) ? 1 : 0));
@@ -46,12 +59,20 @@ const parseArg = (a: string) => (a.startsWith('[') ? a.slice(1, -1).split(',').f
 
 async function simulate(p: Position, feePayer: boolean) {
   const step = p.steps[0];
+  // "addr::module::fn<T1, T2>" carries type arguments in the step's function string.
+  const [fn, typeList] = step.function.match(/^([^<]+)(?:<(.*)>)?$/)!.slice(1);
   const transaction = await aptos.transaction.build.simple({ sender: p.owner, withFeePayer: feePayer, options: feePayer ? { maxGasAmount: 20_000 } : undefined,
-    data: { function: step.function as `${string}::${string}::${string}`, functionArguments: step.arguments.map(parseArg) } });
+    data: { function: fn as `${string}::${string}::${string}`, typeArguments: typeList ? typeList.split(',').map(t => t.trim()) : [],
+      functionArguments: step.arguments.map(parseArg) } });
   if (feePayer) transaction.feePayerAddress = AccountAddress.ZERO;
   const [r] = await aptos.transaction.simulate.simple({ transaction, options: feePayer ? { estimateGasUnitPrice: true } : { estimateGasUnitPrice: true, estimateMaxGasAmount: true } });
-  const store = primaryStore(p.owner, APT);
-  const paid = r.events.filter((e: any) => e.type === '0x1::fungible_asset::Deposit' && normalizeAddress(e.data.store) === store).reduce((s: bigint, e: any) => s + BigInt(e.data.amount), 0n);
+  const asset = payout(p).asset;
+  const store = primaryStore(p.owner, await metadataOf(asset));
+  // Paid either into the owner's primary FA store, or (unmigrated Coin) into its CoinStore.
+  const paid = r.events.filter((e: any) =>
+      (e.type === '0x1::fungible_asset::Deposit' && normalizeAddress(e.data.store) === store) ||
+      (e.type === '0x1::coin::CoinDeposit' && normalizeAddress(e.data.account) === p.owner && e.data.coin_type === asset))
+    .reduce((s: bigint, e: any) => s + BigInt(e.data.amount), 0n);
   return { success: r.success, vmStatus: r.vm_status, paid };
 }
 

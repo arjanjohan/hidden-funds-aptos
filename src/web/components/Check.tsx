@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { usd as toUsd, type PriceBook } from '../../shared/accounting.ts';
 import { createReader, normalizeAddress } from '../../shared/chain.ts';
-import { APT } from '../../shared/sources/delegation.ts';
+import { ASSETS } from '../../shared/assets.ts';
 import { SOURCES } from '../../shared/sources/index.ts';
 import type { Memo, Position, ReadContext, ReadResult } from '../../shared/types.ts';
 import { date, short, units, usd } from '../lib/format.ts';
@@ -88,8 +88,7 @@ function AddressResult({ row, prices }: { row: Row; prices: PriceBook }) {
 function PositionRow({ p, prices }: { p: Position; prices: PriceBook }) {
   const source = SOURCES.find(s => s.id === p.source)!;
   const value = toUsd(p.expectedPayout, prices);
-  const decimals = (a: string) => prices[a]?.decimals ?? (a === APT ? 8 : 0);
-  const amount = p.expectedPayout.map(a => `${units(a.raw, decimals(a.asset))} ${a.asset === APT ? 'APT' : short(a.asset)}`).join(' + ');
+  const amount = p.expectedPayout.map(a => `${units(a.raw, ASSETS[a.asset]?.decimals ?? 0)} ${ASSETS[a.asset]?.symbol ?? short(a.asset)}`).join(' + ');
   return (
     <div style={{ borderTop: '1px solid var(--line)', marginTop: 12, paddingTop: 12 }}>
       <div><b style={{ display: 'inline', fontSize: 16 }}>{amount}</b>{value !== null && <span className="muted"> ≈ {usd(value)}</span>} · {STATUS[p.status]}</div>

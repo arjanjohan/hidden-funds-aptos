@@ -14,6 +14,8 @@ Measurement runs use a fresh local state (`node src/node/snapshot.ts --source <i
 | `thala-unstake` | entry-function senders | ended position (request matured) | headline $27.5K, 925 owners | 10/10 ok, payout = expected; 3 need gas |
 | `kofi-withdrawals` | entry-function senders | ended position; protocol winding down | headline $12.8K, 287 owners | 10/10 ok, payout = expected; 1 needs gas |
 | `amnis-withdrawals` | collection owners (`Amnis Withdrawal Tokens`) | ended position (lockup passed) | headline $938K, 397 owners; one wallet = 88% | 10/10 ok, payout = expected; 1 needs gas |
+| `thala-vethl-expired` | entry-function senders (`vetoken scripts::lock`, `farming_vesting::convert_to_vethl`) | ended position (lock expired) | headline $13.7K, 4,852 owners (97 ≥ $10) | 10/10 ok, payout = expected |
+| `thala-vesting-matured` | entry-function senders (`farming_vesting::start_vesting`) | ended position (vesting reached end_sec) | headline $6.2K, 2,642 owners (16 ≥ $10) | 10/10 ok, payout = expected; 1 needs gas |
 | `tortuga-tickets` | entry-function senders → per-user `TicketStore` | ended position (cooldown passed); reserve-queued tickets blocked | headline $12.2K, 818 owners; blocked $172 | recoverable 10/10 exact; blocked 4/4 abort `EFUND_NOT_AVAILABLE_YET` as predicted |
 
 Native delegation and Thala are documented in [phase0-report.md](phase0-report.md).
@@ -25,6 +27,12 @@ Native delegation and Thala are documented in [phase0-report.md](phase0-report.m
 - The cost is 1 request per ordinary owner, ever.
 
 Each source page also states the largest single wallet's share of its 90+ day total. No address is published.
+
+**Re-read schedule (all sources):**
+- Owners holding something are re-read every run.
+- Owners holding nothing are re-read monthly, or immediately when enumeration shows activity. Activity means a new entry-function call since the cursor, or a changed hint (delegation row version, token list).
+- A position counts as "not re-read" only once it is older than its source's own refresh window.
+- This keeps weekly cost proportional to non-zero positions.
 
 ## kofi-withdrawals
 
@@ -76,3 +84,28 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Sanity:** matured tokens found = 1,634,658 APT, which is **99.08%** of `withdrawal::total_pending_withdrawal` (all open tokens, matured or not).
 - **Recovery:** `router::withdraw_entry(token)`. 10 of 10 sampled simulations, including the largest token, paid exactly the expected amount.
 - **Backlog spotted:** the same wallets hold "Amnis Season 2 Airdrop" ($AMI Claim) and "Amnis Reward Voucher" NFTs. These are possible unclaimed-airdrop sources; their status needs research.
+
+## thala-vethl-expired
+
+- **Read:** one `vetoken::VeTokenStore<THL>` resource per owner (locked amount, `unlockable_epoch`). Two shared views per run: `now_epoch` and `seconds_in_epoch`.
+  - A lock counts when `unlockable_epoch <= now_epoch`, as in `can_unlock<THL>`.
+  - Claimable since = `unlockable_epoch × seconds_in_epoch`.
+  - Only THL locks are counted. Locks of LP tokens need LP pricing and are not covered.
+- **Equivalence:** the resource-based read was checked against the four-view read (`is_account_registered`, `locked_coin_amount`, `can_unlock`, `unlockable_epoch`). Both give the same 4,914 positions with identical amounts. Revalidation costs 4,922 requests instead of ~20k.
+- **Enumeration:** senders of `vetoken scripts::lock<T>` and `farming_vesting::convert_to_vethl`. 10,745 senders, 139 pages. The first full run took 35,288 requests with the view-based read.
+- **Result:** 4,914 expired locks: $16.3K now, **$13.7K aged ≥ 90 days**, 4,852 owners.
+  - Value is mostly dust: 4,317 locks are under $1, and 97 owners have ≥ $10.
+  - THL was $0.0099 on 2026-10-18.
+- **Sanity:** no contract total exists, because locks are held per account.
+- **Recovery:** `scripts::unlock<THL>()`, after claiming veTHL dividends. Sample simulation: 10/10 paid exactly the locked THL.
+
+## thala-vesting-matured
+
+- **Read:** the `farming_vesting::VestingBeneficiary` resource. With no claim ids, nothing more is read. Otherwise `farming_vesting::all_claims(owner)`.
+  - A claim counts once `end_sec` has passed and `claimable_amount > 0`.
+  - A claim still vesting is not counted, because claiming it early forfeits the rest.
+  - Escrowed THL is not counted: it is not a claim until vesting starts.
+- **Enumeration:** senders of `farming_vesting::start_vesting`. 4,960 senders, 261 pages; first full run 12,826 requests.
+- **Result:** 3,676 matured claims: **$6.2K aged ≥ 90 days**, 2,642 owners (16 with ≥ $10). Nearly all are under $1.
+- **Sanity:** no contract total exists, because claims are stored per id.
+- **Recovery:** `farming_vesting_scripts::claim(claim_id)`. Sample simulation: 10/10 paid exactly the claimable THL.

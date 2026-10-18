@@ -7,7 +7,7 @@ import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
 export const APT = '0x000000000000000000000000000000000000000000000000000000000000000a';
 const SOURCE = 'native-delegation';
 
-export type DelegationHint = { pools: string[] };
+export type DelegationHint = { pools: string[]; version?: number };
 
 // Indexer rows go stale (a fully redeemed share entry is deleted on chain but can stay indexed),
 // so they only name candidate pools; amounts always come from get_stake.
@@ -107,7 +107,7 @@ export const delegation: SourceDef<DelegationHint> = {
   category: 'staking',
   inclusionRule: 'R2 ended position: unlock completed (stake is inactive, or pending-inactive in a pool whose validator left the set).',
   protocolStatus: { state: 'live', evidence: 'Aptos framework module 0x1::delegation_pool.', checkedAt: '2026-10-18' },
-  refresh: { nonZero: 'every_run', zero: 'weekly' },
+  refresh: { nonZero: 'every_run', zero: 'monthly' },
   headlineAgeBases: ['onchain_maturity'],
   howTo: [
     'Open the delegation pool in your wallet\'s staking view (Petra: Stake) and withdraw.',

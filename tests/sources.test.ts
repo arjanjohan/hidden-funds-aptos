@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ownerKind } from '../src/shared/owners.ts';
 import { delegation } from '../src/shared/sources/delegation.ts';
 import { kofiWithdrawals } from '../src/shared/sources/kofi-withdrawals.ts';
+import { thalaVestingMatured, thalaVethlExpired } from '../src/shared/sources/thala-thl.ts';
 import { THALA_LSD, thalaUnstake } from '../src/shared/sources/thala-unstake.ts';
 import { tortugaTickets } from '../src/shared/sources/tortuga-tickets.ts';
 import { addr, context, fakeChain, memoryMemo } from './fake-chain.ts';
@@ -167,5 +168,29 @@ describe('owner kind', () => {
     const before = chain.calls.length;
     await ownerKind(ctx, addr(1));
     expect(chain.calls.length).toBe(before);
+  });
+});
+
+describe('thala THL', () => {
+  it('counts a THL lock once its unlockable epoch is reached, aged at the epoch start', async () => {
+    const chain = (unlockable: number) => fakeChain({
+      resource: () => ({ vetoken: { locked: { value: '500' }, unlockable_epoch: String(unlockable) } }),
+      view: fn => (fn.endsWith('::now_epoch') ? ['100'] : fn.endsWith('::seconds_in_epoch') ? ['604800'] : []),
+    });
+    const expired = await thalaVethlExpired.read(context(chain(90)), OWNER);
+    expect(expired.positions).toHaveLength(1);
+    expect(expired.positions[0].claimableSince).toBe(new Date(90 * 604800 * 1000).toISOString());
+    expect((await thalaVethlExpired.read(context(chain(101)), OWNER)).positions).toEqual([]);
+  });
+
+  it('counts matured vesting claims at their claimable amount and skips accounts without claims', async () => {
+    const claim = (id: number, end: number, ready: string) =>
+      ({ claim_id: String(id), beneficiary: OWNER, total_amount: '1000', claimable_amount: ready, end_sec: String(end) });
+    const chain = fakeChain({ resource: () => ({ claim_ids: ['1', '2'] }), view: () => [[claim(1, NOW - 10, '1000'), claim(2, NOW + 10, '400')]] });
+    const r = await thalaVestingMatured.read(context(chain), OWNER);
+    expect(r.positions.map(p => [p.locator, p.expectedPayout[0].raw])).toEqual([['1', '1000']]);
+    const none = fakeChain({ resource: () => ({ claim_ids: [] }) });
+    expect((await thalaVestingMatured.read(context(none), OWNER)).positions).toEqual([]);
+    expect(none.calls.some(c => c.startsWith('view'))).toBe(false);
   });
 });
