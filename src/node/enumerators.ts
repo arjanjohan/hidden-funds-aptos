@@ -192,6 +192,62 @@ export const amnisWithdrawalsEnumerator = collectionOwners('amnis-withdrawals', 
       detail: `matured ${matured} of ${total} pending (${pct(matured, total)})` };
   });
 
+// Every delegation pool, then the active-stake delegators of pools whose validator is inactive.
+export const inactiveValidatorEnumerator: Enumerator = {
+  sourceId: 'delegation-inactive-validator',
+  processor: 'stake_processor',
+  scope: 'active_shares rows (shares > 0) in delegation pools whose validator state is inactive (4) at enumeration time',
+  async run(chain) {
+    let pages = 0, after = '';
+    const pools: string[] = [];
+    for (;;) {
+      const page = (await chain.gql(`query($a:String!){ current_delegated_staking_pool_balances(where:{staking_pool_address:{_gt:$a}},
+        order_by:{staking_pool_address:asc}, limit:${PAGE}){ staking_pool_address } }`, { a: after })).current_delegated_staking_pool_balances;
+      pages++;
+      pools.push(...page.map((p: any) => normalizeAddress(p.staking_pool_address)));
+      if (page.length < PAGE) break;
+      after = page[page.length - 1].staking_pool_address;
+    }
+    const ledger = await chain.ledger();
+    const states = await mapLimit(pools, 8, async pool => Number((await chain.view('0x1::stake::get_validator_state', [pool], [], ledger.version))[0]));
+    const inactive = pools.filter((_, i) => states[i] === 4);
+    const owners = new Map<string, { pools: Set<string>; version: number }>();
+    for (const pool of inactive) {
+      let cursor = '';
+      for (;;) {
+        const rows = (await chain.gql(`query($p:String!,$a:String!){ current_delegator_balances(where:{pool_address:{_eq:$p}, pool_type:{_eq:"active_shares"},
+          shares:{_gt:"0"}, delegator_address:{_gt:$a}}, order_by:{delegator_address:asc}, limit:${PAGE}){ delegator_address last_transaction_version } }`,
+          { p: pool, a: cursor })).current_delegator_balances;
+        pages++;
+        for (const r of rows) {
+          const owner = normalizeAddress(r.delegator_address);
+          const entry = owners.get(owner) ?? { pools: new Set<string>(), version: 0 };
+          entry.pools.add(pool);
+          entry.version = Math.max(entry.version, Number(r.last_transaction_version));
+          owners.set(owner, entry);
+        }
+        if (rows.length < PAGE) break;
+        cursor = rows[rows.length - 1].delegator_address;
+      }
+    }
+    return { candidates: [...owners].map(([owner, e]) => ({ owner, hint: { pools: [...e.pools].sort(), version: e.version } })), pages };
+  },
+  async sanity(chain, ledger, positions) {
+    const perPool = new Map<string, bigint>();
+    for (const p of positions) {
+      const pool = p.locator.split('/')[0];
+      perPool.set(pool, (perPool.get(pool) ?? 0n) + BigInt(p.grossClaim[0].raw));
+    }
+    const violations: string[] = [];
+    await mapLimit([...perPool], 8, async ([pool, sum]) => {
+      const [active] = (await chain.view('0x1::stake::get_stake', [pool], [], ledger.version)).map(BigInt);
+      if (sum > active + 1000n) violations.push(`${pool}: delegators ${sum} > pool active ${active}`);
+    });
+    return { check: 'per pool: sum of delegator active stake <= stake::get_stake(pool).active', ok: violations.length === 0,
+      detail: violations.length ? violations.slice(0, 10).join('; ') : `${perPool.size} pools, 0 violations` };
+  },
+};
+
 const noContractTotal: Enumerator['sanity'] = async () =>
   ({ check: 'none', ok: null, detail: 'no contract total available: balances are stored per account' });
 
@@ -204,4 +260,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
   noContractTotal);
 
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
-  amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator];
+  amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator];

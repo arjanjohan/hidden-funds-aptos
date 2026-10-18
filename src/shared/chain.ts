@@ -34,7 +34,11 @@ export function createReader(options: ReaderOptions = {}): ChainReader {
       try {
         res = await fetch(url, { ...init, headers: { ...headers, ...(init.headers as Record<string, string>) }, signal: AbortSignal.timeout(timeoutMs) });
       } catch (err: any) {
-        if (err?.name === 'TimeoutError' && attempt < retries) continue;
+        // Timeouts and network failures ("fetch failed": reset, DNS, TLS) are transient.
+        if ((err?.name === 'TimeoutError' || err instanceof TypeError) && attempt < retries) {
+          await sleep(Math.min(60_000, 2_000 * 2 ** attempt));
+          continue;
+        }
         throw err;
       }
       if (allow404 && res.status === 404) return null;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ownerKind } from '../src/shared/owners.ts';
 import { delegation } from '../src/shared/sources/delegation.ts';
+import { delegationInactiveValidator } from '../src/shared/sources/delegation-inactive.ts';
 import { kofiWithdrawals } from '../src/shared/sources/kofi-withdrawals.ts';
 import { thalaVestingMatured, thalaVethlExpired } from '../src/shared/sources/thala-thl.ts';
 import { THALA_LSD, thalaUnstake } from '../src/shared/sources/thala-unstake.ts';
@@ -192,5 +193,39 @@ describe('thala THL', () => {
     const none = fakeChain({ resource: () => ({ claim_ids: [] }) });
     expect((await thalaVestingMatured.read(context(none), OWNER)).positions).toEqual([]);
     expect(none.calls.some(c => c.startsWith('view'))).toBe(false);
+  });
+});
+
+describe('delegation with an inactive validator', () => {
+  const STOP = NOW - 200 * 86_400;
+  const chain = (opts: { state?: number; active?: string; pending?: string; rewards?: boolean; addedAt?: number }) => fakeChain({
+    view: fn => fn === '0x1::stake::get_validator_state' ? [String(opts.state ?? 4)]
+      : fn === '0x1::delegation_pool::get_stake' ? [opts.active ?? '5000000000', '0', opts.pending ?? '0'] : [],
+    gql: (query, vars) => query.includes('DistributeRewards') ? { delegated_staking_activities: opts.rewards === false ? [] : [{ transaction_version: 10 }] }
+      : query.includes('AddStake') ? { delegated_staking_activities: opts.addedAt ? [{ transaction_version: 20 }] : [] }
+      : query.includes('block_metadata_transactions') ? { block_metadata_transactions: [{ timestamp: new Date(((vars as any).v === '20' ? opts.addedAt! : STOP) * 1000).toISOString().slice(0, -1) }] }
+      : { current_delegator_balances: [] },
+  });
+  const read = (opts: Parameters<typeof chain>[0]) => delegationInactiveValidator.read(context(chain(opts)), OWNER, { pools: [POOL] });
+
+  it('ignores pools whose validator is active', async () => {
+    expect((await read({ state: 2 })).positions).toEqual([]);
+  });
+
+  it('dates idle stake at the validator\'s last reward, or at a later add', async () => {
+    expect((await read({})).positions[0]).toMatchObject({ ageBasis: 'protocol_closure', claimableSince: new Date(STOP * 1000).toISOString(), status: 'recoverable' });
+    const later = NOW - 100 * 86_400;
+    expect((await read({ addedAt: later })).positions[0].claimableSince).toBe(new Date(later * 1000).toISOString());
+  });
+
+  it('leaves the age unknown when no reward is indexed for the pool', async () => {
+    expect((await read({ rewards: false })).positions[0].ageBasis).toBe('unknown');
+  });
+
+  it('blocks stake below the 10 APT unlock minimum', async () => {
+    const p = (await read({ active: '500000000' })).positions[0];
+    expect(p.status).toBe('blocked');
+    expect(p.blockers[0].code).toBe('below_unlock_minimum');
+    expect((await read({ active: '500000000', pending: '600000000' })).positions[0].status).toBe('recoverable');
   });
 });

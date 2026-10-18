@@ -11,6 +11,7 @@ Measurement runs use a fresh local state (`node src/node/snapshot.ts --source <i
 | Source | Shape | Status rule | Measured (2026-10-18) | Sample simulation |
 |---|---|---|---|---|
 | `native-delegation` | indexer staking table | ended position (unlock done) | headline $680K, 7,163 owners | 20/20 ok, payout = expected; 2 owners need gas |
+| `delegation-inactive-validator` | all pools → inactive validators → active-stake delegators | ended position (validator left the set); age = last reward epoch | headline $7.41M, 4,017 owners (1,451 ≥ $10); top wallet 12.6% | unlock 10/10 exact; 2 need gas (withdraw step: see native-delegation early-withdraw sample) |
 | `thala-unstake` | entry-function senders | ended position (request matured) | headline $27.5K, 925 owners | 10/10 ok, payout = expected; 3 need gas |
 | `kofi-withdrawals` | entry-function senders | ended position; protocol winding down | headline $12.8K, 287 owners | 10/10 ok, payout = expected; 1 needs gas |
 | `amnis-withdrawals` | collection owners (`Amnis Withdrawal Tokens`) | ended position (lockup passed) | headline $938K, 397 owners; one wallet = 88% | 10/10 ok, payout = expected; 1 needs gas |
@@ -109,3 +110,33 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Result:** 3,676 matured claims: **$6.2K aged ≥ 90 days**, 2,642 owners (16 with ≥ $10). Nearly all are under $1.
 - **Sanity:** no contract total exists, because claims are stored per id.
 - **Recovery:** `farming_vesting_scripts::claim(claim_id)`. Sample simulation: 10/10 paid exactly the claimable THL.
+
+## delegation-inactive-validator
+
+- **What:** APT still staked (active) in a delegation pool whose validator has left the set (`stake::get_validator_state = 4`).
+  - Inactive validators earn no rewards.
+  - With the validator out of the set, `unlock` followed by `withdraw` returns the stake immediately. `can_withdraw_pending_inactive` is true.
+- **Size of the problem (2026-10-18):** 124 of 174 delegation pools have an inactive validator.
+  - 43 of them still hold active stake: 15.4M APT.
+  - 30 of those pools show a last `DistributeRewards` event (2025-06 to 2026-10); 13 show none in the indexer.
+- **Enumeration:**
+  - Every pool (`current_delegated_staking_pool_balances`, 2 pages).
+  - Validator state per pool (174 views).
+  - For inactive pools, the `active_shares` delegators, keyset-paged.
+  - Totals: 6,822 candidates, 187 pages.
+- **Read:** `delegation_pool::get_stake(pool, owner)`, with the validator state re-read once per pool per run.
+- **Age (`protocol_closure`):** the pool's last `0x1::stake::DistributeRewards` event (block time), or the owner's last `AddStake` in that pool if later, since stake added to an idle pool is idle only from then.
+  - Memoized per (owner, pool, amount, stop time).
+  - Pools with no reward event get `unknown` age and are not in the headline.
+- **Blocked:** unlock aborts with `EDELEGATOR_PENDING_INACTIVE_BALANCE_TOO_LOW` when the delegator's resulting pending_inactive would be below 10 APT (`MIN_COINS_ON_SHARES_POOL`). Such positions are `blocked` (`below_unlock_minimum`): add stake to reach 10 APT, then unlock and withdraw everything. That is 12 positions, $2.
+- **Result:** $11.0M claimable now. **$7.41M has been idle ≥ 90 days**, across 4,017 owners (1,451 with ≥ $10).
+  - The largest wallet holds 12.6% of the headline.
+  - ≥ 180 days is only $96K, because most of the value sits in pools that stopped in 2026.
+  - 3 positions held by resource accounts ($359K) are `unknown`.
+  - 2,123 positions ($313K) have unknown age.
+- **Concentration:** the largest pool (`0x52561f4a…`, 9.76M APT, last reward 2026-06-12) has 66 delegators. 11 ordinary accounts with similar profiles (4–7 transactions each, 0.48–1.26M APT) hold 98% of it, which looks like one institution's wallets.
+- **Sanity:** per pool, the delegators' active stake found does not exceed `stake::get_stake(pool).active`. 43 pools, 0 violations.
+- **Recovery:** `delegation_pool::unlock(pool, amount)`, then `delegation_pool::withdraw(pool, amount)`.
+  - Sample simulation of the unlock step (`spikes/08-simulate-unlock.ts`, seed 20261018): 10/10 unlocked exactly the active amount, including the largest position (2.03M APT). 2 owners need gas.
+  - The withdraw step after an unlock in an inactive pool is the `pending_inactive_early` case of `native-delegation`, sampled 10/10.
+- **Cost:** the first run takes 23,776 requests (ages and owner kinds). Re-reading costs 7,423.
