@@ -71,6 +71,8 @@ export function createReader(options: ReaderOptions = {}): ChainReader {
     resource: async (address, type, version) =>
       (await request(`${APTOS.fullnode}/accounts/${address}/resource/${encodeURIComponent(type)}${at(version)}`, {}, `resource ${type}`, true))?.data ?? null,
     account: address => request(`${APTOS.fullnode}/accounts/${address}`, {}, 'account', true),
+    tableItem: (handle, keyType, valueType, key, version) =>
+      request(`${APTOS.fullnode}/tables/${handle}/item${at(version)}`, json({ key_type: keyType, value_type: valueType, key }), 'table', true),
     archiveResource: async (address, type, version) =>
       (await request(`${APTOS.archive}/accounts/${address}/resource/${encodeURIComponent(type)}${at(version)}`, {}, `archive ${type}`, true))?.data ?? null,
     gql: async (query, variables = {}) => (await request(APTOS.indexer, json({ query, variables }), 'indexer')).data,

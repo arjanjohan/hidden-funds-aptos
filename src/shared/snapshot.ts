@@ -5,7 +5,7 @@ import type { SourceDef } from './types.ts';
 export interface Sanity { check: string; ok: boolean | null; detail: string }
 
 export interface SourceRun {
-  processor: string;
+  processor: string | null;
   scope: string;
   watermarkBefore?: { version: string; timestamp: string };
   watermarkAfter?: { version: string; timestamp: string };

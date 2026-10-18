@@ -17,6 +17,7 @@ Measurement runs use a fresh local state (`node src/node/snapshot.ts --source <i
 | `amnis-withdrawals` | collection owners (`Amnis Withdrawal Tokens`) | ended position (lockup passed) | headline $938K, 397 owners; one wallet = 88% | 10/10 ok, payout = expected; 1 needs gas |
 | `thala-vethl-expired` | entry-function senders (`vetoken scripts::lock`, `farming_vesting::convert_to_vethl`) | ended position (lock expired) | headline $13.7K, 4,852 owners (97 ≥ $10) | 10/10 ok, payout = expected |
 | `thala-vesting-matured` | entry-function senders (`farming_vesting::start_vesting`) | ended position (vesting reached end_sec) | headline $6.2K, 2,642 owners (16 ≥ $10) | 10/10 ok, payout = expected; 1 needs gas |
+| `trufin-unlocks` | one global table (`staker::Unlocks`) | ended position (request claimable); off-whitelist → team_gated | 1 request, $1.8K, 85 days old (not yet in headline) | 1/1 ok, payout = expected |
 | `tortuga-tickets` | entry-function senders → per-user `TicketStore` | ended position (cooldown passed); reserve-queued tickets blocked | headline $12.2K, 818 owners; blocked $172 | recoverable 10/10 exact; blocked 4/4 abort `EFUND_NOT_AVAILABLE_YET` as predicted |
 
 Native delegation and Thala are documented in [phase0-report.md](phase0-report.md).
@@ -140,3 +141,19 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - Sample simulation of the unlock step (`spikes/08-simulate-unlock.ts`, seed 20261018): 10/10 unlocked exactly the active amount, including the largest position (2.03M APT). 2 owners need gas.
   - The withdraw step after an unlock in an inactive pool is the `pending_inactive_early` case of `native-delegation`, sampled 10/10.
 - **Cost:** the first run takes 23,776 requests (ages and owner kinds). Re-reading costs 7,423.
+
+## trufin-unlocks
+
+- **Shape:** global table. Every TruFin unlock request sits in `staker::Unlocks`, one SmartTable read bucket by bucket at a pinned version. A read that does not reach `size` entries is an error, never "no request".
+- **Read:** `staker::is_claimable(nonce)`.
+  - Withdrawal requires TruFin's whitelist (`master_whitelist::is_whitelisted`). Owners off it are `team_gated` (`not_whitelisted`).
+- **Age:** the moment the request's pool lockup cycle (`olc`) ended, i.e. the first version whose `DelegationPool.observed_lockup_cycle.index > olc`.
+  - Found by binary search over archive reads; valid because that index only grows.
+  - Memoized per (pool, olc).
+- **Result (2026-10-18):** 1 pending request, 2,411.4 APT ($1.8K), claimable since 2026-07-25, whitelisted. It enters the 90-day headline after 2026-10-23.
+- **Cost:** 49 requests on the first run, about 10 after that.
+- **Recovery:** `staker::withdraw(nonce)`. Simulation 1/1, exact payout.
+
+## Sized and not added
+
+- **Hyperion fridge** (delayed LP withdrawals): `fridge::asset_unclaimed_all()` reports 4.70 APT in total across all users, about $3.50. Too small to maintain.

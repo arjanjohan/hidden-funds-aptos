@@ -44,7 +44,7 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
   const runStart = new Date().toISOString();
   let ledger: Ledger | undefined;
   try {
-    run.watermarkBefore = await processorWatermark(chain, en.processor);
+    if (en.processor) run.watermarkBefore = await processorWatermark(chain, en.processor);
     run.enumeration.start = new Date().toISOString();
     const before = state.candidateCount(def.id);
     const result = await en.run(chain, state.cursor(def.id));
@@ -52,9 +52,11 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
     if (result.cursor) state.setCursor(def.id, result.cursor);
     Object.assign(run.enumeration, { end: new Date().toISOString(), pages: result.pages, cursor: result.cursor,
       candidates: state.candidateCount(def.id), newCandidates: state.candidateCount(def.id) - before });
-    run.watermarkAfter = await processorWatermark(chain, en.processor);
-    const lagMs = Date.now() - Date.parse(run.watermarkAfter.timestamp);
-    if (lagMs > WATERMARK_MAX_LAG_MS) run.degradedReasons.push(`indexer ${en.processor} is ${Math.round(lagMs / 60_000)} min behind`);
+    if (en.processor) {
+      run.watermarkAfter = await processorWatermark(chain, en.processor);
+      const lagMs = Date.now() - Date.parse(run.watermarkAfter.timestamp);
+      if (lagMs > WATERMARK_MAX_LAG_MS) run.degradedReasons.push(`indexer ${en.processor} is ${Math.round(lagMs / 60_000)} min behind`);
+    }
 
     ledger = await chain.ledger();
     const ctx: ReadContext = { chain, ledger, memo: state.memo(), scratch: new Map() };

@@ -75,7 +75,7 @@ const basisLabel: Record<string, string> = {
       <tbody>
         <tr><th>Completeness</th><td><span class={`badge ${s.run.completeness}`}>{s.run.completeness}</span> {s.run.degradedReasons.join('; ')}</td></tr>
         <tr><th>Scope</th><td>{s.run.scope}</td></tr>
-        <tr><th>Indexer</th><td>{s.run.processor} at version {s.run.watermarkAfter?.version ?? '—'} ({date(s.run.watermarkAfter?.timestamp)})</td></tr>
+        <tr><th>Indexer</th><td>{s.run.processor ? `${s.run.processor} at version ${s.run.watermarkAfter?.version ?? '—'} (${date(s.run.watermarkAfter?.timestamp)})` : 'none (read directly from the fullnode)'}</td></tr>
         <tr><th>Wallets checked</th><td>{count(s.run.enumeration.candidates)} candidates, {count(s.run.verification.read)} read this run</td></tr>
         <tr><th>Verified on chain</th><td>ledger versions {s.run.verification.ledgerFrom ?? '—'} – {s.run.verification.ledgerTo ?? '—'}, {date(s.run.verification.end)}</td></tr>
         <tr><th>Sanity check</th><td>{s.run.sanity ? `${s.run.sanity.check}: ${s.run.sanity.detail}` : '—'}</td></tr>

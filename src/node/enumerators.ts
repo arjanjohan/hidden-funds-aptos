@@ -5,6 +5,7 @@ import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
 import { THALA_VE, THALA_VEST } from '../shared/sources/thala-thl.ts';
 import { THALA_LSD } from '../shared/sources/thala-unstake.ts';
 import { TORTUGA, TORTUGA_STATE } from '../shared/sources/tortuga-tickets.ts';
+import { TRUFIN, unlockTable } from '../shared/sources/trufin-unlocks.ts';
 import type { Sanity } from '../shared/snapshot.ts';
 import type { ChainReader, Ledger, Position } from '../shared/types.ts';
 
@@ -20,7 +21,8 @@ export interface Enumeration {
 
 export interface Enumerator {
   sourceId: string;
-  processor: string;
+  /** Indexer processor whose watermark bounds the enumeration; null when only the fullnode is read. */
+  processor: string | null;
   /** Named enumeration scope; "complete" means complete within this, never chain-wide. */
   scope: string;
   run(chain: ChainReader, cursor: string | undefined): Promise<Enumeration>;
@@ -248,6 +250,23 @@ export const inactiveValidatorEnumerator: Enumerator = {
   },
 };
 
+// One global table holds every TruFin unlock request; its owners are the candidates.
+export const trufinUnlocksEnumerator: Enumerator = {
+  sourceId: 'trufin-unlocks',
+  processor: null,
+  scope: `every entry of ${TRUFIN}::staker::Unlocks (one global SmartTable), read at a pinned ledger version`,
+  async run(chain) {
+    const ledger = await chain.ledger();
+    const rows = await unlockTable({ chain, ledger, memo: { get: async () => undefined, set: async () => {} }, scratch: new Map() });
+    return { candidates: [...new Set(rows.map(r => r.user))].map(owner => ({ owner, hint: { nonces: rows.filter(r => r.user === owner).map(r => r.nonce).sort() } })), pages: 1 };
+  },
+  async sanity(chain, ledger, positions) {
+    const res = await chain.resource(TRUFIN, `${TRUFIN}::staker::Unlocks`, ledger.version);
+    return { check: 'claimable requests found vs staker::Unlocks size (all pending requests)', ok: positions.length <= Number(res.unlocks.size),
+      detail: `${positions.length} claimable of ${res.unlocks.size} pending` };
+  },
+};
+
 const noContractTotal: Enumerator['sanity'] = async () =>
   ({ check: 'none', ok: null, detail: 'no contract total available: balances are stored per account' });
 
@@ -260,4 +279,5 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
   noContractTotal);
 
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
-  amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator];
+  amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
+  trufinUnlocksEnumerator];

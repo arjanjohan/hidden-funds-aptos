@@ -6,5 +6,6 @@ import { kofiWithdrawals } from './kofi-withdrawals.ts';
 import { thalaVestingMatured, thalaVethlExpired } from './thala-thl.ts';
 import { thalaUnstake } from './thala-unstake.ts';
 import { tortugaTickets } from './tortuga-tickets.ts';
+import { trufinUnlocks } from './trufin-unlocks.ts';
 
-export const SOURCES: SourceDef<any>[] = [delegation, delegationInactiveValidator, thalaUnstake, kofiWithdrawals, tortugaTickets, amnisWithdrawals, thalaVethlExpired, thalaVestingMatured];
+export const SOURCES: SourceDef<any>[] = [delegation, delegationInactiveValidator, thalaUnstake, kofiWithdrawals, tortugaTickets, amnisWithdrawals, thalaVethlExpired, thalaVestingMatured, trufinUnlocks];

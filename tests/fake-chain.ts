@@ -8,6 +8,7 @@ export function fakeChain(handlers: {
   resource?: Handler<[string, string]>;
   archiveResource?: Handler<[string, string, string]>;
   account?: Handler<[string]>;
+  tableItem?: Handler<[string, string, string, unknown]>;
   gql?: Handler<[string, Record<string, unknown>]>;
 }): ChainReader & { calls: string[] } {
   const calls: string[] = [];
@@ -22,6 +23,7 @@ export function fakeChain(handlers: {
     view: (fn, args, typeArgs = []) => call('view', handlers.view, fn, args, typeArgs) as Promise<any[]>,
     resource: (address, type) => call('resource', handlers.resource, address, type),
     account: address => call('account', handlers.account, address) as Promise<any>,
+    tableItem: (handle, keyType, valueType, key) => call('tableItem', handlers.tableItem, handle, keyType, valueType, key),
     archiveResource: (address, type, version) => call('archiveResource', handlers.archiveResource, address, type, version),
     gql: (query, variables = {}) => call('gql', handlers.gql, query, variables) as Promise<any>,
   };

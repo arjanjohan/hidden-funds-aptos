@@ -6,6 +6,7 @@ import { kofiWithdrawals } from '../src/shared/sources/kofi-withdrawals.ts';
 import { thalaVestingMatured, thalaVethlExpired } from '../src/shared/sources/thala-thl.ts';
 import { THALA_LSD, thalaUnstake } from '../src/shared/sources/thala-unstake.ts';
 import { tortugaTickets } from '../src/shared/sources/tortuga-tickets.ts';
+import { trufinUnlocks } from '../src/shared/sources/trufin-unlocks.ts';
 import { addr, context, fakeChain, memoryMemo } from './fake-chain.ts';
 
 const OWNER = addr('abc');
@@ -227,5 +228,33 @@ describe('delegation with an inactive validator', () => {
     expect(p.status).toBe('blocked');
     expect(p.blockers[0].code).toBe('below_unlock_minimum');
     expect((await read({ active: '500000000', pending: '600000000' })).positions[0].status).toBe('recoverable');
+  });
+});
+
+describe('trufin unlocks', () => {
+  const POOL2 = addr('0901');
+  const row = (nonce: number, user: string) => ({ key: String(nonce), value: { user, amount: '2000', delegation_pool: POOL2, olc: '5' } });
+  const chain = (opts: { listed?: boolean; claimable?: boolean; size?: number }) => fakeChain({
+    resource: () => ({ unlocks: { size: String(opts.size ?? 2), num_buckets: '1', buckets: { inner: { handle: '0xh' } } } }),
+    tableItem: () => [row(1, OWNER), row(2, addr(7))],
+    view: fn => fn.endsWith('::staker::whitelist') ? [addr('aa')] : fn.endsWith('::is_whitelisted') ? [opts.listed ?? true]
+      : fn.endsWith('::is_claimable') ? [opts.claimable ?? true] : [],
+    archiveResource: () => ({ observed_lockup_cycle: { index: '9' } }),
+    gql: () => ({ user_transactions: [{ timestamp: '2026-07-25T22:34:03' }] }),
+  });
+
+  it('lists only the owner\'s claimable requests, whitelisted as recoverable', async () => {
+    const r = await trufinUnlocks.read(context(chain({})), OWNER);
+    expect(r.positions.map(p => [p.locator, p.status])).toEqual([['1', 'recoverable']]);
+  });
+
+  it('marks requests of wallets off the whitelist as needing the team', async () => {
+    const r = await trufinUnlocks.read(context(chain({ listed: false })), OWNER);
+    expect(r.positions[0].status).toBe('team_gated');
+  });
+
+  it('refuses a partial table instead of reporting no request', async () => {
+    const r = await trufinUnlocks.read(context(chain({ size: 3 })), OWNER);
+    expect(r.complete).toBe(false);
   });
 });
