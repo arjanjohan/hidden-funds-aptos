@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { delegation } from '../src/shared/sources/delegation.ts';
+import { kofiWithdrawals } from '../src/shared/sources/kofi-withdrawals.ts';
 import { THALA_LSD, thalaUnstake } from '../src/shared/sources/thala-unstake.ts';
 import { addr, context, fakeChain, memoryMemo } from './fake-chain.ts';
 
@@ -97,5 +98,27 @@ describe('thala unstake', () => {
   it('marks the read incomplete when the view fails', async () => {
     const r = await thalaUnstake.read(context(fakeChain({ view: () => { throw new Error('down'); } })), OWNER);
     expect(r.complete).toBe(false);
+  });
+});
+
+describe('kofi withdrawals', () => {
+  const ticket = (id: number, unlock: number, apt = '1000', fees = '0') =>
+    ({ ticket_id: String(id), user: OWNER, kapt_amount: apt, apt_amount: apt, unlock_timestamp: String(unlock), withdraw_fees: fees });
+  const chain = (tickets: unknown[], paused = false) => fakeChain({
+    view: () => [tickets],
+    resource: (_a, type) => (type.endsWith('::config::GlobalConfig') ? { gateway_config: { withdrawals_paused: paused } } : null),
+  });
+
+  it('counts unlocked tickets only, aged at unlock_timestamp, net of withdrawal fees', async () => {
+    const r = await kofiWithdrawals.read(context(chain([ticket(1, NOW - 100, '1000', '30'), ticket(2, NOW + 100)])), OWNER);
+    expect(r.positions.map(p => p.locator)).toEqual(['1']);
+    expect(r.positions[0].grossClaim[0].raw).toBe('1000');
+    expect(r.positions[0].expectedPayout[0].raw).toBe('970');
+    expect(r.positions[0].claimableSince).toBe(new Date((NOW - 100) * 1000).toISOString());
+  });
+
+  it('blocks unlocked tickets while withdrawals are paused', async () => {
+    const r = await kofiWithdrawals.read(context(chain([ticket(1, NOW - 100)], true)), OWNER);
+    expect(r.positions[0].status).toBe('blocked');
   });
 });

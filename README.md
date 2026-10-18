@@ -5,7 +5,7 @@ Finds APT people left behind on Aptos: stake that finished unlocking but was nev
 - **Dashboard:** weekly aggregate snapshot per source. Only totals are published, never addresses.
 - **Check:** paste addresses. Your browser reads Aptos mainnet directly; the addresses are not sent to this site.
 
-What counts, how it is aged and how totals are computed: [docs/left-behind.md](docs/left-behind.md). Measurements behind each source: [docs/phase0-report.md](docs/phase0-report.md).
+What counts, how it is aged and how totals are computed: [docs/left-behind.md](docs/left-behind.md). Measurements behind each source: [docs/phase0-report.md](docs/phase0-report.md) and [docs/sources.md](docs/sources.md).
 
 ## Layout
 

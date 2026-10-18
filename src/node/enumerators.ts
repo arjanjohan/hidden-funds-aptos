@@ -1,5 +1,6 @@
 // Chain-wide candidate enumeration and source-level sanity checks (node-only: keyed indexer use).
 import { mapLimit, normalizeAddress } from '../shared/chain.ts';
+import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
 import { THALA_LSD } from '../shared/sources/thala-unstake.ts';
 import type { Sanity } from '../shared/snapshot.ts';
 import type { ChainReader, Ledger, Position } from '../shared/types.ts';
@@ -79,33 +80,62 @@ const SENDERS_QUERY = `query($c:String!,$m:String!,$f:String!,$after:bigint!){
   user_transactions(where:{entry_function_contract_address:{_eq:$c}, entry_function_module_name:{_eq:$m},
     entry_function_function_name:{_eq:$f}, version:{_gt:$after}}, order_by:{version:asc}, limit:${PAGE}){ version sender } }`;
 
-/** New senders of one entry function since the stored version cursor. Only the (contract, module, function) filter is
- *  indexed; entry_function_id_str alone times out. */
-async function senders(chain: ChainReader, fn: { contract: string; module: string; name: string }, cursor: string | undefined): Promise<Enumeration> {
+type EntryFunction = { contract: string; module: string; name: string };
+
+/** New senders of entry functions since per-function version cursors (stored as one JSON object). Only the
+ *  (contract, module, function) filter is indexed; entry_function_id_str alone times out. */
+async function senders(chain: ChainReader, fns: EntryFunction[], cursor: string | undefined): Promise<Enumeration> {
+  let cursors: Record<string, string> = {};
+  try { cursors = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: rescan from the start */ }
+  if (typeof cursors !== 'object' || cursors === null) cursors = {};
   const owners = new Set<string>();
-  let after = cursor ?? '0', pages = 0;
-  for (;;) {
-    const page = (await chain.gql(SENDERS_QUERY, { c: fn.contract, m: fn.module, f: fn.name, after })).user_transactions;
-    pages++;
-    page.forEach((t: any) => owners.add(normalizeAddress(t.sender)));
-    if (page.length) after = String(page[page.length - 1].version);
-    if (page.length < PAGE) break;
+  let pages = 0;
+  for (const fn of fns) {
+    const key = `${fn.contract}::${fn.module}::${fn.name}`;
+    let after = cursors[key] ?? '0';
+    for (;;) {
+      const page = (await chain.gql(SENDERS_QUERY, { c: fn.contract, m: fn.module, f: fn.name, after })).user_transactions;
+      pages++;
+      page.forEach((t: any) => owners.add(normalizeAddress(t.sender)));
+      if (page.length) after = String(page[page.length - 1].version);
+      if (page.length < PAGE) break;
+    }
+    cursors[key] = after;
   }
-  return { candidates: [...owners].map(owner => ({ owner })), cursor: after, pages };
+  return { candidates: [...owners].map(owner => ({ owner })), cursor: JSON.stringify(cursors), pages };
 }
 
-export const thalaUnstakeEnumerator: Enumerator = {
-  sourceId: 'thala-unstake',
-  processor: 'user_transaction_processor',
-  scope: `senders of ${THALA_LSD}::scripts::request_unstake_APT entry calls (requests made by other contracts excluded)`,
-  run: (chain, cursor) => senders(chain, { contract: THALA_LSD, module: 'scripts', name: 'request_unstake_APT' }, cursor),
-  async sanity(chain, ledger, positions) {
-    const tlsd = await chain.resource(THALA_LSD, `${THALA_LSD}::staking::TLSD`, ledger.version);
-    const held = BigInt(tlsd.apt_pending_withdrawal.value);
-    const matured = positions.reduce((s, p) => s + BigInt(p.grossClaim[0].raw), 0n);
-    return { check: 'matured requests found <= TLSD.apt_pending_withdrawal (APT held for claims)', ok: matured <= held,
-      detail: `matured ${matured} of ${held} held (${held ? (Number(matured * 10_000n / held) / 100).toFixed(2) : '0'}%)` };
-  },
-};
+function entrySenders(sourceId: string, fns: EntryFunction[], sanity: Enumerator['sanity']): Enumerator {
+  return {
+    sourceId,
+    processor: 'user_transaction_processor',
+    scope: `senders of ${fns.map(f => `${f.contract}::${f.module}::${f.name}`).join(', ')} entry calls (calls made by other contracts excluded)`,
+    run: (chain, cursor) => senders(chain, fns, cursor),
+    sanity,
+  };
+}
 
-export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator];
+const sumGross = (positions: Position[]) => positions.reduce((s, p) => s + BigInt(p.grossClaim[0].raw), 0n);
+const pct = (part: bigint, whole: bigint) => (whole ? (Number(part * 10_000n / whole) / 100).toFixed(2) : '0') + '%';
+
+export const thalaUnstakeEnumerator = entrySenders('thala-unstake',
+  [{ contract: THALA_LSD, module: 'scripts', name: 'request_unstake_APT' }],
+  async (chain, ledger, positions) => {
+    const tlsd = await chain.resource(THALA_LSD, `${THALA_LSD}::staking::TLSD`, ledger.version);
+    const held = BigInt(tlsd.apt_pending_withdrawal.value), matured = sumGross(positions);
+    return { check: 'matured requests found <= TLSD.apt_pending_withdrawal (APT held for claims)', ok: matured <= held,
+      detail: `matured ${matured} of ${held} held (${pct(matured, held)})` };
+  });
+
+export const kofiWithdrawalsEnumerator = entrySenders('kofi-withdrawals',
+  [{ contract: KOFI, module: 'gateway', name: 'request_withdrawal_entry' },
+   { contract: KOFI, module: 'gateway', name: 'unstake_and_request_withdrawal_entry' }],
+  async (chain, ledger, positions) => {
+    const [unlocked] = await chain.view(`${KOFI}::vault::get_unlocked_apt_balance`, [], [], ledger.version);
+    const held = BigInt(unlocked), matured = sumGross(positions);
+    // Not a hard ceiling: matured tickets can wait for APT still unlocking from validators.
+    return { check: 'matured tickets found vs vault::get_unlocked_apt_balance (APT ready for withdrawals)', ok: null,
+      detail: `matured ${matured} vs ${held} unlocked (${pct(matured, held)})` };
+  });
+
+export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator];
