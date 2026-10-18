@@ -19,7 +19,7 @@ const arg = (name: string, fallback: number) => args.includes(name) ? Number(arg
 const SAMPLE = arg('--sample', 1500);
 const SEED = arg('--seed', 20261018);
 const FRESH = args.includes('--fresh');
-const KEY = readFileSync('.env', 'utf8').match(/^GEOMI=(.*)$/m)![1].trim();
+const KEY = readFileSync('.env', 'utf8').match(/^GEOMI_API_KEY=(.*)$/m)![1].trim();
 const TYPE_INFO = '0x1::type_info::TypeInfo';
 
 const QUERY = `query($c:String!,$m:String!,$f:String!,$after:bigint!){

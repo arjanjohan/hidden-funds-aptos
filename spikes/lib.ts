@@ -7,9 +7,9 @@ export const ARCHIVE = 'https://archive.mainnet.aptoslabs.com/v1';
 export const INDEXER = 'https://api.mainnet.aptoslabs.com/v1/graphql';
 
 function loadKey(): string {
-  const line = readFileSync(new URL('../.env', import.meta.url), 'utf8').split('\n').find(l => l.startsWith('GEOMI='));
-  const key = line?.slice('GEOMI='.length).trim();
-  if (!key) throw new Error('GEOMI missing from .env');
+  const line = readFileSync(new URL('../.env', import.meta.url), 'utf8').split('\n').find(l => l.startsWith('GEOMI_API_KEY='));
+  const key = line?.slice('GEOMI_API_KEY='.length).trim();
+  if (!key) throw new Error('GEOMI_API_KEY missing from .env');
   return key;
 }
 const KEY = loadKey();

@@ -14,7 +14,7 @@ const args = process.argv.slice(2);
 const arg = (name: string, fallback: number) => args.includes(name) ? Number(args[args.indexOf(name) + 1]) : fallback;
 const SEED = arg('--seed', 20261018);
 const EXTRA = arg('--extra', 7);
-const KEY = readFileSync('.env', 'utf8').match(/^GEOMI=(.*)$/m)![1].trim();
+const KEY = readFileSync('.env', 'utf8').match(/^GEOMI_API_KEY=(.*)$/m)![1].trim();
 const THALA = '0xfaf4e633ae9eb31366c9ca24214231760926576c7b625313b3688b5e900731f6';
 
 const aptos = new Aptos(new AptosConfig({ network: Network.MAINNET, clientConfig: { API_KEY: KEY } }));

@@ -6,10 +6,10 @@ import type { ChainReader } from '../shared/types.ts';
 function apiKey(): string {
   if (process.env.GEOMI_API_KEY) return process.env.GEOMI_API_KEY;
   try {
-    const line = readFileSync('.env', 'utf8').split('\n').find(l => l.startsWith('GEOMI='));
-    if (line) return line.slice('GEOMI='.length).trim();
+    const line = readFileSync('.env', 'utf8').split('\n').find(l => l.startsWith('GEOMI_API_KEY='));
+    if (line) return line.slice('GEOMI_API_KEY='.length).trim();
   } catch { /* no local .env */ }
-  throw new Error('Set GEOMI_API_KEY (or GEOMI in .env)');
+  throw new Error('Set GEOMI_API_KEY (environment or .env)');
 }
 
 export class RequestCapReached extends Error {}

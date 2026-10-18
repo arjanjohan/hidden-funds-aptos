@@ -13,7 +13,7 @@ const AURO = '0x50a340a19e6ada1be07192c042786ca6a9651d5c845acc8727e8c6416a56a32c
 const COLLECTION = '0x0bc8b183a8bfbd127e2a7a53944c10fd7d22f34e20d336c9a85f375f552ef951';
 const DIR = 'data/auro-cdp';
 const FRESH = process.argv.includes('--fresh');
-const KEY = readFileSync('.env', 'utf8').match(/^GEOMI=(.*)$/m)![1].trim();
+const KEY = readFileSync('.env', 'utf8').match(/^GEOMI_API_KEY=(.*)$/m)![1].trim();
 
 const QUERY = `query($c:String!,$after:String!){
   current_token_ownerships_v2(where:{current_token_data:{collection_id:{_eq:$c}}, amount:{_gt:"0"}, token_data_id:{_gt:$after}},
