@@ -1,5 +1,6 @@
 // Chain-wide candidate enumeration and source-level sanity checks (node-only: keyed indexer use).
 import { mapLimit, normalizeAddress } from '../shared/chain.ts';
+import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
 import { THALA_LSD } from '../shared/sources/thala-unstake.ts';
 import { TORTUGA, TORTUGA_STATE } from '../shared/sources/tortuga-tickets.ts';
@@ -148,4 +149,41 @@ export const tortugaTicketsEnumerator = entrySenders('tortuga-tickets',
       detail: `found ${found} of ${outstanding} outstanding (${pct(found, outstanding)})` };
   });
 
-export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator];
+// Keyset on token_data_id; a token can only have one current owner with amount > 0 (non-fungible).
+const COLLECTION_QUERY = `query($c:String!,$after:String!){ current_token_ownerships_v2(where:{current_token_data:{collection_id:{_eq:$c}},
+  amount:{_gt:"0"}, token_data_id:{_gt:$after}}, order_by:{token_data_id:asc}, limit:${PAGE}){ token_data_id owner_address } }`;
+
+/** Current owners of every token in a collection, with their token ids as the read hint. */
+function collectionOwners(sourceId: string, collection: string, sanity: Enumerator['sanity']): Enumerator {
+  return {
+    sourceId,
+    processor: 'token_v2_processor',
+    scope: `current owners of tokens in collection ${collection} (current_token_ownerships_v2, amount > 0)`,
+    async run(chain) {
+      const tokens = new Map<string, string[]>();
+      let after = '', pages = 0;
+      for (;;) {
+        const page = (await chain.gql(COLLECTION_QUERY, { c: collection, after })).current_token_ownerships_v2;
+        pages++;
+        for (const t of page) {
+          const owner = normalizeAddress(t.owner_address);
+          tokens.set(owner, [...(tokens.get(owner) ?? []), normalizeAddress(t.token_data_id)]);
+        }
+        if (page.length < PAGE) break;
+        after = page[page.length - 1].token_data_id;
+      }
+      return { candidates: [...tokens].map(([owner, list]) => ({ owner, hint: { tokens: list.sort() } })), pages };
+    },
+    sanity,
+  };
+}
+
+export const amnisWithdrawalsEnumerator = collectionOwners('amnis-withdrawals', AMNIS_WITHDRAWAL_COLLECTION,
+  async (chain, ledger, positions) => {
+    const [pending] = await chain.view(`${AMNIS}::withdrawal::total_pending_withdrawal`, [], [], ledger.version);
+    const total = BigInt(pending), matured = sumGross(positions);
+    return { check: 'matured withdrawal tokens found <= withdrawal::total_pending_withdrawal (all open tokens)', ok: matured <= total,
+      detail: `matured ${matured} of ${total} pending (${pct(matured, total)})` };
+  });
+
+export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator, amnisWithdrawalsEnumerator];

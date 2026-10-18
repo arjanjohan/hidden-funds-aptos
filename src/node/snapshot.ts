@@ -3,7 +3,8 @@
 // Usage: node src/node/snapshot.ts [--source id] [--limit N] [--cap N] [--state path] [--out path]
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { ageDays, HEADLINE_AGE_DAYS, headlineAge, sourceTotals, usd, type PriceBook, type SourceTotals } from '../shared/accounting.ts';
+import { ageDays, applyOwnerKind, HEADLINE_AGE_DAYS, headlineAge, sourceTotals, usd, type PriceBook } from '../shared/accounting.ts';
+import { ownerKind } from '../shared/owners.ts';
 import { mapLimit } from '../shared/chain.ts';
 import { SOURCES } from '../shared/sources/index.ts';
 import type { ChainReader, Ledger, Position, ReadContext, SourceDef } from '../shared/types.ts';
@@ -68,7 +69,8 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
       if (capHit.hit) return;
       try {
         const r = await def.read(ctx, owner, hint);
-        state.recordRead(def.id, owner, r.positions, r.complete, runStart);
+        const positions = r.positions.length ? applyOwnerKind(r.positions, await ownerKind(ctx, owner)) : r.positions;
+        state.recordRead(def.id, owner, positions, r.complete, runStart);
         run.verification.read++;
         if (!r.complete) run.verification.incomplete++;
         run.errors.push(...r.errors.slice(0, 2));

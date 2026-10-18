@@ -47,6 +47,9 @@ const basisLabel: Record<string, string> = {
       </tbody>
     </table>
   </div>
+  {t.headline.owners > 1 && (
+    <p class="muted">The largest single wallet holds {Math.round(t.headlineTopOwnerShare * 100)}% of the 90+ day total.</p>
+  )}
   {t.agedEstimated.ge90.positions > 0 && (
     <p class="muted">Not in these numbers: {usd(t.agedEstimated.ge90.usd)} in {count(t.agedEstimated.ge90.positions)} positions whose age is only an estimate.</p>
   )}

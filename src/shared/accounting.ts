@@ -49,6 +49,18 @@ function bucket(positions: Position[], value: (p: Position) => number | null): B
     ownersMin10: [...perOwner.values()].filter(v => v >= OWNER_MIN_USD).length };
 }
 
+export type OwnerKind = 'user' | 'resource_account' | 'object';
+
+/** Only an ordinary account can sign the recovery itself. Positions held by resource accounts (protocol-controlled)
+ *  or by objects stay visible but count as unknown. */
+export function applyOwnerKind(positions: Position[], kind: OwnerKind): Position[] {
+  if (kind === 'user') return positions;
+  const detail = kind === 'resource_account'
+    ? 'Held by a resource account (program-controlled), not by a person who can sign the recovery.'
+    : 'Held by an object, not directly by an account.';
+  return positions.map(p => ({ ...p, status: 'unknown', blockers: [...p.blockers, { code: 'unsupported_owner', detail }] }));
+}
+
 export interface SourceTotals {
   face: Bucket;                                   // gross claim, every status
   byStatus: Record<Status, Bucket>;               // expected payout
@@ -58,6 +70,8 @@ export interface SourceTotals {
   agedEstimated: Record<string, Bucket>;
   byAgeBasis: Record<AgeBasis, Bucket>;
   headline: Bucket;
+  /** Share of the headline held by the single largest wallet (no address published). */
+  headlineTopOwnerShare: number;
 }
 
 export function sourceTotals(source: Pick<SourceDef, 'headlineAgeBases'>, positions: Position[], prices: PriceBook, nowSecs: number): SourceTotals {
@@ -77,7 +91,15 @@ export function sourceTotals(source: Pick<SourceDef, 'headlineAgeBases'>, positi
     agedEstimated: Object.fromEntries(AGE_BUCKETS.map(d => [`ge${d}`, bucket(agedOn(false, d), payout)])),
     byAgeBasis: Object.fromEntries(bases.map(b => [b, bucket(recoverable.filter(p => p.ageBasis === b), payout)])) as Record<AgeBasis, Bucket>,
     headline: bucket(agedOn(true, HEADLINE_AGE_DAYS), payout),
+    headlineTopOwnerShare: topOwnerShare(agedOn(true, HEADLINE_AGE_DAYS), payout),
   };
+}
+
+function topOwnerShare(positions: Position[], value: (p: Position) => number | null): number {
+  const perOwner = new Map<string, number>();
+  for (const p of positions) perOwner.set(p.owner, (perOwner.get(p.owner) ?? 0) + (value(p) ?? 0));
+  const total = [...perOwner.values()].reduce((a, b) => a + b, 0);
+  return total > 0 ? Math.max(...perOwner.values()) / total : 0;
 }
 
 export function assertUniqueIds(positions: Position[]) {

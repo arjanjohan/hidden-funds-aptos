@@ -81,6 +81,8 @@ export interface ChainReader {
   view(fn: string, args: unknown[], typeArgs?: string[], ledgerVersion?: string): Promise<any[]>;
   /** Null when the resource does not exist. */
   resource(address: string, type: string, ledgerVersion?: string): Promise<any | null>;
+  /** Account authentication key and sequence number; null when the address has no account. */
+  account(address: string): Promise<{ authentication_key: string; sequence_number: string } | null>;
   /** Historical state older than the fullnode's pruning window. */
   archiveResource(address: string, type: string, ledgerVersion: string): Promise<any | null>;
   gql<T = any>(query: string, variables?: Record<string, unknown>): Promise<T>;

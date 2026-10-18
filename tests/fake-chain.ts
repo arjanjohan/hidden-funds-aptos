@@ -7,6 +7,7 @@ export function fakeChain(handlers: {
   view?: Handler<[string, unknown[], string[]]>;
   resource?: Handler<[string, string]>;
   archiveResource?: Handler<[string, string, string]>;
+  account?: Handler<[string]>;
   gql?: Handler<[string, Record<string, unknown>]>;
 }): ChainReader & { calls: string[] } {
   const calls: string[] = [];
@@ -20,6 +21,7 @@ export function fakeChain(handlers: {
     ledger: async () => ({ version: '100', timestampSecs: 1_800_000_000 }),
     view: (fn, args, typeArgs = []) => call('view', handlers.view, fn, args, typeArgs) as Promise<any[]>,
     resource: (address, type) => call('resource', handlers.resource, address, type),
+    account: address => call('account', handlers.account, address) as Promise<any>,
     archiveResource: (address, type, version) => call('archiveResource', handlers.archiveResource, address, type, version),
     gql: (query, variables = {}) => call('gql', handlers.gql, query, variables) as Promise<any>,
   };

@@ -28,7 +28,11 @@ const enumerator = (owners: string[], fail = false): Enumerator => ({
   run: async () => { if (fail) throw new Error('indexer 503'); return { candidates: owners.map(owner => ({ owner })), pages: 1 }; },
 });
 
-const chain = (watermark = freshWatermark): ChainReader => fakeChain({ gql: () => watermark() });
+const chain = (watermark = freshWatermark, authKey?: string): ChainReader => fakeChain({
+  gql: () => watermark(),
+  resource: () => null,
+  account: (address: string) => ({ authentication_key: authKey ?? address, sequence_number: '1' }),
+});
 
 describe('runSource', () => {
   it('reports an indexer failure mid-enumeration as degraded', async () => {
@@ -60,6 +64,24 @@ describe('runSource', () => {
       new State(':memory:'), chain(), capHit);
     expect(capHit.hit).toBe(true);
     expect(run.degradedReasons.join()).toMatch(/request cap/);
+  });
+});
+
+describe('owner rule', () => {
+  it('keeps positions held by a resource account visible but unknown', async () => {
+    const state = new State(':memory:');
+    await runSource(source(async o => ({ positions: [position(o)], complete: true, errors: [], ledgerVersion: '1' })),
+      enumerator([addr(1)]), state, chain(freshWatermark, '0x' + '0'.repeat(64)), { hit: false });
+    const [p] = state.positionsOf('t');
+    expect(p.status).toBe('unknown');
+    expect(p.blockers.map(b => b.code)).toEqual(['unsupported_owner']);
+  });
+
+  it('leaves positions held by an ordinary account unchanged', async () => {
+    const state = new State(':memory:');
+    await runSource(source(async o => ({ positions: [position(o)], complete: true, errors: [], ledgerVersion: '1' })),
+      enumerator([addr(1)]), state, chain(), { hit: false });
+    expect(state.positionsOf('t')[0].status).toBe('recoverable');
   });
 });
 

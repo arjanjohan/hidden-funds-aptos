@@ -13,9 +13,18 @@ Measurement runs use a fresh local state (`node src/node/snapshot.ts --source <i
 | `native-delegation` | indexer staking table | ended position (unlock done) | headline $680K, 7,163 owners | 20/20 ok, payout = expected; 2 owners need gas |
 | `thala-unstake` | entry-function senders | ended position (request matured) | headline $27.5K, 925 owners | 10/10 ok, payout = expected; 3 need gas |
 | `kofi-withdrawals` | entry-function senders | ended position; protocol winding down | headline $12.8K, 287 owners | 10/10 ok, payout = expected; 1 needs gas |
+| `amnis-withdrawals` | collection owners (`Amnis Withdrawal Tokens`) | ended position (lockup passed) | headline $938K, 397 owners; one wallet = 88% | 10/10 ok, payout = expected; 1 needs gas |
 | `tortuga-tickets` | entry-function senders → per-user `TicketStore` | ended position (cooldown passed); reserve-queued tickets blocked | headline $12.2K, 818 owners; blocked $172 | recoverable 10/10 exact; blocked 4/4 abort `EFUND_NOT_AVAILABLE_YET` as predicted |
 
 Native delegation and Thala are documented in [phase0-report.md](phase0-report.md).
+
+**Owner rule (all sources):** after each read, the pipeline classifies the owner once and memoizes it.
+- An account with a zero authentication key is a **resource account**, controlled by a program.
+- An address with no account resource but with `ObjectCore` is an **object**.
+- Positions held by either type stay listed but become `unknown`, with blocker `unsupported_owner`, so they never reach the headline.
+- The cost is 1 request per ordinary owner, ever.
+
+Each source page also states the largest single wallet's share of its 90+ day total. No address is published.
 
 ## kofi-withdrawals
 
@@ -52,3 +61,18 @@ Native delegation and Thala are documented in [phase0-report.md](phase0-report.m
   - Sample simulation: recoverable 10/10, paying exactly the expected amount.
   - Blocked 4/4 abort with `EFUND_NOT_AVAILABLE_YET(0xd0005)`, exactly as classified.
 - **Not counted:** wallet-held tAPT. It has a market (quoted ~11% below redemption), so it is not stranded under the rules.
+
+## amnis-withdrawals
+
+- **Status:** Amnis is live. Withdrawal tokens are NFTs in the collection "Amnis Withdrawal Tokens" (`0x40fb9ce6…6b8d`), created by the Amnis package.
+- **Enumeration:** current owners of that collection, via `current_token_ownerships_v2` keyset-paged on `token_data_id` (5 pages, 455 owners). The token ids are passed as the read hint.
+- **Read:** for each token:
+  - `ObjectCore.owner` must equal the owner, otherwise the token moved and is skipped.
+  - `withdrawal::WithdrawalToken` gives `amapt.value` and `locked_until_secs`.
+  - Matured tokens count, payout amAPT 1:1 in APT (confirmed by simulation).
+- **Result (with the owner rule):** $944K recoverable, of which **$938K is aged ≥ 90 days**, across 397 owners (267 with ≥ $10).
+  - The largest wallet, an ordinary account with 415 transactions, holds 1.08M APT matured since 2025-11-26: **88% of the headline**.
+  - 4 positions (~$304K, mostly one resource account at 388K APT) are `unknown` (`unsupported_owner`).
+- **Sanity:** matured tokens found = 1,634,658 APT, which is **99.08%** of `withdrawal::total_pending_withdrawal` (all open tokens, matured or not).
+- **Recovery:** `router::withdraw_entry(token)`. 10 of 10 sampled simulations, including the largest token, paid exactly the expected amount.
+- **Backlog spotted:** the same wallets hold "Amnis Season 2 Airdrop" ($AMI Claim) and "Amnis Reward Voucher" NFTs. These are possible unclaimed-airdrop sources; their status needs research.

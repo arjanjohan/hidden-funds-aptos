@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ownerKind } from '../src/shared/owners.ts';
 import { delegation } from '../src/shared/sources/delegation.ts';
 import { kofiWithdrawals } from '../src/shared/sources/kofi-withdrawals.ts';
 import { THALA_LSD, thalaUnstake } from '../src/shared/sources/thala-unstake.ts';
@@ -148,5 +149,23 @@ describe('tortuga tickets', () => {
   it('reads nothing more for an account without tickets', async () => {
     const r = await tortugaTickets.read(context(fakeChain({ resource: () => null })), OWNER);
     expect(r).toMatchObject({ positions: [], complete: true });
+  });
+});
+
+describe('owner kind', () => {
+  it('classifies resource accounts, objects and ordinary accounts, once', async () => {
+    const zero = '0x' + '0'.repeat(64);
+    const chain = fakeChain({
+      account: a => (a === addr(1) ? { authentication_key: zero, sequence_number: '0' } : a === addr(2) ? { authentication_key: addr(2), sequence_number: '3' } : null),
+      resource: a => (a === addr(3) ? { owner: addr(2) } : null),
+    });
+    const ctx = context(chain);
+    expect(await ownerKind(ctx, addr(1))).toBe('resource_account');
+    expect(await ownerKind(ctx, addr(2))).toBe('user');
+    expect(await ownerKind(ctx, addr(3))).toBe('object');
+    expect(await ownerKind(ctx, addr(4))).toBe('user');
+    const before = chain.calls.length;
+    await ownerKind(ctx, addr(1));
+    expect(chain.calls.length).toBe(before);
   });
 });

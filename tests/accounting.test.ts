@@ -77,6 +77,14 @@ describe('usd', () => {
     expect(t.headline.usd).toBe(0);
   });
 
+  it('reports the largest wallet\'s share of the headline', () => {
+    const t = sourceTotals(source, [
+      pos({ owner: addr(1), locator: 'a', apt: 3, days: 200 }),
+      pos({ owner: addr(2), locator: 'a', apt: 1, days: 200 }),
+    ], prices, NOW);
+    expect(t.headlineTopOwnerShare).toBe(0.75);
+  });
+
   it('counts owners per source with the $10 floor', () => {
     const t = sourceTotals(source, [
       pos({ owner: addr(1), locator: 'a', apt: 3, days: 200 }),
