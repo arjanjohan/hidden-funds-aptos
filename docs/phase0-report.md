@@ -183,4 +183,16 @@ So about 5–20 reads per address across these sources. That fits in a browser o
 - **Check design: (a) live reads, no published address index** (decided 2026-10-18).
   - The dashboard publishes aggregates only.
   - The check page reads the chain from the browser for pasted addresses. The Aptos fullnode/indexer see those addresses; we don't.
-- Hosting and pipeline cadence: open. API usage cost (Geomi compute units) dominates hosting cost; see the discussion of 2026-10-18.
+- **Hosting** (decided 2026-10-18):
+  - GitHub Actions in a public repo runs the pipeline; Cloudflare Pages serves the static site. Both are $0.
+  - Pipeline state is SQLite in the Actions cache. It is rebuildable from chain data, so a lost cache costs one full run.
+  - A Thursday job restores the cache so it is not evicted under the 7-day rule.
+- **Cadence:** weekly snapshot.
+  - Every known non-zero position is re-read each run. Zero owners are re-read weekly, which under a weekly cadence is also every run.
+  - Delegation ages are memoized per (owner, pool, amount), so only new or changed positions cost aging reads.
+- **Sources in Phase 1:** native delegation and Thala. Aries is left out until the real Geomi cost per request is known, since it would be ~95% of requests.
+- **Check page:** calls Aptos anonymously from the visitor's browser. CORS is verified on the fullnode, archive and indexer. Our key never ships to the browser.
+- **API cost guard:** a per-run request cap (default 100,000; `REQUEST_CAP` env or `--cap`). Hitting it marks the remaining sources degraded instead of overspending.
+- **Deviations from the plan:**
+  - The layer boundary is enforced by `tests/boundary.test.ts` (source imports plus the built `dist/`) instead of ESLint and TS project references. Same guarantee, no extra tooling.
+  - `@aptos-labs/ts-sdk` is a dev dependency used only by the spikes. Shared and browser code use plain `fetch`.

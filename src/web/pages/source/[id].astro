@@ -1,0 +1,84 @@
+---
+import Base from '../../layouts/Base.astro';
+import { snapshot } from '../../lib/data.ts';
+import { count, date, usd } from '../../lib/format.ts';
+import type { SnapshotSource } from '../../../shared/snapshot.ts';
+
+export function getStaticPaths() {
+  return (snapshot?.sources ?? []).map(source => ({ params: { id: source.id }, props: { source } }));
+}
+
+const { source: s } = Astro.props as { source: SnapshotSource };
+const t = s.totals;
+const bands = s.sizeBands.map((b, i, all) => ({
+  label: i === 0 ? `under ${usd(b.upTo!)}` : b.upTo === null ? `${usd(all[i - 1].upTo!)}+` : `${usd(all[i - 1].upTo!)} – ${usd(b.upTo)}`,
+  positions: b.positions,
+}));
+const basisLabel: Record<string, string> = {
+  onchain_maturity: 'On-chain unlock or maturity time',
+  protocol_closure: 'Protocol closure date',
+  position_interaction: 'Last interaction with the position (estimate)',
+  unknown: 'Unknown age',
+};
+---
+<Base title={`${s.title} · hidden funds Aptos`} description={s.summary}>
+  <p class="muted"><a href="/">Dashboard</a> / {s.title}</p>
+  <h1>{s.title}</h1>
+  <p>{s.summary}</p>
+  <p class="muted">
+    Protocol status: {s.protocolStatus.state.replace('_', ' ')} ({s.protocolStatus.evidence})
+    {s.officialUrl && <> · <a href={s.officialUrl}>Official app</a></>}
+  </p>
+
+  <div class="cards">
+    <div class="card"><span class="muted">Left behind 90+ days</span><b>{usd(t.headline.usd)}</b><span class="muted">{count(t.headline.owners)} wallets · {count(t.headline.ownersMin10)} with $10+</span></div>
+    <div class="card"><span class="muted">Claimable now, any age</span><b>{usd(t.byStatus.recoverable.usd)}</b><span class="muted">{count(t.byStatus.recoverable.positions)} positions</span></div>
+    <div class="card"><span class="muted">Blocked or needs the team</span><b>{usd(t.byStatus.blocked.usd + t.byStatus.team_gated.usd)}</b><span class="muted">{count(t.byStatus.blocked.positions + t.byStatus.team_gated.positions)} positions</span></div>
+  </div>
+
+  <h2>How long it has been waiting</h2>
+  <div class="table">
+    <table>
+      <thead><tr><th>Waiting</th><th class="num">Value</th><th class="num">Positions</th><th class="num">Wallets</th></tr></thead>
+      <tbody>
+        {Object.entries(t.aged).map(([k, b]) => (
+          <tr><td>{k.replace('ge', '')}+ days</td><td class="num">{usd(b.usd)}</td><td class="num">{count(b.positions)}</td><td class="num">{count(b.owners)}</td></tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+  {t.agedEstimated.ge90.positions > 0 && (
+    <p class="muted">Not in these numbers: {usd(t.agedEstimated.ge90.usd)} in {count(t.agedEstimated.ge90.positions)} positions whose age is only an estimate.</p>
+  )}
+  <p class="muted">
+    Age basis of claimable positions:
+    {Object.entries(t.byAgeBasis).filter(([, b]) => b.positions).map(([k, b]) => `${basisLabel[k]}: ${count(b.positions)}`).join(' · ')}
+  </p>
+
+  <h2>Position sizes</h2>
+  <div class="table">
+    <table>
+      <thead><tr><th>Claimable value</th><th class="num">Positions</th></tr></thead>
+      <tbody>{bands.map(b => <tr><td>{b.label}</td><td class="num">{count(b.positions)}</td></tr>)}</tbody>
+    </table>
+  </div>
+
+  <h2>How to recover</h2>
+  <ol>{s.howTo.map(step => <li>{step}</li>)}</ol>
+
+  <h2>Data</h2>
+  <div class="table">
+    <table>
+      <tbody>
+        <tr><th>Completeness</th><td><span class={`badge ${s.run.completeness}`}>{s.run.completeness}</span> {s.run.degradedReasons.join('; ')}</td></tr>
+        <tr><th>Scope</th><td>{s.run.scope}</td></tr>
+        <tr><th>Indexer</th><td>{s.run.processor} at version {s.run.watermarkAfter?.version ?? '—'} ({date(s.run.watermarkAfter?.timestamp)})</td></tr>
+        <tr><th>Wallets checked</th><td>{count(s.run.enumeration.candidates)} candidates, {count(s.run.verification.read)} read this run</td></tr>
+        <tr><th>Verified on chain</th><td>ledger versions {s.run.verification.ledgerFrom ?? '—'} – {s.run.verification.ledgerTo ?? '—'}, {date(s.run.verification.end)}</td></tr>
+        <tr><th>Sanity check</th><td>{s.run.sanity ? `${s.run.sanity.check}: ${s.run.sanity.detail}` : '—'}</td></tr>
+        <tr><th>Last complete run</th><td>{date(s.lastSuccessAt)}</td></tr>
+        <tr><th>Counted because</th><td>{s.inclusionRule}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</Base>

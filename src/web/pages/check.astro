@@ -1,0 +1,13 @@
+---
+import Check from '../components/Check.tsx';
+import Base from '../layouts/Base.astro';
+import { snapshot } from '../lib/data.ts';
+---
+<Base title="Check wallets · hidden funds Aptos" description="Paste Aptos addresses to find APT you can still withdraw or claim.">
+  <h1>Check wallets</h1>
+  <p class="muted">
+    Paste Aptos addresses. Your browser reads Aptos mainnet directly; addresses are not sent to this site.
+    Aptos Labs' public API sees the requests.
+  </p>
+  <Check client:load prices={snapshot?.prices ?? {}} />
+</Base>
