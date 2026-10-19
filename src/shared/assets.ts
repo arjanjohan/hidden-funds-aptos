@@ -3,7 +3,6 @@ import { APT, MOVE } from './sources/delegation.ts';
 import { KAPT, STKAPT } from './sources/kofi-receipts.ts';
 import { LZ_COINS } from './sources/layerzero-claimable.ts';
 import { MKLP } from './sources/merkle-mklp.ts';
-import { GUI } from './sources/pancake-syrup.ts';
 import { ESMKL, MKL, PREMKL } from './sources/merkle-vemkl.ts';
 import { THL } from './sources/thala-thl.ts';
 
@@ -12,7 +11,6 @@ export const ASSETS: Record<string, { symbol: string; decimals: number }> = {
   [APT]: { symbol: 'APT', decimals: 8 },
   [THL]: { symbol: 'THL', decimals: 8 },
   [MOVE]: { symbol: 'MOVE', decimals: 8 },
-  [GUI]: { symbol: 'GUI', decimals: 6 },
   [KAPT]: { symbol: 'kAPT', decimals: 8 },
   [STKAPT]: { symbol: 'stkAPT', decimals: 8 },
   [MKLP[0].coin]: { symbol: 'MKLP', decimals: 6 },

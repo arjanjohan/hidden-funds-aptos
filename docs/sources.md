@@ -295,14 +295,14 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Status:** PancakeSwap Aptos is live; the pools are not. Each pool's reward accumulator was last updated at or after its end, so the pending reward is final.
 - **Size (pool totals, 2026-10-19):**
   - CAKE staked in the 6 CAKE pools: **60,052 CAKE (~$130K at $2.17)**, 49,547 of it in the MoveCoin-reward pool that ended 2024-02-09.
-  - Gui Inu staked in the 4 GUI pools: 441.7M GUI (~$66; CoinGecko's quote is stale, so unpriced).
-  - Rewards left in the pools: 2.75 APT, plus unpriced Blt, ETERN, MoveCoin (BlueMove), Ditto stAPT and Celer USDC.
+  - Gui Inu staked in the 4 GUI pools: 441.7M GUI (~$66; CoinGecko's quote is stale) with ~2.75 APT of rewards. Those pools are left out: not worth 4 reads per depositor.
+  - Rewards left in the CAKE pools: unpriced Blt, ETERN, MoveCoin (BlueMove), Ditto stAPT and Celer USDC.
 - **Enumeration:** senders of `smart_chef::deposit` (incremental by version).
-- **Read:** the staker's `UserInfo<stake, reward, pool id>` for each pool (10 reads the first time, then only the pools the staker was found in, kept in memo), and `PoolInfo` once per run. Pending reward = `amount × acc_token_per_share / precision_factor − reward_debt` (`derived_math`; smart_chef has no views).
+- **Read:** the staker's `UserInfo<stake, reward, pool id>` for each CAKE pool (6 reads the first time, then only the pools the staker was found in, kept in memo), and `PoolInfo` once per run. Pending reward = `amount × acc_token_per_share / precision_factor − reward_debt` (`derived_math`; smart_chef has no views).
   - When a pool holds less reward than the staker is owed, `withdraw` would abort, so the step is `emergency_withdraw` (stake only) and the reward is `blocked` (`reward_unfunded`).
   - A staker who deposits into a pool not in their memo after the first read would be missed. The pools are over, so nobody has a reason to join one.
 - **Sanity:** stake found per pool ≤ the pool's `total_staked_token`.
-- **Spot check (anonymous public endpoint, 2026-10-19):** of 14 depositors sampled from older deposits, 11 still hold CAKE in pool U2 (0.02–8.2 CAKE each). Simulated `withdraw` for 3 of them: 3/3 succeed and pay exactly the derived stake and reward. 1 Gui Inu stake (pool U9) is also read with its reward.
+- **Spot check (anonymous public endpoint, 2026-10-19):** of 14 depositors sampled from older deposits, 11 still hold CAKE in pool U2 (0.02–8.2 CAKE each). Simulated `withdraw` for 3 of them: 3/3 succeed and pay exactly the derived stake and reward.
 - **Not measured per staker yet:** enumeration needs the Geomi key.
 
 ## topaz-bids (built, not enabled)

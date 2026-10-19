@@ -1,5 +1,5 @@
-// PancakeSwap (Aptos) syrup pools whose reward period ended while users stayed staked. Every smart_chef pool ended in
-// 2023-2024; the staked tokens and the final pending reward wait in the pool until the staker withdraws.
+// PancakeSwap (Aptos) CAKE syrup pools whose reward period ended while users stayed staked. Every smart_chef pool ended
+// in 2023-2024; the staked tokens and the final pending reward wait in the pool until the staker withdraws.
 // smart_chef has no views: the pending reward follows its own math, final because each pool's accumulator was last
 // updated at or after its end (pending = amount * acc_token_per_share / precision_factor - reward_debt).
 import { iso, positionIds } from '../accounting.ts';
@@ -10,10 +10,11 @@ import { CAKE } from './layerzero-claimable.ts';
 
 export const SMART_CHEF = '0xfd1d8a523f1be89277ac0787ae3469312667e3d0b3f75a5f01bfc95530a2dc91';
 const UIDS = '0x9936836587ca33240d3d3f91844651b16cb07802faf5e34514ed6f78580deb0a::uints';
-export const GUI = '0xe4ccb6d39136469f376242c31b34d10515c8eaaa38092f804db8e08a8f53c5b2::assets_v1::EchoCoin002';
 const SOURCE = 'pancake-syrup-ended';
 
-/** Every pool smart_chef created (create_pool_event counter = 10 on 2026-10-19): stake, reward and pool-id types. */
+/** The CAKE pools smart_chef created (create_pool_event counter = 10 on 2026-10-19): stake, reward and pool-id types.
+ *  The other 4 (U6-U9) stake Gui Inu for APT and are left out: ~$66 of stake and ~2.75 APT of rewards in total, not
+ *  worth 4 reads per depositor. */
 export const SYRUP_POOLS = [
   { uid: 'U0', stake: CAKE, reward: '0xd11107bdf0d6d7040c6c0bfbdecb6545191fdf13e8d8d259952f53e1713f61b5::staked_coin::StakedAptos' },
   { uid: 'U1', stake: CAKE, reward: '0x8d87a65ba30e09357fa2edea2c80dbac296e5dec2b18287113500b902942929d::celer_coin_manager::UsdcCoin' },
@@ -21,10 +22,6 @@ export const SYRUP_POOLS = [
   { uid: 'U3', stake: CAKE, reward: '0x25a64579760a4c64be0d692327786a6375ec80740152851490cfd0b53604cf95::coin::ETERN' },
   { uid: 'U4', stake: CAKE, reward: '0xfbab9fb68bd2103925317b6a540baa20087b1e7a7a4eb90badee04abb6b5a16f::blt::Blt' },
   { uid: 'U5', stake: CAKE, reward: '0x25a64579760a4c64be0d692327786a6375ec80740152851490cfd0b53604cf95::coin::ETERN' },
-  { uid: 'U6', stake: GUI, reward: '0x1::aptos_coin::AptosCoin' },
-  { uid: 'U7', stake: GUI, reward: '0x1::aptos_coin::AptosCoin' },
-  { uid: 'U8', stake: GUI, reward: '0x1::aptos_coin::AptosCoin' },
-  { uid: 'U9', stake: GUI, reward: '0x1::aptos_coin::AptosCoin' },
 ].map(p => ({ ...p, types: `${p.stake}, ${p.reward}, ${UIDS}::${p.uid}` }));
 
 type Pool = (typeof SYRUP_POOLS)[number];
@@ -93,10 +90,10 @@ export const pancakeSyrupEnded: SourceDef = {
   chain: 'aptos',
   protocol: 'PancakeSwap',
   title: 'PancakeSwap syrup pool ended, still staked',
-  summary: 'You staked CAKE (or GUI) in a PancakeSwap syrup pool on Aptos. The pool\'s rewards ended in 2023-2024, but your stake and the last rewards are still in the pool.',
+  summary: 'You staked CAKE in a PancakeSwap syrup pool on Aptos. The pool\'s rewards ended in 2023-2024, but your CAKE and the last rewards are still in the pool.',
   category: 'staking',
   inclusionRule: 'R2 ended position: the pool\'s reward period ended; the stake earns nothing and waits for a withdraw.',
-  protocolStatus: { state: 'live', evidence: 'smart_chef pools all ended (last on 2024-04-16); withdraw still works (simulated).', checkedAt: '2026-10-19' },
+  protocolStatus: { state: 'live', evidence: 'smart_chef CAKE pools all ended (last on 2024-02-09); withdraw still works (simulated).', checkedAt: '2026-10-19' },
   refresh: { nonZero: 'monthly', zero: 'monthly' },
   headlineAgeBases: ['onchain_maturity'],
   howTo: [
