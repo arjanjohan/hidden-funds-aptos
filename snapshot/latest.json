@@ -1,27 +1,60 @@
 {
   "schema": 1,
-  "generatedAt": "2026-10-19T11:37:57.001Z",
+  "generatedAt": "2026-10-19T15:42:52.516Z",
   "prices": {
     "0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.765011,
+      "usd": 0.767898,
       "decimals": 8,
-      "at": "2026-10-19T11:36:42.000Z",
+      "at": "2026-10-19T15:38:43.000Z",
       "source": "coingecko simple/price"
     },
     "0x07fd500c11216f0fe3095d0c4b8aa4d64a4e2e04f83758462f2b127255643615::thl_coin::THL": {
-      "usd": 0.00984707,
+      "usd": 0.00990367,
       "decimals": 8,
-      "at": "2026-10-19T11:37:02.000Z",
+      "at": "2026-10-19T15:38:43.000Z",
       "source": "coingecko simple/price"
     },
     "movement:0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.00723243,
+      "usd": 0.00725836,
       "decimals": 8,
-      "at": "2026-10-19T11:37:02.000Z",
+      "at": "2026-10-19T15:38:43.000Z",
+      "source": "coingecko simple/price"
+    },
+    "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC": {
+      "usd": 0.999893,
+      "decimals": 6,
+      "at": "2026-10-19T15:38:43.000Z",
+      "source": "coingecko simple/price"
+    },
+    "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDT": {
+      "usd": 0.999304,
+      "decimals": 6,
+      "at": "2026-10-19T15:38:43.000Z",
+      "source": "coingecko simple/price"
+    },
+    "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::WETH": {
+      "usd": 2402.98,
+      "decimals": 6,
+      "at": "2026-10-19T15:38:43.000Z",
+      "source": "coingecko simple/price"
+    },
+    "0x159df6b7689437016108a019fd5bef736bac692b6d4a1f10c941f6fbb9a74ca6::oft::CakeOFT": {
+      "usd": 2.18,
+      "decimals": 8,
+      "at": "2026-10-19T15:38:43.000Z",
+      "source": "coingecko simple/price"
+    },
+    "0x8b107b816356295ea62750020edea701bfc6d11575953d0e146c20d7b9409300::oft::BTCbOFT": {
+      "usd": 82140,
+      "decimals": 8,
+      "at": "2026-10-19T15:38:43.000Z",
       "source": "coingecko simple/price"
     }
   },
-  "priceErrors": [],
+  "priceErrors": [
+    "quote for layerzero-bridged-wbtc-aptos older than 7 days"
+  ],
+  "markets": {},
   "sources": [
     {
       "id": "native-delegation",
@@ -2917,14 +2950,229 @@
           "positions": 0
         }
       ]
+    },
+    {
+      "id": "canopy-ended-rewards",
+      "chain": "movement",
+      "title": "Canopy staking rewards never claimed",
+      "summary": "You staked on Canopy (Movement). A reward period you earned in has ended, but the rewards were never claimed.",
+      "category": "staking",
+      "inclusionRule": "R2 ended position: the pool's reward period finished; what you earned waits in the pool until claimed.",
+      "protocolStatus": {
+        "state": "live",
+        "evidence": "Canopy multi_rewards pools still stream rewards (22 of 56 pools live on 2026-10-19).",
+        "checkedAt": "2026-10-19"
+      },
+      "howTo": [
+        "Claim in the Canopy app (Rewards), or",
+        "call 0x113a1769acc5ce21b5ece6f9533eef6dd34c758911fa5235124c87ff1298633b::multi_rewards::claim_reward(staking token) from the staking account."
+      ],
+      "officialUrl": "https://app.canopyhub.xyz",
+      "headlineAgeBases": [
+        "onchain_maturity"
+      ],
+      "run": {
+        "processor": "default_processor",
+        "scope": "stakers in 0x113a1769acc5ce21b5ece6f9533eef6dd34c758911fa5235124c87ff1298633b::multi_rewards (MultiRewardsModule.user_staked_balances, current_table_items)",
+        "enumeration": {
+          "pages": 82,
+          "newCandidates": 7497,
+          "candidates": 7497,
+          "start": "2026-10-19T15:38:59.072Z",
+          "end": "2026-10-19T15:39:00.623Z",
+          "cursor": "170041950"
+        },
+        "verification": {
+          "read": 7497,
+          "incomplete": 0,
+          "notReread": 0,
+          "start": "2026-10-19T15:39:00.749Z",
+          "ledgerFrom": "230287625",
+          "end": "2026-10-19T15:42:51.945Z",
+          "ledgerTo": "230289128"
+        },
+        "completeness": "complete",
+        "degradedReasons": [],
+        "errors": [],
+        "watermarkBefore": {
+          "version": "230287611",
+          "timestamp": "2026-10-19T15:38:57.378576Z"
+        },
+        "watermarkAfter": {
+          "version": "230287623",
+          "timestamp": "2026-10-19T15:38:59.349965Z"
+        },
+        "sanity": {
+          "check": "none",
+          "ok": null,
+          "detail": "no contract total: earned rewards are computed per staker"
+        }
+      },
+      "lastSuccessAt": "2026-10-19T15:42:51.945Z",
+      "totals": {
+        "face": {
+          "positions": 5620,
+          "owners": 4925,
+          "usd": 4856.964386388744,
+          "unpriced": 0,
+          "ownersMin10": 15
+        },
+        "byStatus": {
+          "recoverable": {
+            "positions": 5620,
+            "owners": 4925,
+            "usd": 4856.964386388744,
+            "unpriced": 0,
+            "ownersMin10": 15
+          },
+          "team_gated": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "blocked": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "aged": {
+          "ge30": {
+            "positions": 5620,
+            "owners": 4925,
+            "usd": 4856.964386388744,
+            "unpriced": 0,
+            "ownersMin10": 15
+          },
+          "ge90": {
+            "positions": 5620,
+            "owners": 4925,
+            "usd": 4856.964386388744,
+            "unpriced": 0,
+            "ownersMin10": 15
+          },
+          "ge180": {
+            "positions": 5509,
+            "owners": 4866,
+            "usd": 4682.0195549896835,
+            "unpriced": 0,
+            "ownersMin10": 12
+          }
+        },
+        "agedEstimated": {
+          "ge30": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "byAgeBasis": {
+          "onchain_maturity": {
+            "positions": 5620,
+            "owners": 4925,
+            "usd": 4856.964386388744,
+            "unpriced": 0,
+            "ownersMin10": 15
+          },
+          "protocol_closure": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "position_interaction": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "headline": {
+          "positions": 5620,
+          "owners": 4925,
+          "usd": 4856.964386388744,
+          "unpriced": 0,
+          "ownersMin10": 15
+        },
+        "headlineTopOwnerShare": 0.8419039865706941,
+        "unverified": {
+          "positions": 0,
+          "owners": 0,
+          "usd": 0,
+          "unpriced": 0,
+          "ownersMin10": 0
+        }
+      },
+      "sizeBands": [
+        {
+          "upTo": 1,
+          "positions": 5516
+        },
+        {
+          "upTo": 10,
+          "positions": 89
+        },
+        {
+          "upTo": 100,
+          "positions": 12
+        },
+        {
+          "upTo": 1000,
+          "positions": 2
+        },
+        {
+          "upTo": 10000,
+          "positions": 1
+        },
+        {
+          "upTo": null,
+          "positions": 0
+        }
+      ]
     }
   ],
   "global": {
-    "headlineUsd": 9590267.169517873,
-    "headlineOwners": 21087,
-    "headlineOwnersMin10": 3553,
-    "recoverableUsd": 15436109.778577155,
-    "requests": 6075,
+    "headlineUsd": 9595124.133904262,
+    "headlineOwners": 25961,
+    "headlineOwnersMin10": 3599,
+    "recoverableUsd": 15440966.742963543,
+    "requests": 12485,
     "requestCap": 100000
   }
 }
