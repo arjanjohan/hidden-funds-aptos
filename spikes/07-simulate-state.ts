@@ -4,7 +4,7 @@
 // (address derived from owner + metadata), compared with expectedPayout. Gas-only failures are re-run with a
 // zero-address fee payer so "the contract pays" and "the owner can pay gas" are reported separately.
 //
-// Usage: node spikes/07-simulate-state.ts --state path --source id [--network aptos|movement] [--seed S] [--extra N]
+// Usage: node spikes/07-simulate-state.ts --state path --source id [--network aptos|movement] [--step N] [--seed S] [--extra N]
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
@@ -17,6 +17,8 @@ const args = process.argv.slice(2);
 const opt = (name: string, fallback?: string) => (args.includes(name) ? args[args.indexOf(name) + 1] : fallback);
 const STATE = opt('--state')!, SOURCE = opt('--source')!;
 const SEED = Number(opt('--seed', '20261018')), EXTRA = Number(opt('--extra', '7'));
+// Which recovery step to simulate; a step without expected outputs is checked for success only.
+const STEP = Number(opt('--step', '0'));
 const NETWORK = opt('--network', 'aptos') as 'aptos' | 'movement';
 // The Geomi key goes to Aptos Labs only; Movement is simulated on its public fullnode.
 const aptos = NETWORK === 'movement'
@@ -62,7 +64,7 @@ function stratified(positions: Position[], rand: () => number): Position[] {
 const parseArg = (a: string) => (a.startsWith('[') ? a.slice(1, -1).split(',').filter(Boolean) : a);
 
 async function simulate(p: Position, feePayer: boolean) {
-  const step = p.steps[0];
+  const step = p.steps[STEP];
   // "addr::module::fn<T1, T2>" carries type arguments in the step's function string.
   const [fn, typeList] = step.function.match(/^([^<]+)(?:<(.*)>)?$/)!.slice(1);
   const transaction = await aptos.transaction.build.simple({ sender: p.owner, withFeePayer: feePayer, options: feePayer ? { maxGasAmount: 20_000 } : undefined,
@@ -95,7 +97,9 @@ for (const [variant, group] of variants) {
     try {
       let r = await simulate(p, false), needsGas = false;
       if (!r.success && /INSUFFICIENT_BALANCE|BALANCE_FOR_TRANSACTION_FEE|Out of gas/.test(r.vmStatus)) { needsGas = true; r = await simulate(p, true); }
-      results.push({ id: p.id, expected: raw(p).toString(), paid: r.paid.toString(), success: r.success, payoutMatches: r.paid === raw(p), needsGas, vmStatus: r.vmStatus });
+      const checksPayout = p.steps[STEP].expectedOutputs.length > 0;
+      results.push({ id: p.id, expected: checksPayout ? raw(p).toString() : 'n/a', paid: r.paid.toString(), success: r.success,
+        payoutMatches: checksPayout ? r.paid === raw(p) : r.success, needsGas, vmStatus: r.vmStatus });
     } catch (err) { results.push({ id: p.id, success: false, error: String(err).slice(0, 200) }); }
   }
   report[variant] = { population: group.length, sampled: results.length, simulatedOk: results.filter(r => r.success).length,

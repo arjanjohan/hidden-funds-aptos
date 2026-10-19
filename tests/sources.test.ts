@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ownerKind } from '../src/shared/owners.ts';
 import { delegation, MOVE, movementDelegation } from '../src/shared/sources/delegation.ts';
 import { delegationInactiveValidator } from '../src/shared/sources/delegation-inactive.ts';
+import { KAPT, kofiReceipts, STKAPT } from '../src/shared/sources/kofi-receipts.ts';
 import { kofiWithdrawals } from '../src/shared/sources/kofi-withdrawals.ts';
 import { thalaVestingMatured, thalaVethlExpired } from '../src/shared/sources/thala-thl.ts';
 import { THALA_LSD, thalaUnstake } from '../src/shared/sources/thala-unstake.ts';
@@ -269,5 +270,28 @@ describe('movement delegation', () => {
     expect(movementDelegation.chain).toBe('movement');
     expect(r.positions[0].expectedPayout[0].asset).toBe(MOVE);
     expect(r.positions[0].id.startsWith('movement-native-delegation:')).toBe(true);
+  });
+});
+
+describe('kofi receipts', () => {
+  const chain = (balances: Record<string, string>, changedAt: number) => fakeChain({
+    view: (fn, args) => fn.endsWith('::get_exchange_rate') ? ['108560114']
+      : fn === '0x1::primary_fungible_store::balance' ? [balances[(args as string[])[1]] ?? '0'] : [],
+    gql: () => ({ user_transactions: [{ timestamp: new Date(changedAt * 1000).toISOString().slice(0, -1) }] }),
+  });
+  const versions = { [KAPT]: 10, [STKAPT]: 11 };
+
+  it('values kAPT 1:1 and stkAPT at the live rate, and never counts them while the market is unchecked', async () => {
+    const r = await kofiReceipts.read(context(chain({ [KAPT]: '100000000', [STKAPT]: '100000000' }, 1_700_000_000)), OWNER, { versions });
+    expect(r.positions.map(p => [p.locator, p.expectedPayout[0].raw])).toEqual([['kAPT', '100000000'], ['stkAPT', '108560114']]);
+    expect(r.positions.every(p => p.status === 'unknown' && p.blockers[0].code === 'market_check_unavailable')).toBe(true);
+  });
+
+  it('dates holdings from the wind-down, or from a later balance change', async () => {
+    const early = await kofiReceipts.read(context(chain({ [KAPT]: '5' }, 1_700_000_000)), OWNER, { versions: { [KAPT]: 10 } });
+    expect(early.positions[0].claimableSince).toBe('2026-07-24T07:55:53.000Z');
+    const later = NOW - 10 * 86_400;
+    const late = await kofiReceipts.read(context(chain({ [KAPT]: '5' }, later)), OWNER, { versions: { [KAPT]: 10 } });
+    expect(late.positions[0].claimableSince).toBe(new Date(later * 1000).toISOString());
   });
 });

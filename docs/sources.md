@@ -20,6 +20,7 @@ Measurement runs use a fresh local state (`node src/node/snapshot.ts --source <i
 | `trufin-unlocks` | one global table (`staker::Unlocks`) | ended position (request claimable); off-whitelist → team_gated | 1 request, $1.8K, 85 days old (not yet in headline) | 1/1 ok, payout = expected |
 | `movement-native-delegation` | indexer staking table (Movement indexer) | ended position (unlock done) | headline $2.2K, 57 owners (MOVE $0.0073) | 10/10 ok, payout = expected |
 | `movement-inactive-validator` | all pools → inactive validators (Movement) | ended position | none: no inactive Movement pool holds active stake | — |
+| `kofi-receipts` | primary stores holding kAPT / stkAPT | stranded receipt? market not checked → all `unknown` | 11,619 positions, 8,063 owners, ~$98K redemption value, none in headline | request step 38/38 ok; finalize = kofi-withdrawals sample |
 | `tortuga-tickets` | entry-function senders → per-user `TicketStore` | ended position (cooldown passed); reserve-queued tickets blocked | headline $12.2K, 818 owners; blocked $172 | recoverable 10/10 exact; blocked 4/4 abort `EFUND_NOT_AVAILABLE_YET` as predicted |
 
 Native delegation and Thala are documented in [phase0-report.md](phase0-report.md).
@@ -186,7 +187,21 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Echo lending:** reports describe Echo moving BTC-bridge liquidity off Aptos, but no closure or withdrawal deadline was found. Not R2.
 - **Kana perps** (`blocked`, payout $0): every market is deprecated and the collateral stores hold no USDt, so recorded balances are face value only. There are 13,408 depositors (senders of `perpetual_scripts::deposit*`), and sizing them needs ~3 reads each (~40K requests) for value that never reaches a total besides "may not work". Skipped; Aptin is treated the same way.
 
+## kofi-receipts
+
+- **Why it exists before the market test:** Kofi is winding down (evidenced). kAPT and stkAPT can still be redeemed for APT through a withdrawal ticket. They count as left behind only if stranded, and no quote provider is configured, so every position is `unknown` (`market_check_unavailable`) and never reaches the headline. Holders who check an address still see that they must redeem.
+- **Enumeration:** primary stores (the only stores entry functions spend) holding kAPT or stkAPT, keyset-paged on `storage_id`. 117 pages, 8,063 owners. The hint carries each store's last change version.
+- **Read:** `primary_fungible_store::balance`.
+  - Redemption value: kAPT 1:1 in APT; stkAPT × `rewards_manager::get_exchange_rate` / 1e8 (1.0856 on 2026-10-19).
+- **Age (`protocol_closure`):** the later of the wind-down (2026-07-24 07:55:53 UTC) and the holder's last balance change. A holder who bought after the wind-down is dated from the purchase.
+- **Result (2026-10-19):** 11,619 positions, ~$98K redemption value. Sanity: user primary stores hold 89.11% of the kAPT supply and 99.77% of the stkAPT supply.
+- **Re-read schedule:** monthly, plus immediately when a holder's store changes. Never in the headline, so a weekly re-read (11.6K requests) is not worth it.
+- **Recovery:** `gateway::request_withdrawal_entry(amount)` for kAPT, or `gateway::unstake_and_request_withdrawal_entry(amount)` for stkAPT. Then `finalize_withdrawals_entry([ticket])` after 14 days.
+  - Request step sample: 38/38 succeed across the four variants.
+  - The finalize step is the `kofi-withdrawals` sample (10/10 exact).
+- **To count it:** a market test, Panora per the rules, which needs the owner's decision on a key.
+
 ## Waiting on a decision
 
-- **Kofi kAPT/stkAPT receipts** (~135K APT, 7,244 + 4,521 holder stores; Kofi is winding down): these count only if stranded. The market test needs a Panora API key, which is a credential choice for the owner.
+- **Kofi receipt market test:** with a Panora key, `kofi-receipts` positions with no usable market become `recoverable` and can reach the headline.
 - **Aries** (blocked; pre-drain face ≈ 60× the current quote): 455K registered users. Per-user revalidation would cost ~285K reads a week, so it waits until the real Geomi cost per request is known.

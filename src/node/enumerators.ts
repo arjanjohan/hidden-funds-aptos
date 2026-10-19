@@ -1,6 +1,7 @@
 // Chain-wide candidate enumeration and source-level sanity checks (node-only: keyed indexer use).
 import { mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
+import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
 import { THALA_VE, THALA_VEST } from '../shared/sources/thala-thl.ts';
 import { THALA_LSD } from '../shared/sources/thala-unstake.ts';
@@ -271,6 +272,44 @@ export const trufinUnlocksEnumerator: Enumerator = {
   },
 };
 
+// Every primary store holding Kofi kAPT or stkAPT, keyset-paged on storage_id.
+export const kofiReceiptsEnumerator: Enumerator = {
+  sourceId: 'kofi-receipts',
+  processor: 'fungible_asset_processor',
+  scope: 'primary stores holding Kofi kAPT or stkAPT (current_fungible_asset_balances, amount > 0)',
+  async run(chain) {
+    const holders = new Map<string, Record<string, number>>();
+    let pages = 0;
+    for (const asset of [KAPT, STKAPT]) {
+      let after = '';
+      for (;;) {
+        const rows = (await chain.gql(`query($a:String!,$s:String!){ current_fungible_asset_balances(where:{asset_type:{_eq:$a}, is_primary:{_eq:true},
+          amount:{_gt:"0"}, storage_id:{_gt:$s}}, order_by:{storage_id:asc}, limit:${PAGE}){ owner_address storage_id last_transaction_version } }`,
+          { a: asset, s: after })).current_fungible_asset_balances;
+        pages++;
+        for (const r of rows) {
+          const owner = normalizeAddress(r.owner_address);
+          holders.set(owner, { ...(holders.get(owner) ?? {}), [asset]: Number(r.last_transaction_version) });
+        }
+        if (rows.length < PAGE) break;
+        after = rows[rows.length - 1].storage_id;
+      }
+    }
+    return { candidates: [...holders].map(([owner, versions]) => ({ owner, hint: { versions } })), pages };
+  },
+  async sanity(chain, ledger, positions) {
+    const parts: string[] = [];
+    let ok = true;
+    for (const [asset, symbol] of [[KAPT, 'kAPT'], [STKAPT, 'stkAPT']]) {
+      const [supply] = await chain.view('0x1::fungible_asset::supply', [asset], ['0x1::fungible_asset::Metadata'], ledger.version);
+      const total = BigInt(supply.vec[0]), found = positions.filter(p => p.asset === asset).reduce((s, p) => s + BigInt(p.grossClaim[0].raw), 0n);
+      ok &&= found <= total;
+      parts.push(`${symbol} ${found} of ${total} supply (${pct(found, total)})`);
+    }
+    return { check: 'receipts found in user primary stores <= token supply', ok, detail: parts.join('; ') };
+  },
+};
+
 const noContractTotal: Enumerator['sanity'] = async () =>
   ({ check: 'none', ok: null, detail: 'no contract total available: balances are stored per account' });
 
@@ -284,4 +323,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
-  trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator];
+  trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator];
