@@ -5,6 +5,11 @@ on:
     - cron: '17 3 * * 1'   # weekly snapshot, Monday 03:17 UTC
     - cron: '17 3 * * 4'   # Thursday: restore the state cache so it is not evicted (7 days without access)
   workflow_dispatch:
+    inputs:
+      source:
+        description: 'Re-run one source id only (other sources keep their last published results); empty = all'
+        required: false
+        default: ''
   push:
     branches: [main]
     paths-ignore: ['snapshot/**', 'docs/**', 'spikes/**', '*.md']
@@ -43,9 +48,10 @@ jobs:
       # State is derived from chain data only; a cache miss means one full rebuild run, not lost data.
       - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with: { path: state, key: 'state-${{ github.run_id }}', restore-keys: 'state-' }
-      - run: pnpm snapshot
+      - run: pnpm snapshot ${SOURCE:+--source "$SOURCE"}
         env:
           GEOMI_API_KEY: ${{ secrets.GEOMI_API_KEY }}
+          SOURCE: ${{ inputs.source }}
       - uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         if: always()
         with: { path: state, key: 'state-${{ github.run_id }}' }
