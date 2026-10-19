@@ -244,5 +244,67 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Merkle protocol rewards** (`protocol_reward::EpochReward<T>` tables, read through `current_table_items`): only 1,003 MKLP (USDC) units are unclaimed across 3 epochs (Jan–Feb 2026), paid in MKLP, which itself needs the team. Too small to add.
 - **Thala MOD** (CDP vaults and stability pool): no deprecation notice found.
 
+## layerzero-claimable
+
+- **What:** LayerZero v1 transfers to Aptos that arrived while the receiver could not take the coin (no CoinStore registered). The app credits a claimable table instead; the receiver collects with a claim call.
+  - LayerZero Aptos Bridge (`0xf22b…::coin_bridge`): lzUSDC, lzUSDT, lzWETH, lzWBTC, lzUSDD. Table `CoinStore<T>.claimable_amt_ld`; claim `coin_bridge::claim_coin<T>()`.
+  - Shared OFT module (`0x43d8…::oft`): CAKE and BTC.b. Table `oft::CoinStore<T>.claimable_amount` at the coin's address; claim `oft::claim<T>()`.
+- **Status:** live. Claims still work (see simulation).
+- **Enumeration:** every entry of the 7 claimable tables (`current_table_items`), incremental per table by version. 254,920 receivers, 3,135 pages; the first full scan takes ~15 min (16 key ranges in parallel).
+  - The indexer stores table handles zero-padded to 64 hex digits; the fullnode returns them without leading zeros. Unpadded, CAKE's table looked empty.
+  - The indexer keeps some claimed entries as live (2 of the top 20 BTC.b entries were already claimed on chain), so every counted entry is re-read on chain.
+- **Dust:** entries under ~$1 (`verifyMin` per coin) are not read on chain. They are listed as `indexer_only` and stay out of every total: $31.6K across ~213K entries.
+- **Age:** the time the bridge wrote the entry (`onchain_maturity`). Write times are fetched 100 versions per query. All verified entries were written 2022–2025.
+- **Result (2026-10-19; 252.7K of 254.9K receivers read before the Geomi credit ran out):**
+
+  | Coin | Positions | Value |
+  |---|---|---|
+  | lzUSDC | 15,576 | $79.5K |
+  | lzUSDT | 12,277 | $60.5K |
+  | lzWETH | 9,202 | $92.3K (38.6 WETH) |
+  | BTC.b | 5,043 | $24.4K (0.30 BTC.b) |
+  | CAKE | 199 | $4.5K (2,092 CAKE) |
+  | lzUSDD | 4 | unpriced (320 USDD) |
+
+  - Total ~$261K recoverable, 41,019 receivers, 3,739 with ≥ $10. Top receiver: $2.2K (0.8%).
+  - 1 position is held by a resource account (`unknown`).
+- **Simulation (anonymous fullnode, seed 20261018):** 48/48 recoverable samples succeed and pay exactly the expected amount, across all 6 coins. 28 need gas. The resource-account position aborts (no signer), as expected.
+- **Re-read schedule:** monthly, or when an entry changes (a claim always rewrites it).
+
+## topaz-bids (built, not enabled)
+
+- **What:** APT escrowed in Topaz NFT bids. Topaz ceased operations on 2024-08-21 (homepage notice; aptos.dev lists it as deprecated). The bid's APT stays in Topaz's tables until the bidder cancels.
+  - Collection bids: `collection_marketplace::Bids<APT>` (bid → coins, deadline, bidder); `cancel<APT>(bid id)`.
+  - Token bids: `bid_any::CoinEscrow<APT>` (bid → coins), bidder and deadline in `bid_any::Bids`; `cancel_bid<APT>(bid id)`.
+- **Size (indexer, 2026-10-19):** 30,567 APT in 22,879 collection bids (17,880 bidders, 1,084 with ≥ 1 APT, top bidder 11,266 APT), plus 7,617 APT in 190,176 token-bid escrows (mostly dust). About $29K at $0.76/APT. 64/64 sampled bids match the chain.
+- **Simulation:** a collection bid with a 2058 deadline cancels and returns exactly its 33.33 APT. Expired token bids not simulated yet.
+- **Open question:** a bid whose deadline has not passed can still be filled by calling the contract directly, so it is technically an open order (rule R4). Expired bids are clearly ended.
+- **Not enabled yet:** the measurement run stopped when the Geomi credit ran out. Indexer `key: {_in: …}` lookups on these tables take 6–46 s (no key index), so the enumerator pages the bid tables themselves (~850K rows).
+
+## Other bridges and NFT marketplaces checked
+
+- **TradePort** (left Aptos): every bid is gone. v1 has 1 collection bid left; v2 inserted 128,323 collection bids, and 92,113 were deleted plus 36,210 accepted, leaving 0. Token bids also net to 0.
+- **Souffl3:** no closure evidence found.
+
+## Bridges (Aptos and Movement)
+
+Bridges listed for Aptos (official directory, 2026-10-19): Wormhole (Portal), NEAR Intents, Meson, CashmereLabs, Gas.zip, Panora, ChangeNOW, Swapspace. Also used: the LayerZero Aptos Bridge (zUSDC/zUSDT/zWETH), Celer cBridge, Circle CCTP (native USDC) and Stargate. Movement's canonical bridge is LayerZero-powered (MOVE, USDC, USDT, WETH, WBTC to and from Ethereum).
+
+A bridge leaves funds behind when a transfer arrived but was never claimed or completed. Per bridge:
+
+| Bridge | What can be left behind | Where it is recorded | Status |
+|---|---|---|---|
+| LayerZero Aptos Bridge (v1 `coin_bridge`: lzUSDC, lzUSDT, lzWETH, lzWBTC, lzUSDD) | coins credited to a receiver that could not take them, waiting for `claim_coin<T>` | on Aptos: `coin_bridge::CoinStore<T>.claimable_amt_ld` | **source `layerzero-claimable`** |
+| LayerZero v1 OFTs on the shared `0x43d8…::oft` module (CAKE, BTC.b) | same, waiting for `oft::claim<T>` | on Aptos: `oft::CoinStore<T>.claimable_amount` at the coin's address | **source `layerzero-claimable`**. The other coins named `oft::…` are copies with under 3 tokens claimable; the older `0x54ad…::oft` module has one send ever |
+| LayerZero v1 blocked messages (`lzapp::StoredPayload`) | a delivery that failed and waits for a retry | on Aptos | empty for the bridge, CAKE and BTC.b (2026-10-19) |
+| Wormhole Portal → Aptos | transfers never redeemed on Aptos (VAA not submitted) | off-chain (Wormholescan); `state::vaa_is_consumed` is not a view function | Wormholescan's history listing for Aptos returns only recent operations, so no chain-wide total; possible as a per-address check |
+| Celer cBridge (`0x8d87…::peg_bridge`, `vault`) | large transfers held 6 hours (`delayed_transfer` map), then executed by anyone | on Aptos | delay map has never held an entry; peg bridge live (last mint 2026-10-16), vault paused. Refunds of failed transfers go through cBridge's API: not built |
+| Circle CCTP → Aptos | USDC burned on another chain, never minted on Aptos | source-chain burns + Circle attestation API | needs cross-chain indexing; not built |
+| LayerZero v2 OFTs and Stargate (Aptos, Movement) | messages that failed delivery | LayerZero Scan | per-address check possible; not built. Successful deliveries go straight to the receiver's fungible store, so nothing waits on chain |
+| Movement canonical bridge (LayerZero) | inbound credits arrive directly; outbound transfers wait out a security delay on Ethereum | Ethereum | needs EVM support; not built |
+| Movement framework bridges (`atomic_bridge`, `native_bridge`) | — | on Movement | never used on mainnet: all event counters 0, transfer tables empty (2026-10-19) |
+| NEAR Intents | balances held in NEAR's intents contract | NEAR | needs NEAR support; not built |
+| Meson, Gas.zip, ChangeNOW, Swapspace, Panora, CashmereLabs | swaps settled by liquidity providers; nothing held for the user on Aptos | — | nothing to claim |
+
 ## Waiting on a decision
 - **Aries** (blocked; pre-drain face ≈ 60× the current quote): 455K registered users. Per-user revalidation would cost ~285K reads a week, so it waits until the real Geomi cost per request is known.

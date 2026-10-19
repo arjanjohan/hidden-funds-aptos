@@ -69,6 +69,17 @@ describe('aging', () => {
   });
 });
 
+describe('verification', () => {
+  it('keeps indexer-only positions out of every total and reports them apart', () => {
+    const unverified = { ...pos({ locator: 'b', days: 200 }), confidence: 'indexer_only' as const };
+    const t = sourceTotals(source, [pos({ locator: 'a', days: 200 }), unverified], prices, NOW);
+    expect(t.headline.positions).toBe(1);
+    expect(t.byStatus.recoverable.positions).toBe(1);
+    expect(t.face.positions).toBe(1);
+    expect(t.unverified.positions).toBe(1);
+  });
+});
+
 describe('usd', () => {
   it('counts unpriced value separately, never as zero', () => {
     expect(usd([{ asset: 'unknown', raw: '1' }], prices)).toBeNull();

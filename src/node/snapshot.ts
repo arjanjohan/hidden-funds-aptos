@@ -70,7 +70,7 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
     ledger = await chain.ledger();
     const ctx: ReadContext = { chain, ledger, memo: state.memo(), scratch: new Map(), market };
     const enumerated = new Set(result.candidates.map(c => c.owner));
-    const due = state.due(def, Date.now(), enumerated);
+    const due = state.due(def, Date.now(), enumerated, !!result.incremental);
     const batch = due.slice(0, LIMIT);
     if (batch.length < due.length) run.degradedReasons.push(`limited to ${batch.length} of ${due.length} due owners`);
     run.verification.start = new Date().toISOString();
@@ -80,7 +80,8 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
       if (capHit.hit) return;
       try {
         const r = await def.read(ctx, owner, hint);
-        const positions = r.positions.length ? applyOwnerKind(r.positions, await ownerKind(ctx, owner)) : r.positions;
+        // Indexer-only positions never reach a total, so their owner is not looked up.
+        const positions = r.positions.some(p => p.confidence !== 'indexer_only') ? applyOwnerKind(r.positions, await ownerKind(ctx, owner)) : r.positions;
         state.recordRead(def.id, owner, positions, r.complete, runStart);
         run.verification.read++;
         if (!r.complete) run.verification.incomplete++;
@@ -149,7 +150,7 @@ async function main() {
   const headlineOwners = new Map<string, number>();
   for (const def of SOURCES) for (const p of state.positionsOf(def.id)) {
     const age = ageDays(p, now);
-    if (p.status !== 'recoverable' || !headlineAge(def, p) || age === null || age < HEADLINE_AGE_DAYS) continue;
+    if (p.status !== 'recoverable' || p.confidence === 'indexer_only' || !headlineAge(def, p) || age === null || age < HEADLINE_AGE_DAYS) continue;
     headlineOwners.set(p.owner, (headlineOwners.get(p.owner) ?? 0) + (usd(p.expectedPayout, prices) ?? 0));
   }
   const snapshot: Snapshot = {

@@ -84,7 +84,7 @@ describe('owner rule', () => {
   it('leaves positions held by an ordinary account unchanged', async () => {
     const state = new State(':memory:');
     await runSource(source(async o => ({ positions: [position(o)], complete: true, errors: [], ledgerVersion: '1' })),
-      enumerator([addr(1)]), state, chain(), { hit: false });
+      enumerator([addr('b1')]), state, chain(), { hit: false });
     expect(state.positionsOf('t')[0].status).toBe('recoverable');
   });
 });
@@ -124,6 +124,15 @@ describe('state changes', () => {
     expect(state.due(def(), Date.parse('2026-10-02T00:00:00Z'), new Set())).toEqual([]);
     state.upsertCandidates('t', [{ owner: addr(1), hint: { version: 2 } }], '2026-10-03T00:00:00Z');
     expect(state.due(def(), Date.parse('2026-10-03T00:00:00Z'), new Set()).map(d => d.owner)).toEqual([addr(1)]);
+  });
+
+  it('merges an incremental hint into the stored one and reads with it', () => {
+    const state = new State(':memory:');
+    state.upsertCandidates('t', [{ owner: addr(1), hint: { versions: { a: 1 } } }, { owner: addr(2), hint: { versions: { a: 5 } } }], '2026-10-01T00:00:00Z', true);
+    state.upsertCandidates('t', [{ owner: addr(1), hint: { versions: { b: 2 } } }], '2026-10-02T00:00:00Z', true);
+    const due = state.due(def(), Date.parse('2026-10-02T00:00:00Z'), new Set([addr(1)]), true);
+    expect(due.find(d => d.owner === addr(1))?.hint).toEqual({ versions: { a: 1, b: 2 } });
+    expect(due.find(d => d.owner === addr(2))?.hint).toEqual({ versions: { a: 5 } });
   });
 
   it('adds the changed_at column to a state file written before it existed', () => {

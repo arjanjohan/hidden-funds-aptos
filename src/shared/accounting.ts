@@ -72,10 +72,14 @@ export interface SourceTotals {
   headline: Bucket;
   /** Share of the headline held by the single largest wallet (no address published). */
   headlineTopOwnerShare: number;
+  /** indexer_only positions (not verified on chain): listed, never in any total above. */
+  unverified: Bucket;
 }
 
-export function sourceTotals(source: Pick<SourceDef, 'headlineAgeBases'>, positions: Position[], prices: PriceBook, nowSecs: number): SourceTotals {
-  assertUniqueIds(positions);
+export function sourceTotals(source: Pick<SourceDef, 'headlineAgeBases'>, all: Position[], prices: PriceBook, nowSecs: number): SourceTotals {
+  assertUniqueIds(all);
+  // Only positions verified on chain (or derived from verified state) count; indexer-only rows are reported apart.
+  const positions = all.filter(p => p.confidence !== 'indexer_only');
   const payout = (p: Position) => usd(p.expectedPayout, prices);
   const recoverable = positions.filter(p => p.status === 'recoverable');
   const agedOn = (eligible: boolean, days: number) => recoverable.filter(p => {
@@ -92,6 +96,7 @@ export function sourceTotals(source: Pick<SourceDef, 'headlineAgeBases'>, positi
     byAgeBasis: Object.fromEntries(bases.map(b => [b, bucket(recoverable.filter(p => p.ageBasis === b), payout)])) as Record<AgeBasis, Bucket>,
     headline: bucket(agedOn(true, HEADLINE_AGE_DAYS), payout),
     headlineTopOwnerShare: topOwnerShare(agedOn(true, HEADLINE_AGE_DAYS), payout),
+    unverified: bucket(all.filter(p => p.confidence === 'indexer_only'), payout),
   };
 }
 

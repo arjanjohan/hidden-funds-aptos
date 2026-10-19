@@ -4,7 +4,11 @@ import type { ReadContext } from './types.ts';
 
 const ZERO_KEY = /^0x0+$/;
 
+/** Framework-reserved addresses 0x0–0xa: nobody signs for them. */
+const RESERVED = /^0x0{63}[0-9a]$/;
+
 export async function ownerKind(ctx: ReadContext, owner: string): Promise<OwnerKind> {
+  if (RESERVED.test(owner)) return 'resource_account';
   const key = `owner-kind:${owner}`;
   const cached = await ctx.memo.get(key);
   if (cached) return cached as OwnerKind;

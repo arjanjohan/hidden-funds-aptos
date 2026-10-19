@@ -1,10 +1,23 @@
 // Identity-bound USD prices. A quote older than 7 days is not a price.
 import type { PriceBook } from '../shared/accounting.ts';
 import { APT, MOVE } from '../shared/sources/delegation.ts';
+import { BTCB, CAKE, LZ_BRIDGE } from '../shared/sources/layerzero-claimable.ts';
 import { THL } from '../shared/sources/thala-thl.ts';
 
 const MAX_QUOTE_AGE_SECS = 7 * 86_400;
-const COINGECKO = [{ asset: APT, id: 'aptos', decimals: 8 }, { asset: THL, id: 'thala', decimals: 8 }, { asset: MOVE, id: 'movement', decimals: 8 }];
+const COINGECKO = [
+  { asset: APT, id: 'aptos', decimals: 8 },
+  { asset: THL, id: 'thala', decimals: 8 },
+  { asset: MOVE, id: 'movement', decimals: 8 },
+  // LayerZero Aptos Bridge coins have their own ids; bridged USDD has none and stays unpriced.
+  { asset: `${LZ_BRIDGE}::asset::USDC`, id: 'layerzero-bridged-usdc-aptos', decimals: 6 },
+  { asset: `${LZ_BRIDGE}::asset::USDT`, id: 'layerzero-bridged-usdt-aptos', decimals: 6 },
+  { asset: `${LZ_BRIDGE}::asset::WETH`, id: 'layerzero-bridged-weth-aptos', decimals: 6 },
+  { asset: `${LZ_BRIDGE}::asset::WBTC`, id: 'layerzero-bridged-wbtc-aptos', decimals: 6 },
+  // CAKE and BTC.b on Aptos are the tokens' own LayerZero OFTs (mint/burn, redeemable 1:1), priced as the token.
+  { asset: CAKE, id: 'pancakeswap-token', decimals: 8 },
+  { asset: BTCB, id: 'bitcoin-avalanche-bridged-btc-b', decimals: 8 },
+];
 
 export async function fetchPrices(nowSecs: number): Promise<{ prices: PriceBook; errors: string[] }> {
   const prices: PriceBook = {};

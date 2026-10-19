@@ -4,10 +4,12 @@ import { delegation, MOVE, movementDelegation } from '../src/shared/sources/dele
 import { delegationInactiveValidator } from '../src/shared/sources/delegation-inactive.ts';
 import { KAPT, kofiReceipts, STKAPT } from '../src/shared/sources/kofi-receipts.ts';
 import { kofiWithdrawals } from '../src/shared/sources/kofi-withdrawals.ts';
+import { BTCB, layerzeroClaimable, LZ_COINS } from '../src/shared/sources/layerzero-claimable.ts';
 import { merkleMklp, MKLP } from '../src/shared/sources/merkle-mklp.ts';
 import { ESMKL, MKL, merkleVemkl, PREMKL } from '../src/shared/sources/merkle-vemkl.ts';
 import { thalaVestingMatured, thalaVethlExpired } from '../src/shared/sources/thala-thl.ts';
 import { THALA_LSD, thalaUnstake } from '../src/shared/sources/thala-unstake.ts';
+import { TOPAZ_CLOSED_SECS, topazBids, u64Key } from '../src/shared/sources/topaz-bids.ts';
 import { tortugaTickets } from '../src/shared/sources/tortuga-tickets.ts';
 import { trufinUnlocks } from '../src/shared/sources/trufin-unlocks.ts';
 import { addr, context, fakeChain, memoryMemo } from './fake-chain.ts';
@@ -161,18 +163,26 @@ describe('tortuga tickets', () => {
 describe('owner kind', () => {
   it('classifies resource accounts, objects and ordinary accounts, once', async () => {
     const zero = '0x' + '0'.repeat(64);
+    const [res, user, obj, fresh] = [addr('b1'), addr('b2'), addr('b3'), addr('b4')];
     const chain = fakeChain({
-      account: a => (a === addr(1) ? { authentication_key: zero, sequence_number: '0' } : a === addr(2) ? { authentication_key: addr(2), sequence_number: '3' } : null),
-      resource: a => (a === addr(3) ? { owner: addr(2) } : null),
+      account: a => (a === res ? { authentication_key: zero, sequence_number: '0' } : a === user ? { authentication_key: user, sequence_number: '3' } : null),
+      resource: a => (a === obj ? { owner: user } : null),
     });
     const ctx = context(chain);
-    expect(await ownerKind(ctx, addr(1))).toBe('resource_account');
-    expect(await ownerKind(ctx, addr(2))).toBe('user');
-    expect(await ownerKind(ctx, addr(3))).toBe('object');
-    expect(await ownerKind(ctx, addr(4))).toBe('user');
+    expect(await ownerKind(ctx, res)).toBe('resource_account');
+    expect(await ownerKind(ctx, user)).toBe('user');
+    expect(await ownerKind(ctx, obj)).toBe('object');
+    expect(await ownerKind(ctx, fresh)).toBe('user');
     const before = chain.calls.length;
-    await ownerKind(ctx, addr(1));
+    await ownerKind(ctx, res);
     expect(chain.calls.length).toBe(before);
+  });
+
+  it('treats framework-reserved addresses as program-controlled without reading', async () => {
+    const chain = fakeChain({});
+    expect(await ownerKind(context(chain), addr(0))).toBe('resource_account');
+    expect(await ownerKind(context(chain), addr('a'))).toBe('resource_account');
+    expect(chain.calls).toEqual([]);
   });
 });
 
@@ -349,3 +359,114 @@ describe('merkle veMKL', () => {
     expect((await merkleVemkl.read(context(chain({ mkl: '100' }, addr(9))), OWNER, { tokens: [TOKEN] })).positions).toEqual([]);
   });
 });
+
+describe('kofi receipts with a market test', () => {
+  const chain = () => fakeChain({
+    view: (fn, args) => fn.endsWith('::get_exchange_rate') ? ['100000000']
+      : fn === '0x1::primary_fungible_store::balance' ? [(args as string[])[1] === KAPT ? '100000000' : '0'] : [],
+    gql: () => ({ user_transactions: [{ timestamp: '2026-08-01T00:00:00' }] }),
+  });
+  const market = (verdict: 'usable' | 'none' | 'unknown', all = false) =>
+    ({ verdict: async () => verdict, allUsable: async () => all });
+
+  it('reads nothing when every bucket has a usable market', async () => {
+    const c = chain();
+    const r = await kofiReceipts.read({ ...context(c), market: market('usable', true) }, OWNER, { versions: { [KAPT]: 1 } });
+    expect(r.positions).toEqual([]);
+    expect(c.calls.some(x => x.includes('primary_fungible_store'))).toBe(false);
+  });
+
+  it('counts a stranded receipt as recoverable and skips one with a usable market', async () => {
+    const stranded = await kofiReceipts.read({ ...context(chain()), market: market('none') }, OWNER, { versions: { [KAPT]: 1 } });
+    expect(stranded.positions[0].status).toBe('recoverable');
+    const liquid = await kofiReceipts.read({ ...context(chain()), market: market('usable') }, OWNER, { versions: { [KAPT]: 1 } });
+    expect(liquid.positions).toEqual([]);
+  });
+});
+
+describe('layerzero claimable', () => {
+  const chain = (amount: string | null) => fakeChain({
+    resource: (_a, type) => type.includes('::coin_bridge::CoinStore<') ? { claimable_amt_ld: { handle: '0xab' } }
+      : type.includes('::oft::CoinStore<') ? { claimable_amount: { handle: '0xcd' } } : null,
+    tableItem: () => amount,
+    gql: () => ({ user_transactions: [{ timestamp: '2025-01-01T00:00:00' }], current_table_items: [{ last_transaction_version: 7 }] }),
+  });
+
+  it('lists a credited bridge transfer, dated when the bridge wrote it', async () => {
+    const r = await layerzeroClaimable.read(context(chain('1500000')), OWNER, { versions: { [LZ_COINS[0].coin]: 7 } });
+    expect(r.positions).toHaveLength(1);
+    expect(r.positions[0]).toMatchObject({ locator: 'USDC', status: 'recoverable', ageBasis: 'onchain_maturity', claimableSince: '2025-01-01T00:00:00.000Z' });
+    expect(r.positions[0].steps[0].function).toContain('::coin_bridge::claim_coin<');
+  });
+
+  it('lists nothing when the receiver has no entry', async () => {
+    expect((await layerzeroClaimable.read(context(chain(null)), OWNER, { versions: { [LZ_COINS[0].coin]: 7 } })).positions).toEqual([]);
+  });
+
+  it('reads an OFT coin from its own claimable table, padded as the indexer stores handles', async () => {
+    const c = chain('5000000');
+    const r = await layerzeroClaimable.read(context(c), OWNER, { versions: { [BTCB]: 7 } });
+    expect(r.positions[0]).toMatchObject({ locator: 'BTC.b', asset: BTCB, expectedPayout: [{ asset: BTCB, raw: '5000000' }] });
+    expect(r.positions[0].steps[0].function).toBe(`0x43d8cad89263e6936921a0adb8d5d49f0e236c229460f01b14dca073114df2b9::oft::claim<${BTCB}>`);
+    expect(c.calls).toContain(`tableItem 0x${'cd'.padStart(64, '0')}`);
+  });
+
+  it('lists nothing for an entry the indexer saw claimed', async () => {
+    const c = chain('1500000');
+    expect((await layerzeroClaimable.read(context(c), OWNER, { versions: { [LZ_COINS[0].coin]: 7 }, amounts: { [LZ_COINS[0].coin]: '0' } })).positions).toEqual([]);
+  });
+});
+
+describe('layerzero claimable dust', () => {
+  it('lists entries below the verification threshold as indexer-only, without reading the chain', async () => {
+    const chain = fakeChain({});
+    const r = await layerzeroClaimable.read(context(chain), OWNER, { versions: { [LZ_COINS[0].coin]: 7 }, amounts: { [LZ_COINS[0].coin]: '5000' } });
+    expect(r.positions[0]).toMatchObject({ confidence: 'indexer_only', expectedPayout: [{ asset: LZ_COINS[0].coin, raw: '5000' }] });
+    expect(chain.calls).toEqual([]);
+  });
+});
+
+describe('topaz bids', () => {
+  const handles: Record<string, string> = { 'collection_marketplace::Index': '0xc1', 'collection_marketplace::Bids<': '0xc2', 'bid_any::Index': '0xa1', 'bid_any::CoinEscrow<': '0xa2', 'bid_any::Bids': '0xa3' };
+  const pad = (h: string) => '0x' + h.slice(2).padStart(64, '0');
+  const chain = (bids: Record<string, { coins: string; deadline: number }>) => fakeChain({
+    resource: (_a, type) => {
+      const k = Object.keys(handles).find(k => type.includes(`::${k}`))!;
+      return { bids: { handle: handles[k] }, coins: { handle: handles[k] } };
+    },
+    tableItem: (handle, _kt, _vt, key) => {
+      if (handle === pad('0xc1')) return Object.keys(bids);
+      if (handle === pad('0xa1')) return null;
+      if (handle === pad('0xc2')) return bids[String(key)] ? { coins: { value: bids[String(key)].coins }, deadline: String(bids[String(key)].deadline * 1e6), cancelled: false } : null;
+      throw new Error(`table ${handle}`);
+    },
+    gql: (query) => query.includes('current_table_items') ? { current_table_items: [{ last_transaction_version: 9 }] }
+      : { user_transactions: [{ timestamp: '2023-01-01T00:00:00' }] },
+  });
+
+  it('ages an expired bid from its deadline and a live one from the closure', async () => {
+    const r = await topazBids.read(context(chain({ '7': { coins: '50000000', deadline: 1_700_000_000 }, '8': { coins: '30000000', deadline: 2_500_000_000 } })), OWNER);
+    expect(r.complete).toBe(true);
+    const [expired, live] = r.positions;
+    expect(expired).toMatchObject({ locator: 'collection-bid:7', ageBasis: 'onchain_maturity', claimableSince: new Date(1_700_000_000_000).toISOString(), status: 'recoverable' });
+    expect(expired.steps[0]).toMatchObject({ function: expect.stringContaining('::collection_marketplace::cancel<0x1::aptos_coin::AptosCoin>'), arguments: ['7'] });
+    expect(live).toMatchObject({ locator: 'collection-bid:8', ageBasis: 'protocol_closure', claimableSince: new Date(TOPAZ_CLOSED_SECS * 1000).toISOString() });
+  });
+
+  it('skips bids whose escrow is empty', async () => {
+    expect((await topazBids.read(context(chain({ '7': { coins: '0', deadline: 1 } })), OWNER)).positions).toEqual([]);
+  });
+
+  it('lists a bidder below the verification threshold as indexer-only, without reading the chain', async () => {
+    const c = fakeChain({});
+    const r = await topazBids.read(context(c), OWNER, { a: { 3: { raw: '1000' }, 4: { raw: '0' } } });
+    expect(r.positions).toHaveLength(1);
+    expect(r.positions[0]).toMatchObject({ locator: 'token-bid:3', confidence: 'indexer_only' });
+    expect(c.calls).toEqual([]);
+  });
+
+  it('encodes u64 keys as the indexer stores them', () => {
+    expect(u64Key('310341')).toBe('0x45bc040000000000');
+  });
+});
+

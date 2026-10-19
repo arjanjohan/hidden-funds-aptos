@@ -3,12 +3,14 @@ import { mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
 import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
+import { type ClaimableHint, claimableHandle, LZ_COINS } from '../shared/sources/layerzero-claimable.ts';
 import { MKLP } from '../shared/sources/merkle-mklp.ts';
 import { VEMKL_COLLECTION } from '../shared/sources/merkle-vemkl.ts';
 import { THALA_VE, THALA_VEST } from '../shared/sources/thala-thl.ts';
 import { THALA_LSD } from '../shared/sources/thala-unstake.ts';
 import { TORTUGA, TORTUGA_STATE } from '../shared/sources/tortuga-tickets.ts';
 import { TRUFIN, unlockTable } from '../shared/sources/trufin-unlocks.ts';
+import { TOPAZ, TOPAZ_VERIFY_MIN, type TopazBid, type TopazHint, type TopazKind, topazTables, u64Key } from '../shared/sources/topaz-bids.ts';
 import type { Sanity } from '../shared/snapshot.ts';
 import type { ChainReader, Ledger, Position } from '../shared/types.ts';
 
@@ -354,6 +356,177 @@ export const merkleMklpEnumerator: Enumerator = {
 export const merkleVemklEnumerator = collectionOwners('merkle-vemkl', VEMKL_COLLECTION,
   async () => ({ check: 'none', ok: null, detail: 'no contract total available: each lock holds its own stores' }));
 
+// Receivers with a claimable entry in a LayerZero per-coin claimable table. Incremental: only entries written since
+// the stored per-coin version cursor are fetched (a claim rewrites or deletes the entry, so it is seen too). The first
+// run, with no cursor, reads every live entry.
+export const layerzeroClaimableEnumerator: Enumerator = {
+  sourceId: 'layerzero-claimable',
+  processor: 'default_processor',
+  scope: `entries of the LayerZero claimable tables (coin_bridge::CoinStore<T>.claimable_amt_ld, oft::CoinStore<T>.claimable_amount) for ${LZ_COINS.map(c => c.display).join(', ')} (current_table_items)`,
+  async run(chain, cursor) {
+    let cursors: Record<string, string> = {};
+    try { cursors = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: full rescan */ }
+    if (typeof cursors !== 'object' || cursors === null) cursors = {};
+    const ledger = await chain.ledger();
+    const ctx = { chain, ledger, memo: { get: async () => undefined, set: async () => {} }, scratch: new Map() };
+    const owners = new Map<string, Required<ClaimableHint>>();
+    let pages = 0;
+    for (const c of LZ_COINS) {
+      const handle = await claimableHandle(ctx, c);
+      if (!handle) continue;
+      const table = await tableRows(chain, handle, cursors[c.coin]);
+      pages += table.pages;
+      cursors[c.coin] = table.cursor;
+      const verify = new Map<number, string[]>(); // write version → owners whose entry will be verified on chain
+      for (const r of table.rows) {
+        const owner = normalizeAddress(r.decoded_key);
+        const amount = r.is_deleted ? '0' : String(r.decoded_value ?? 0);
+        const hint = owners.get(owner) ?? { versions: {}, amounts: {}, times: {} };
+        hint.versions[c.coin] = Number(r.last_transaction_version);
+        hint.amounts[c.coin] = amount;
+        owners.set(owner, hint);
+        if (BigInt(amount) >= c.verifyMin) verify.set(hint.versions[c.coin], [...verify.get(hint.versions[c.coin]) ?? [], owner]);
+      }
+      // Credit times for the entries that will be verified, a page of versions per query instead of one per position.
+      const { times, pages: timePages } = await versionTimes(chain, [...verify.keys()]);
+      pages += timePages;
+      for (const [v, list] of verify) for (const owner of list) if (times.has(v)) owners.get(owner)!.times[c.coin] = times.get(v)!;
+    }
+    return { candidates: [...owners].map(([owner, hint]) => ({ owner, hint })), cursor: JSON.stringify(cursors), pages, incremental: true };
+  },
+  sanity: async () => ({ check: 'none', ok: null, detail: 'no contract total: claimable amounts are minted on claim' }),
+};
+
+const HEX = '0123456789abcdef';
+
+/** Rows of a table: all of them with a parallel keyset over 16 key-prefix ranges when `since` is undefined, else
+ *  the rows written after version `since` (version keyset). Returns the highest version seen as the next cursor. */
+async function tableRows(chain: ChainReader, handle: string, since: string | undefined): Promise<{ rows: any[]; cursor: string; pages: number }> {
+  const rows: any[] = [];
+  let pages = 0, cursor = since ?? '0';
+  const fields = 'key decoded_key decoded_value is_deleted last_transaction_version';
+  if (since === undefined) {
+    await mapLimit([...HEX], 8, async (c, i) => {
+      let after = `0x${c}`;
+      const end = i < 15 ? `0x${HEX[i + 1]}` : '0xg';
+      for (;;) {
+        const page = (await chain.gql(`query($h:String!,$a:String!,$e:String!){ current_table_items(where:{table_handle:{_eq:$h},
+          is_deleted:{_eq:false}, key:{_gt:$a, _lt:$e}}, order_by:{key:asc}, limit:${PAGE}){ ${fields} } }`, { h: handle, a: after, e: end })).current_table_items;
+        pages++;
+        rows.push(...page);
+        if (page.length < PAGE) break;
+        after = page[page.length - 1].key;
+      }
+    });
+  } else {
+    let k = '';
+    for (;;) {
+      const page = (await chain.gql(`query($h:String!,$v:bigint!,$k:String!){ current_table_items(where:{table_handle:{_eq:$h},
+        _or:[{last_transaction_version:{_gt:$v}}, {last_transaction_version:{_eq:$v}, key:{_gt:$k}}]},
+        order_by:[{last_transaction_version:asc},{key:asc}], limit:${PAGE}){ ${fields} } }`, { h: handle, v: cursor, k })).current_table_items;
+      pages++;
+      rows.push(...page);
+      if (page.length) { cursor = String(page[page.length - 1].last_transaction_version); k = page[page.length - 1].key; }
+      if (page.length < PAGE) break;
+    }
+  }
+  for (const r of rows) if (BigInt(r.last_transaction_version) > BigInt(cursor)) cursor = String(r.last_transaction_version);
+  return { rows, cursor, pages };
+}
+
+/** Current rows of a u64-keyed table for the given ids, a page of keys per query. Slow on large tables (no key index:
+ *  seconds per query), so only for the few ids an incremental scan needs. */
+async function rowsByIds(chain: ChainReader, handle: string, ids: string[]): Promise<{ rows: Map<string, any>; pages: number }> {
+  const rows = new Map<string, any>();
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += 20) batches.push(ids.slice(i, i + 20));
+  await mapLimit(batches, 4, async batch => {
+    const page = (await chain.gql(`query($h:String!,$ks:[String!]!){ current_table_items(where:{table_handle:{_eq:$h}, key:{_in:$ks}},
+      limit:${PAGE}){ decoded_key decoded_value is_deleted last_transaction_version } }`, { h: handle, ks: batch.map(id => u64Key(id)) })).current_table_items;
+    for (const r of page) rows.set(String(r.decoded_key), r);
+  });
+  return { rows, pages: batches.length };
+}
+
+/** Write times (unix seconds) of transaction versions, a page of versions per query. */
+async function versionTimes(chain: ChainReader, versions: number[]): Promise<{ times: Map<number, number>; pages: number }> {
+  const times = new Map<number, number>();
+  const unique = [...new Set(versions)];
+  const batches: number[][] = [];
+  for (let i = 0; i < unique.length; i += PAGE) batches.push(unique.slice(i, i + PAGE));
+  await mapLimit(batches, 8, async batch => {
+    const txs = (await chain.gql(`query($vs:[bigint!]!){ user_transactions(where:{version:{_in:$vs}}, limit:${PAGE}){ version timestamp } }`,
+      { vs: batch.map(String) })).user_transactions;
+    for (const t of txs) times.set(Number(t.version), Math.floor(Date.parse(t.timestamp + 'Z') / 1000));
+  });
+  return { times, pages: batches.length };
+}
+
+// Topaz bids with their bidder, escrowed APT, deadline and write time, read from the bid tables themselves
+// (collection_marketplace::Bids<APT>; bid_any::CoinEscrow<APT> joined to bid_any::Bids for the bidder). Rows are never
+// deleted: a cancel or fill rewrites the bid with empty coins, so the per-table version cursors catch every change.
+export const topazBidsEnumerator: Enumerator = {
+  sourceId: 'topaz-bids',
+  processor: 'default_processor',
+  scope: `bids in ${TOPAZ}::collection_marketplace::Bids<APT> and ::bid_any::CoinEscrow<APT> (current_table_items)`,
+  async run(chain, cursor) {
+    let cursors: Record<string, string> = {};
+    try { cursors = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: full rescan */ }
+    if (typeof cursors !== 'object' || cursors === null) cursors = {};
+    const ledger = await chain.ledger();
+    const ctx = { chain, ledger, memo: { get: async () => undefined, set: async () => {} }, scratch: new Map() };
+    const tables = await topazTables(ctx);
+    const hints = new Map<string, TopazHint>();
+    const written = new Map<TopazBid, number>();   // bid → version of its last write
+    const add = (buyer: string, kind: TopazKind, id: string, bid: TopazBid, version: number) => {
+      const owner = normalizeAddress(buyer);
+      const hint = hints.get(owner) ?? {};
+      hint[kind] = { ...hint[kind], [id]: bid };
+      hints.set(owner, hint);
+      written.set(bid, version);
+    };
+    const full = !cursors.c && !cursors.a && !cursors.b;
+    const deadlineOf = (v: any) => v?.deadline !== undefined ? Math.floor(Number(v.deadline) / 1e6) : undefined;
+    let pages = 0;
+    const scan = async (key: string, handle: string) => {
+      const t = await tableRows(chain, handle, cursors[key]);
+      pages += t.pages;
+      cursors[key] = t.cursor;
+      return t.rows.filter(r => !r.is_deleted);
+    };
+
+    for (const r of await scan('c', tables.c.store)) {
+      const v = r.decoded_value;
+      add(v.buyer, 'c', String(r.decoded_key), { raw: String(v.coins?.value ?? 0), deadline: deadlineOf(v) }, Number(r.last_transaction_version));
+    }
+    const escrow = await scan('a', tables.a.store);
+    const details = new Map((await scan('b', tables.anyBids)).map(r => [String(r.decoded_key), r.decoded_value]));
+    const missing = escrow.map(r => String(r.decoded_key)).filter(id => !details.has(id));
+    if (missing.length) {
+      const looked = await rowsByIds(chain, tables.anyBids, missing);
+      pages += looked.pages;
+      for (const [id, r] of looked.rows) if (!r.is_deleted) details.set(id, r.decoded_value);
+    }
+    for (const r of escrow) {
+      const id = String(r.decoded_key), d = details.get(id);
+      if (!d?.buyer) continue;   // bidder unknown: counted nowhere (the bid row is never deleted, so this should not happen)
+      add(d.buyer, 'a', id, { raw: String(r.decoded_value?.value ?? 0), deadline: deadlineOf(d) }, Number(r.last_transaction_version));
+    }
+    // A full scan keeps only bidders with escrowed coins; an incremental one keeps every change (a cancel empties a bid).
+    const owners = [...hints].filter(([, h]) => !full || Object.values(h).some(m => Object.values(m).some(b => BigInt(b.raw) > 0n)));
+
+    // Bids that will be verified and have not expired are aged from their last write.
+    const verified = owners.filter(([, h]) => Object.values(h).flatMap(m => Object.values(m)).reduce((s, b) => s + BigInt(b.raw), 0n) >= TOPAZ_VERIFY_MIN);
+    const live = verified.flatMap(([, h]) => Object.values(h).flatMap(m => Object.values(m)))
+      .filter(b => BigInt(b.raw) > 0n && !(b.deadline !== undefined && b.deadline <= ledger.timestampSecs));
+    const { times, pages: timePages } = await versionTimes(chain, live.map(b => written.get(b)!));
+    pages += timePages;
+    for (const b of live) b.t = times.get(written.get(b)!);
+    return { candidates: owners.map(([owner, hint]) => ({ owner, hint })), cursor: JSON.stringify(cursors), pages, incremental: true };
+  },
+  sanity: async () => ({ check: 'none', ok: null, detail: 'no contract total: each bid holds its own coins' }),
+};
+
 const noContractTotal: Enumerator['sanity'] = async () =>
   ({ check: 'none', ok: null, detail: 'no contract total available: balances are stored per account' });
 
@@ -368,4 +541,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator, merkleVemklEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator];

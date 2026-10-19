@@ -40,20 +40,29 @@ export class State {
   }
 
   /** Insert new candidates and record which ones changed: new, re-enumerated by an incremental (activity) scan, or
-   *  with a different hint. A changed candidate is due regardless of its refresh window. Never deletes candidates. */
+   *  with a different hint. A changed candidate is due regardless of its refresh window. Never deletes candidates.
+   *  An incremental scan's hint is a delta: it is deep-merged into the stored hint. */
   upsertCandidates(source: string, candidates: { owner: string; hint?: unknown }[], now: string, incremental = false) {
     const stmt = this.db.prepare(`insert into candidates (source, owner, hint, first_seen, changed_at, dirty) values (?, ?, ?, ?, ?, 1)
       on conflict(source, owner) do update set
         dirty = case when ? or candidates.hint is not excluded.hint then 1 else candidates.dirty end,
         changed_at = case when ? or candidates.hint is not excluded.hint then excluded.changed_at else candidates.changed_at end,
         hint = excluded.hint`);
+    const stored = this.db.prepare('select hint from candidates where source = ? and owner = ?');
     this.db.exec('begin');
-    for (const c of candidates) stmt.run(source, c.owner, c.hint === undefined ? null : JSON.stringify(c.hint), now, now, incremental ? 1 : 0, incremental ? 1 : 0);
+    for (const c of candidates) {
+      let hint = c.hint;
+      if (incremental && hint !== undefined) {
+        const prev = (stored.get(source, c.owner) as { hint: string | null } | undefined)?.hint;
+        if (prev) hint = deepMerge(JSON.parse(prev), hint);
+      }
+      stmt.run(source, c.owner, hint === undefined ? null : JSON.stringify(hint), now, now, incremental ? 1 : 0, incremental ? 1 : 0);
+    }
     this.db.exec('commit');
   }
 
   /** Candidates due for a read. Known non-zero and incomplete owners follow refresh.nonZero, zero owners refresh.zero. */
-  due(source: SourceDef<any>, nowMs: number, enumerated: Set<string>): { owner: string; hint?: unknown; priority: number }[] {
+  due(source: SourceDef<any>, nowMs: number, enumerated: Set<string>, storedHints = false): { owner: string; hint?: unknown; priority: number }[] {
     const rows = this.db.prepare('select owner, hint, last_read_at, last_nonzero, last_complete, dirty from candidates where source = ?').all(source.id) as any[];
     const out: { owner: string; hint?: unknown; priority: number }[] = [];
     for (const r of rows) {
@@ -62,8 +71,9 @@ export class State {
       const limit = r.last_nonzero || r.last_complete === 0 ? AGE_LIMIT_MS[source.refresh.nonZero] : AGE_LIMIT_MS[source.refresh.zero];
       // Reads slightly early so a weekly cadence never skips a run because of schedule jitter.
       if (age < limit - DAY_MS / 2) continue;
-      // A hint only applies when this run's enumeration produced it; otherwise the source discovers for itself.
-      const hint = enumerated.has(r.owner) && r.hint ? JSON.parse(r.hint) : undefined;
+      // A full scan refreshes every hint, so only this run's hints apply; an incremental scan only returns changed
+      // owners, so for the rest the stored hint is the latest knowledge.
+      const hint = r.hint && (storedHints || enumerated.has(r.owner)) ? JSON.parse(r.hint) : undefined;
       out.push({ owner: r.owner, hint, priority: r.last_read_at ? (r.last_nonzero ? 1 : 2) : 0 });
     }
     return out.sort((a, b) => a.priority - b.priority);
@@ -115,4 +125,13 @@ export class State {
   }
 
   close() { this.db.close(); }
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+function deepMerge(a: unknown, b: unknown): unknown {
+  if (!isRecord(a) || !isRecord(b)) return b;
+  const out: Record<string, unknown> = { ...a };
+  for (const [k, v] of Object.entries(b)) out[k] = deepMerge(a[k], v);
+  return out;
 }

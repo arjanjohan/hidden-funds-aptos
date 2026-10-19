@@ -61,7 +61,7 @@ export interface SourceDef<Hint = unknown> {
   chain: 'aptos' | 'movement';
   title: string;
   summary: string;
-  category: 'staking' | 'liquid_staking' | 'closed_app';
+  category: 'staking' | 'liquid_staking' | 'closed_app' | 'bridge';
   /** Which left-behind rule (R2 branch) makes a position count. */
   inclusionRule: string;
   protocolStatus: ProtocolStatus;

@@ -4,7 +4,7 @@
 // (address derived from owner + metadata), compared with expectedPayout. Gas-only failures are re-run with a
 // zero-address fee payer so "the contract pays" and "the owner can pay gas" are reported separately.
 //
-// Usage: node spikes/07-simulate-state.ts --state path --source id [--network aptos|movement] [--step N] [--seed S] [--extra N]
+// Usage: node spikes/07-simulate-state.ts --state path --source id [--network aptos|movement] [--step N] [--seed S] [--extra N] [--anonymous]
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
@@ -20,9 +20,11 @@ const SEED = Number(opt('--seed', '20261018')), EXTRA = Number(opt('--extra', '7
 // Which recovery step to simulate; a step without expected outputs is checked for success only.
 const STEP = Number(opt('--step', '0'));
 const NETWORK = opt('--network', 'aptos') as 'aptos' | 'movement';
-// The Geomi key goes to Aptos Labs only; Movement is simulated on its public fullnode.
+// The Geomi key goes to Aptos Labs only; Movement is simulated on its public fullnode. --anonymous uses Aptos Labs'
+// public endpoint without the key (lower rate limits).
 const aptos = NETWORK === 'movement'
   ? new Aptos(new AptosConfig({ network: Network.CUSTOM, fullnode: NETWORKS.movement.fullnode }))
+  : args.includes('--anonymous') ? new Aptos(new AptosConfig({ network: Network.MAINNET }))
   : new Aptos(new AptosConfig({ network: Network.MAINNET, clientConfig: { API_KEY: readFileSync('.env', 'utf8').match(/^GEOMI_API_KEY=(.*)$/m)![1].trim() } }));
 
 function rng(seed: number) {
