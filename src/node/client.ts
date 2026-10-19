@@ -31,10 +31,10 @@ export function readers(cap: number, { anonymous = false } = {}): { chains: Reco
   };
   return {
     chains: {
-      // Anonymous (local runs without a key): Aptos Labs allows 40,000 compute units per 5 minutes per IP, so a
-      // rate-limited request keeps retrying long enough to outlast the window.
+      // Anonymous (local runs without a key): Aptos Labs allows 40,000 compute units per 5 minutes per IP, and
+      // parallel readers use up each new window between them, so a rate-limited request retries for up to ~1 hour.
       aptos: anonymous
-        ? createReader({ network: 'aptos', onRequest: count('aptos'), retries: 12 })
+        ? createReader({ network: 'aptos', onRequest: count('aptos'), retries: 60 })
         : createReader({ network: 'aptos', headers: { authorization: `Bearer ${apiKey()}` }, onRequest: count('aptos') }),
       movement: createReader({ network: 'movement', onRequest: count('movement') }),
     },
