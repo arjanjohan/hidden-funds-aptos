@@ -1,11 +1,17 @@
 {
   "schema": 1,
-  "generatedAt": "2026-10-18T19:35:17.723Z",
+  "generatedAt": "2026-10-19T05:39:28.106Z",
   "prices": {
     "0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.762764,
+      "usd": 0.7706,
       "decimals": 8,
-      "at": "2026-10-18T19:30:17.000Z",
+      "at": "2026-10-19T05:20:29.000Z",
+      "source": "coingecko simple/price"
+    },
+    "0x07fd500c11216f0fe3095d0c4b8aa4d64a4e2e04f83758462f2b127255643615::thl_coin::THL": {
+      "usd": 0.00986134,
+      "decimals": 8,
+      "at": "2026-10-19T05:20:29.000Z",
       "source": "coingecko simple/price"
     }
   },
@@ -34,30 +40,30 @@
         "scope": "current_delegator_balances rows with pool_type=inactive_shares and shares>0 (stake_processor)",
         "enumeration": {
           "pages": 123,
-          "newCandidates": 1,
-          "candidates": 8696,
-          "start": "2026-10-18T19:30:29.382Z",
-          "end": "2026-10-18T19:30:33.949Z"
+          "newCandidates": 14,
+          "candidates": 8710,
+          "start": "2026-10-19T05:20:38.289Z",
+          "end": "2026-10-19T05:20:43.639Z"
         },
         "verification": {
-          "read": 7817,
+          "read": 8707,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-18T19:30:34.756Z",
-          "ledgerFrom": "7669534291",
-          "end": "2026-10-18T19:32:52.718Z",
-          "ledgerTo": "7669561914"
+          "start": "2026-10-19T05:20:44.199Z",
+          "ledgerFrom": "7675197355",
+          "end": "2026-10-19T05:21:45.594Z",
+          "ledgerTo": "7675206376"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "7669533132",
-          "timestamp": "2026-10-18T19:30:26.994577Z"
+          "version": "7675196288",
+          "timestamp": "2026-10-19T05:20:36.40306Z"
         },
         "watermarkAfter": {
-          "version": "7669533897",
-          "timestamp": "2026-10-18T19:30:32.395262Z"
+          "version": "7675197156",
+          "timestamp": "2026-10-19T05:20:42.552193Z"
         },
         "sanity": {
           "check": "per pool: sum of delegator inactive stake <= stake::get_stake(pool).inactive",
@@ -65,22 +71,22 @@
           "detail": "66 pools, 0 violations"
         }
       },
-      "lastSuccessAt": "2026-10-18T19:32:52.718Z",
+      "lastSuccessAt": "2026-10-19T05:21:45.594Z",
       "totals": {
         "face": {
-          "positions": 8487,
-          "owners": 7813,
-          "usd": 2610581.7628321894,
+          "positions": 8483,
+          "owners": 7809,
+          "usd": 2638466.280989008,
           "unpriced": 0,
-          "ownersMin10": 1707
+          "ownersMin10": 1766
         },
         "byStatus": {
           "recoverable": {
-            "positions": 8470,
-            "owners": 7796,
-            "usd": 2598808.594037918,
+            "positions": 8466,
+            "owners": 7792,
+            "usd": 2625464.9870234784,
             "unpriced": 0,
-            "ownersMin10": 1703
+            "ownersMin10": 1762
           },
           "team_gated": {
             "positions": 0,
@@ -99,64 +105,64 @@
           "unknown": {
             "positions": 17,
             "owners": 17,
-            "usd": 11773.168794272167,
+            "usd": 13001.293965529552,
             "unpriced": 0,
             "ownersMin10": 4
           }
         },
         "aged": {
           "ge30": {
-            "positions": 7919,
-            "owners": 7264,
-            "usd": 689343.0881551261,
+            "positions": 7920,
+            "owners": 7265,
+            "usd": 696459.0893319319,
             "unpriced": 0,
-            "ownersMin10": 1455
+            "ownersMin10": 1505
           },
           "ge90": {
             "positions": 7795,
             "owners": 7148,
-            "usd": 675984.3910228115,
+            "usd": 682928.8898298464,
             "unpriced": 0,
-            "ownersMin10": 1401
+            "ownersMin10": 1449
           },
           "ge180": {
             "positions": 7610,
             "owners": 6975,
-            "usd": 579181.2355780752,
+            "usd": 585131.2596510346,
             "unpriced": 0,
-            "ownersMin10": 1319
+            "ownersMin10": 1358
           }
         },
         "agedEstimated": {
           "ge30": {
             "positions": 85,
             "owners": 85,
-            "usd": 6305.838584007244,
+            "usd": 6370.619500705304,
             "unpriced": 0,
-            "ownersMin10": 37
+            "ownersMin10": 38
           },
           "ge90": {
             "positions": 79,
             "owners": 79,
-            "usd": 5161.892096327136,
+            "usd": 5214.921062648068,
             "unpriced": 0,
-            "ownersMin10": 35
+            "ownersMin10": 36
           },
           "ge180": {
             "positions": 64,
             "owners": 64,
-            "usd": 5003.813143548694,
+            "usd": 5055.218138793419,
             "unpriced": 0,
-            "ownersMin10": 32
+            "ownersMin10": 33
           }
         },
         "byAgeBasis": {
           "onchain_maturity": {
-            "positions": 8353,
-            "owners": 7684,
-            "usd": 2459555.499532501,
+            "positions": 8349,
+            "owners": 7680,
+            "usd": 2484781.3225795934,
             "unpriced": 0,
-            "ownersMin10": 1647
+            "ownersMin10": 1705
           },
           "protocol_closure": {
             "positions": 0,
@@ -168,14 +174,14 @@
           "position_interaction": {
             "positions": 101,
             "owners": 101,
-            "usd": 137958.3947618925,
+            "usd": 139375.66403699474,
             "unpriced": 0,
-            "ownersMin10": 52
+            "ownersMin10": 53
           },
           "unknown": {
             "positions": 16,
             "owners": 16,
-            "usd": 1294.6997435245885,
+            "usd": 1308.000406888694,
             "unpriced": 0,
             "ownersMin10": 5
           }
@@ -183,28 +189,28 @@
         "headline": {
           "positions": 7795,
           "owners": 7148,
-          "usd": 675984.3910228115,
+          "usd": 682928.8898298464,
           "unpriced": 0,
-          "ownersMin10": 1401
+          "ownersMin10": 1449
         },
-        "headlineTopOwnerShare": 0.4974934700710012
+        "headlineTopOwnerShare": 0.49749347007100614
       },
       "sizeBands": [
         {
           "upTo": 1,
-          "positions": 4175
+          "positions": 4174
         },
         {
           "upTo": 10,
-          "positions": 2524
+          "positions": 2462
         },
         {
           "upTo": 100,
-          "positions": 1559
+          "positions": 1615
         },
         {
           "upTo": 1000,
-          "positions": 166
+          "positions": 169
         },
         {
           "upTo": 10000,
@@ -213,6 +219,214 @@
         {
           "upTo": null,
           "positions": 12
+        }
+      ]
+    },
+    {
+      "id": "delegation-inactive-validator",
+      "title": "APT staked with a validator that stopped",
+      "summary": "Your APT is still staked in a delegation pool whose validator left the validator set. It earns nothing and can be unlocked and withdrawn right away.",
+      "category": "staking",
+      "inclusionRule": "R2 ended position: the pool's validator is inactive (stake::get_validator_state = 4), so staking stopped; unlock and withdraw are immediate.",
+      "protocolStatus": {
+        "state": "live",
+        "evidence": "Aptos framework module 0x1::delegation_pool; per-pool validator state read each run.",
+        "checkedAt": "2026-10-18"
+      },
+      "howTo": [
+        "In your wallet's staking view, unlock the stake from this validator, then withdraw it. With the validator out of the set, the withdrawal is available immediately.",
+        "Or call 0x1::delegation_pool::unlock(pool, amount), then 0x1::delegation_pool::withdraw(pool, amount)."
+      ],
+      "headlineAgeBases": [
+        "protocol_closure"
+      ],
+      "run": {
+        "processor": "stake_processor",
+        "scope": "active_shares rows (shares > 0) in delegation pools whose validator state is inactive (4) at enumeration time",
+        "enumeration": {
+          "pages": 187,
+          "newCandidates": 6821,
+          "candidates": 6821,
+          "start": "2026-10-19T05:21:46.309Z",
+          "end": "2026-10-19T05:22:26.766Z"
+        },
+        "verification": {
+          "read": 6821,
+          "incomplete": 8,
+          "notReread": 0,
+          "start": "2026-10-19T05:22:27.134Z",
+          "ledgerFrom": "7675213091",
+          "end": "2026-10-19T05:32:53.970Z",
+          "ledgerTo": "7675312776"
+        },
+        "completeness": "degraded",
+        "degradedReasons": [
+          "8 owners read incompletely; their previous positions are kept"
+        ],
+        "errors": [
+          "pool 0xc41e4eded759ab4a31e999bbef6d14361fd94bea59db8310703b1668af98a23d: Error: indexer: HTTP 408 {\"errors\":[{\"message\":\"Request Timed Out: Upstream took longer than 10000ms to respond\",\"extensions\":{\"code\":\"408\"}}]}"
+        ],
+        "watermarkBefore": {
+          "version": "7675206262",
+          "timestamp": "2026-10-19T05:21:44.870579Z"
+        },
+        "watermarkAfter": {
+          "version": "7675212886",
+          "timestamp": "2026-10-19T05:22:25.637353Z"
+        },
+        "sanity": {
+          "check": "per pool: sum of delegator active stake <= stake::get_stake(pool).active",
+          "ok": true,
+          "detail": "43 pools, 0 violations"
+        }
+      },
+      "totals": {
+        "face": {
+          "positions": 6889,
+          "owners": 6813,
+          "usd": 11855264.647416305,
+          "unpriced": 0,
+          "ownersMin10": 2633
+        },
+        "byStatus": {
+          "recoverable": {
+            "positions": 6874,
+            "owners": 6798,
+            "usd": 11483437.208742524,
+            "unpriced": 0,
+            "ownersMin10": 2631
+          },
+          "team_gated": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "blocked": {
+            "positions": 12,
+            "owners": 12,
+            "usd": 2.2948521633760004,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 3,
+            "owners": 3,
+            "usd": 371825.1438216231,
+            "unpriced": 0,
+            "ownersMin10": 2
+          }
+        },
+        "aged": {
+          "ge30": {
+            "positions": 4061,
+            "owners": 4035,
+            "usd": 10155788.531814061,
+            "unpriced": 0,
+            "ownersMin10": 1623
+          },
+          "ge90": {
+            "positions": 4042,
+            "owners": 4016,
+            "usd": 7703830.235734105,
+            "unpriced": 0,
+            "ownersMin10": 1611
+          },
+          "ge180": {
+            "positions": 3939,
+            "owners": 3918,
+            "usd": 99760.7945464717,
+            "unpriced": 0,
+            "ownersMin10": 1559
+          }
+        },
+        "agedEstimated": {
+          "ge30": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "byAgeBasis": {
+          "onchain_maturity": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "protocol_closure": {
+            "positions": 4760,
+            "owners": 4718,
+            "usd": 11157645.636084763,
+            "unpriced": 0,
+            "ownersMin10": 1857
+          },
+          "position_interaction": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 2114,
+            "owners": 2105,
+            "usd": 325791.572657754,
+            "unpriced": 0,
+            "ownersMin10": 789
+          }
+        },
+        "headline": {
+          "positions": 4042,
+          "owners": 4016,
+          "usd": 7703830.235734105,
+          "unpriced": 0,
+          "ownersMin10": 1611
+        },
+        "headlineTopOwnerShare": 0.12609814874572672
+      },
+      "sizeBands": [
+        {
+          "upTo": 1,
+          "positions": 0
+        },
+        {
+          "upTo": 10,
+          "positions": 4204
+        },
+        {
+          "upTo": 100,
+          "positions": 2439
+        },
+        {
+          "upTo": 1000,
+          "positions": 186
+        },
+        {
+          "upTo": 10000,
+          "positions": 20
+        },
+        {
+          "upTo": null,
+          "positions": 25
         }
       ]
     },
@@ -239,32 +453,32 @@
         "processor": "user_transaction_processor",
         "scope": "senders of 0xfaf4e633ae9eb31366c9ca24214231760926576c7b625313b3688b5e900731f6::scripts::request_unstake_APT entry calls (calls made by other contracts excluded)",
         "enumeration": {
-          "pages": 69,
-          "newCandidates": 0,
-          "candidates": 2466,
-          "start": "2026-10-18T19:32:53.953Z",
-          "end": "2026-10-18T19:33:09.262Z",
-          "cursor": "{\"0xfaf4e633ae9eb31366c9ca24214231760926576c7b625313b3688b5e900731f6::scripts::request_unstake_APT\":\"7665701707\"}"
+          "pages": 1,
+          "newCandidates": 1,
+          "candidates": 2467,
+          "start": "2026-10-19T05:32:54.642Z",
+          "end": "2026-10-19T05:32:54.856Z",
+          "cursor": "{\"0xfaf4e633ae9eb31366c9ca24214231760926576c7b625313b3688b5e900731f6::scripts::request_unstake_APT\":\"7673120610\"}"
         },
         "verification": {
-          "read": 951,
+          "read": 952,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-18T19:33:09.672Z",
-          "ledgerFrom": "7669565305",
-          "end": "2026-10-18T19:33:25.255Z",
-          "ledgerTo": "7669569833"
+          "start": "2026-10-19T05:32:55.083Z",
+          "ledgerFrom": "7675313016",
+          "end": "2026-10-19T05:33:00.889Z",
+          "ledgerTo": "7675313954"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "7669561638",
-          "timestamp": "2026-10-18T19:32:50.905408Z"
+          "version": "7675312620",
+          "timestamp": "2026-10-19T05:32:53.043923Z"
         },
         "watermarkAfter": {
-          "version": "7669564631",
-          "timestamp": "2026-10-18T19:33:07.949097Z"
+          "version": "7675312620",
+          "timestamp": "2026-10-19T05:32:53.043923Z"
         },
         "sanity": {
           "check": "matured requests found <= TLSD.apt_pending_withdrawal (APT held for claims)",
@@ -272,12 +486,12 @@
           "detail": "matured 3840020838541 of 5461988122123 held (70.30%)"
         }
       },
-      "lastSuccessAt": "2026-10-18T19:33:25.255Z",
+      "lastSuccessAt": "2026-10-19T05:33:00.889Z",
       "totals": {
         "face": {
           "positions": 1094,
           "owners": 951,
-          "usd": 29290.296548888862,
+          "usd": 29591.20058179693,
           "unpriced": 0,
           "ownersMin10": 90
         },
@@ -285,7 +499,7 @@
           "recoverable": {
             "positions": 1094,
             "owners": 951,
-            "usd": 29290.296548888862,
+            "usd": 29591.20058179693,
             "unpriced": 0,
             "ownersMin10": 90
           },
@@ -315,21 +529,21 @@
           "ge30": {
             "positions": 1080,
             "owners": 939,
-            "usd": 27348.46008208655,
+            "usd": 27629.41530965789,
             "unpriced": 0,
             "ownersMin10": 86
           },
           "ge90": {
             "positions": 1066,
             "owners": 925,
-            "usd": 27316.507661311207,
+            "usd": 27597.134636409704,
             "unpriced": 0,
             "ownersMin10": 85
           },
           "ge180": {
-            "positions": 1029,
-            "owners": 890,
-            "usd": 25900.645628850685,
+            "positions": 1030,
+            "owners": 891,
+            "usd": 26166.727941717854,
             "unpriced": 0,
             "ownersMin10": 80
           }
@@ -361,7 +575,7 @@
           "onchain_maturity": {
             "positions": 1094,
             "owners": 951,
-            "usd": 29290.296548888862,
+            "usd": 29591.20058179693,
             "unpriced": 0,
             "ownersMin10": 90
           },
@@ -390,20 +604,20 @@
         "headline": {
           "positions": 1066,
           "owners": 925,
-          "usd": 27316.507661311207,
+          "usd": 27597.134636409704,
           "unpriced": 0,
           "ownersMin10": 85
         },
-        "headlineTopOwnerShare": 0.5545870176282702
+        "headlineTopOwnerShare": 0.5545870176282695
       },
       "sizeBands": [
         {
           "upTo": 1,
-          "positions": 745
+          "positions": 744
         },
         {
           "upTo": 10,
-          "positions": 255
+          "positions": 256
         },
         {
           "upTo": 100,
@@ -447,32 +661,32 @@
         "processor": "user_transaction_processor",
         "scope": "senders of 0x2cc52445acc4c5e5817a0ac475976fbef966fedb6e30e7db792e10619c76181f::gateway::request_withdrawal_entry, 0x2cc52445acc4c5e5817a0ac475976fbef966fedb6e30e7db792e10619c76181f::gateway::unstake_and_request_withdrawal_entry entry calls (calls made by other contracts excluded)",
         "enumeration": {
-          "pages": 24,
-          "newCandidates": 1258,
+          "pages": 2,
+          "newCandidates": 0,
           "candidates": 1258,
-          "start": "2026-10-18T19:33:25.644Z",
-          "end": "2026-10-18T19:33:31.612Z",
+          "start": "2026-10-19T05:33:01.188Z",
+          "end": "2026-10-19T05:33:01.612Z",
           "cursor": "{\"0x2cc52445acc4c5e5817a0ac475976fbef966fedb6e30e7db792e10619c76181f::gateway::request_withdrawal_entry\":\"7652867821\",\"0x2cc52445acc4c5e5817a0ac475976fbef966fedb6e30e7db792e10619c76181f::gateway::unstake_and_request_withdrawal_entry\":\"7467829604\"}"
         },
         "verification": {
-          "read": 1258,
+          "read": 394,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-18T19:33:32.061Z",
-          "ledgerFrom": "7669571247",
-          "end": "2026-10-18T19:33:46.720Z",
-          "ledgerTo": "7669574772"
+          "start": "2026-10-19T05:33:01.839Z",
+          "ledgerFrom": "7675314097",
+          "end": "2026-10-19T05:33:04.406Z",
+          "ledgerTo": "7675314497"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "7669569650",
-          "timestamp": "2026-10-18T19:33:24.325513Z"
+          "version": "7675313798",
+          "timestamp": "2026-10-19T05:32:59.760658Z"
         },
         "watermarkAfter": {
-          "version": "7669570957",
-          "timestamp": "2026-10-18T19:33:30.504909Z"
+          "version": "7675313850",
+          "timestamp": "2026-10-19T05:33:00.144433Z"
         },
         "sanity": {
           "check": "matured tickets found vs vault::get_unlocked_apt_balance (APT ready for withdrawals)",
@@ -480,22 +694,22 @@
           "detail": "matured 1683114150199 vs 28951138828169 unlocked (5.81%)"
         }
       },
-      "lastSuccessAt": "2026-10-18T19:33:46.720Z",
+      "lastSuccessAt": "2026-10-19T05:33:04.406Z",
       "totals": {
         "face": {
           "positions": 504,
           "owners": 394,
-          "usd": 12838.188816623897,
+          "usd": 12970.077641433501,
           "unpriced": 0,
-          "ownersMin10": 25
+          "ownersMin10": 26
         },
         "byStatus": {
           "recoverable": {
             "positions": 504,
             "owners": 394,
-            "usd": 12838.188816623897,
+            "usd": 12970.077641433501,
             "unpriced": 0,
-            "ownersMin10": 25
+            "ownersMin10": 26
           },
           "team_gated": {
             "positions": 0,
@@ -523,23 +737,23 @@
           "ge30": {
             "positions": 502,
             "owners": 392,
-            "usd": 12833.217995174877,
+            "usd": 12965.055753918341,
             "unpriced": 0,
-            "ownersMin10": 25
+            "ownersMin10": 26
           },
           "ge90": {
             "positions": 395,
             "owners": 287,
-            "usd": 12769.46636259193,
+            "usd": 12900.649190330627,
             "unpriced": 0,
-            "ownersMin10": 23
+            "ownersMin10": 24
           },
           "ge180": {
             "positions": 381,
             "owners": 273,
-            "usd": 3190.321289803044,
+            "usd": 3223.095985025803,
             "unpriced": 0,
-            "ownersMin10": 21
+            "ownersMin10": 22
           }
         },
         "agedEstimated": {
@@ -569,9 +783,9 @@
           "onchain_maturity": {
             "positions": 504,
             "owners": 394,
-            "usd": 12838.188816623897,
+            "usd": 12970.077641433501,
             "unpriced": 0,
-            "ownersMin10": 25
+            "ownersMin10": 26
           },
           "protocol_closure": {
             "positions": 0,
@@ -598,20 +812,20 @@
         "headline": {
           "positions": 395,
           "owners": 287,
-          "usd": 12769.46636259193,
+          "usd": 12900.649190330627,
           "unpriced": 0,
-          "ownersMin10": 23
+          "ownersMin10": 24
         },
-        "headlineTopOwnerShare": 0.7459835565767116
+        "headlineTopOwnerShare": 0.7459835565767111
       },
       "sizeBands": [
         {
           "upTo": 1,
-          "positions": 443
+          "positions": 442
         },
         {
           "upTo": 10,
-          "positions": 34
+          "positions": 35
         },
         {
           "upTo": 100,
@@ -654,32 +868,32 @@
         "processor": "user_transaction_processor",
         "scope": "senders of 0x8f396e4246b2ba87b51c0739ef5ea4f26515a98375308c31ac2ec1e42142a57f::stake_router::unstake entry calls (calls made by other contracts excluded)",
         "enumeration": {
-          "pages": 112,
-          "newCandidates": 4460,
+          "pages": 1,
+          "newCandidates": 0,
           "candidates": 4460,
-          "start": "2026-10-18T19:33:47.135Z",
-          "end": "2026-10-18T19:34:12.118Z",
+          "start": "2026-10-19T05:33:04.674Z",
+          "end": "2026-10-19T05:33:04.862Z",
           "cursor": "{\"0x8f396e4246b2ba87b51c0739ef5ea4f26515a98375308c31ac2ec1e42142a57f::stake_router::unstake\":\"7496840494\"}"
         },
         "verification": {
-          "read": 4460,
+          "read": 822,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-18T19:34:12.446Z",
-          "ledgerFrom": "7669579607",
-          "end": "2026-10-18T19:34:57.420Z",
-          "ledgerTo": "7669587294"
+          "start": "2026-10-19T05:33:05.089Z",
+          "ledgerFrom": "7675314589",
+          "end": "2026-10-19T05:33:09.855Z",
+          "ledgerTo": "7675315386"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "7669574284",
-          "timestamp": "2026-10-18T19:33:44.234901Z"
+          "version": "7675314441",
+          "timestamp": "2026-10-19T05:33:03.80878Z"
         },
         "watermarkAfter": {
-          "version": "7669579270",
-          "timestamp": "2026-10-18T19:34:10.650997Z"
+          "version": "7675314441",
+          "timestamp": "2026-10-19T05:33:03.80878Z"
         },
         "sanity": {
           "check": "tickets found <= outstanding claims (total_claims_balance - total_claims_balance_cleared)",
@@ -687,12 +901,12 @@
           "detail": "found 1608782966656 of 1608784960656 outstanding (99.99%)"
         }
       },
-      "lastSuccessAt": "2026-10-18T19:34:57.420Z",
+      "lastSuccessAt": "2026-10-19T05:33:09.855Z",
       "totals": {
         "face": {
           "positions": 839,
           "owners": 822,
-          "usd": 12271.217307783976,
+          "usd": 12397.281541051128,
           "unpriced": 0,
           "ownersMin10": 82
         },
@@ -700,7 +914,7 @@
           "recoverable": {
             "positions": 835,
             "owners": 818,
-            "usd": 12099.832010052562,
+            "usd": 12224.135573973725,
             "unpriced": 0,
             "ownersMin10": 79
           },
@@ -714,7 +928,7 @@
           "blocked": {
             "positions": 4,
             "owners": 4,
-            "usd": 171.38529773141576,
+            "usd": 173.145967077404,
             "unpriced": 0,
             "ownersMin10": 3
           },
@@ -730,21 +944,21 @@
           "ge30": {
             "positions": 835,
             "owners": 818,
-            "usd": 12099.832010052562,
+            "usd": 12224.135573973725,
             "unpriced": 0,
             "ownersMin10": 79
           },
           "ge90": {
             "positions": 835,
             "owners": 818,
-            "usd": 12099.832010052562,
+            "usd": 12224.135573973725,
             "unpriced": 0,
             "ownersMin10": 79
           },
           "ge180": {
             "positions": 835,
             "owners": 818,
-            "usd": 12099.832010052562,
+            "usd": 12224.135573973725,
             "unpriced": 0,
             "ownersMin10": 79
           }
@@ -776,7 +990,7 @@
           "onchain_maturity": {
             "positions": 835,
             "owners": 818,
-            "usd": 12099.832010052562,
+            "usd": 12224.135573973725,
             "unpriced": 0,
             "ownersMin10": 79
           },
@@ -805,20 +1019,20 @@
         "headline": {
           "positions": 835,
           "owners": 818,
-          "usd": 12099.832010052562,
+          "usd": 12224.135573973725,
           "unpriced": 0,
           "ownersMin10": 79
         },
-        "headlineTopOwnerShare": 0.5396120201577871
+        "headlineTopOwnerShare": 0.5396120201577878
       },
       "sizeBands": [
         {
           "upTo": 1,
-          "positions": 542
+          "positions": 539
         },
         {
           "upTo": 10,
-          "positions": 215
+          "positions": 218
         },
         {
           "upTo": 100,
@@ -826,11 +1040,11 @@
         },
         {
           "upTo": 1000,
-          "positions": 7
+          "positions": 6
         },
         {
           "upTo": 10000,
-          "positions": 1
+          "positions": 2
         },
         {
           "upTo": null,
@@ -862,30 +1076,30 @@
         "scope": "current owners of tokens in collection 0x40fb9ce6950a90c3677b9c4e1fcd75d2ac2933ae86efdb768955adc6730c6b8d (current_token_ownerships_v2, amount > 0)",
         "enumeration": {
           "pages": 5,
-          "newCandidates": 455,
+          "newCandidates": 0,
           "candidates": 455,
-          "start": "2026-10-18T19:34:58.003Z",
-          "end": "2026-10-18T19:35:09.480Z"
+          "start": "2026-10-19T05:33:10.160Z",
+          "end": "2026-10-19T05:35:48.809Z"
         },
         "verification": {
-          "read": 455,
+          "read": 438,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-18T19:35:09.797Z",
-          "ledgerFrom": "7669589556",
-          "end": "2026-10-18T19:35:17.497Z",
-          "ledgerTo": "7669591001"
+          "start": "2026-10-19T05:35:49.119Z",
+          "ledgerFrom": "7675340139",
+          "end": "2026-10-19T05:35:51.601Z",
+          "ledgerTo": "7675340500"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "7669587100",
-          "timestamp": "2026-10-18T19:34:55.993537Z"
+          "version": "7675315284",
+          "timestamp": "2026-10-19T05:33:09.190291Z"
         },
         "watermarkAfter": {
-          "version": "7669589346",
-          "timestamp": "2026-10-18T19:35:08.376089Z"
+          "version": "7675339836",
+          "timestamp": "2026-10-19T05:35:46.849963Z"
         },
         "sanity": {
           "check": "matured withdrawal tokens found <= withdrawal::total_pending_withdrawal (all open tokens)",
@@ -893,22 +1107,22 @@
           "detail": "matured 163465849075123 of 164977436406151 pending (99.08%)"
         }
       },
-      "lastSuccessAt": "2026-10-18T19:35:17.497Z",
+      "lastSuccessAt": "2026-10-19T05:35:51.601Z",
       "totals": {
         "face": {
           "positions": 445,
           "owners": 438,
-          "usd": 1246858.6490393716,
+          "usd": 1259667.8329728968,
           "unpriced": 0,
-          "ownersMin10": 290
+          "ownersMin10": 297
         },
         "byStatus": {
           "recoverable": {
             "positions": 442,
             "owners": 435,
-            "usd": 943437.5418410727,
+            "usd": 953129.6308461472,
             "unpriced": 0,
-            "ownersMin10": 288
+            "ownersMin10": 295
           },
           "team_gated": {
             "positions": 0,
@@ -927,7 +1141,7 @@
           "unknown": {
             "positions": 3,
             "owners": 3,
-            "usd": 303421.10719829844,
+            "usd": 306538.2021267505,
             "unpriced": 0,
             "ownersMin10": 2
           }
@@ -936,23 +1150,23 @@
           "ge30": {
             "positions": 431,
             "owners": 424,
-            "usd": 938115.0212931517,
+            "usd": 947752.4311694083,
             "unpriced": 0,
-            "ownersMin10": 279
+            "ownersMin10": 286
           },
           "ge90": {
             "positions": 411,
             "owners": 404,
-            "usd": 937367.5463041164,
+            "usd": 946997.2772468969,
             "unpriced": 0,
-            "ownersMin10": 271
+            "ownersMin10": 278
           },
           "ge180": {
             "positions": 378,
             "owners": 372,
-            "usd": 907022.7928108553,
+            "usd": 916340.7871111447,
             "unpriced": 0,
-            "ownersMin10": 257
+            "ownersMin10": 263
           }
         },
         "agedEstimated": {
@@ -982,9 +1196,9 @@
           "onchain_maturity": {
             "positions": 442,
             "owners": 435,
-            "usd": 943437.5418410727,
+            "usd": 953129.6308461472,
             "unpriced": 0,
-            "ownersMin10": 288
+            "ownersMin10": 295
           },
           "protocol_closure": {
             "positions": 0,
@@ -1011,9 +1225,9 @@
         "headline": {
           "positions": 411,
           "owners": 404,
-          "usd": 937367.5463041164,
+          "usd": 946997.2772468969,
           "unpriced": 0,
-          "ownersMin10": 271
+          "ownersMin10": 278
         },
         "headlineTopOwnerShare": 0.8770212363613525
       },
@@ -1024,11 +1238,11 @@
         },
         {
           "upTo": 10,
-          "positions": 150
+          "positions": 143
         },
         {
           "upTo": 100,
-          "positions": 245
+          "positions": 252
         },
         {
           "upTo": 1000,
@@ -1043,14 +1257,626 @@
           "positions": 3
         }
       ]
+    },
+    {
+      "id": "thala-vethl-expired",
+      "title": "Expired veTHL lock never unlocked",
+      "summary": "You locked THL for veTHL on Thala. The lock period ended, but the THL is still sitting in the lock.",
+      "category": "closed_app",
+      "inclusionRule": "R2 ended position: vote-escrow lock expired (unlockable_epoch reached, as in vetoken::can_unlock<THL>).",
+      "protocolStatus": {
+        "state": "live",
+        "evidence": "Thala vote-escrow is operating.",
+        "checkedAt": "2026-10-18"
+      },
+      "howTo": [
+        "Open Thala, go to veTHL and unlock the expired lock (claim dividends first).",
+        "Or call 0x167f411fc5a678fb40d86e0af646fa8f62458b686ad8996215248447037af40c::scripts::unlock<0x07fd500c11216f0fe3095d0c4b8aa4d64a4e2e04f83758462f2b127255643615::thl_coin::THL>() from the locking account."
+      ],
+      "officialUrl": "https://app.thala.fi",
+      "headlineAgeBases": [
+        "onchain_maturity"
+      ],
+      "run": {
+        "processor": "user_transaction_processor",
+        "scope": "senders of 0x167f411fc5a678fb40d86e0af646fa8f62458b686ad8996215248447037af40c::scripts::lock, 0x3c4a58b4a8dffe6d14448072efcdd5a0e0089a22c6837b94f1d7e8bb1552137f::farming_vesting::convert_to_vethl entry calls (calls made by other contracts excluded)",
+        "enumeration": {
+          "pages": 139,
+          "newCandidates": 10745,
+          "candidates": 10745,
+          "start": "2026-10-19T05:35:51.841Z",
+          "end": "2026-10-19T05:36:16.638Z",
+          "cursor": "{\"0x167f411fc5a678fb40d86e0af646fa8f62458b686ad8996215248447037af40c::scripts::lock\":\"7468293401\",\"0x3c4a58b4a8dffe6d14448072efcdd5a0e0089a22c6837b94f1d7e8bb1552137f::farming_vesting::convert_to_vethl\":\"3586223066\"}"
+        },
+        "verification": {
+          "read": 10745,
+          "incomplete": 0,
+          "notReread": 0,
+          "start": "2026-10-19T05:36:17.039Z",
+          "ledgerFrom": "7675344413",
+          "end": "2026-10-19T05:37:41.592Z",
+          "ledgerTo": "7675357865"
+        },
+        "completeness": "complete",
+        "degradedReasons": [],
+        "errors": [],
+        "watermarkBefore": {
+          "version": "7675340251",
+          "timestamp": "2026-10-19T05:35:49.762138Z"
+        },
+        "watermarkAfter": {
+          "version": "7675344130",
+          "timestamp": "2026-10-19T05:36:15.097163Z"
+        },
+        "sanity": {
+          "check": "none",
+          "ok": null,
+          "detail": "no contract total available: balances are stored per account"
+        }
+      },
+      "lastSuccessAt": "2026-10-19T05:37:41.592Z",
+      "totals": {
+        "face": {
+          "positions": 4914,
+          "owners": 4914,
+          "usd": 16167.001952269651,
+          "unpriced": 0,
+          "ownersMin10": 113
+        },
+        "byStatus": {
+          "recoverable": {
+            "positions": 4914,
+            "owners": 4914,
+            "usd": 16167.001952269651,
+            "unpriced": 0,
+            "ownersMin10": 113
+          },
+          "team_gated": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "blocked": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "aged": {
+          "ge30": {
+            "positions": 4901,
+            "owners": 4901,
+            "usd": 15365.664154338316,
+            "unpriced": 0,
+            "ownersMin10": 108
+          },
+          "ge90": {
+            "positions": 4852,
+            "owners": 4852,
+            "usd": 13639.418428256018,
+            "unpriced": 0,
+            "ownersMin10": 95
+          },
+          "ge180": {
+            "positions": 4746,
+            "owners": 4746,
+            "usd": 13359.385735784044,
+            "unpriced": 0,
+            "ownersMin10": 87
+          }
+        },
+        "agedEstimated": {
+          "ge30": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "byAgeBasis": {
+          "onchain_maturity": {
+            "positions": 4914,
+            "owners": 4914,
+            "usd": 16167.001952269651,
+            "unpriced": 0,
+            "ownersMin10": 113
+          },
+          "protocol_closure": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "position_interaction": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "headline": {
+          "positions": 4852,
+          "owners": 4852,
+          "usd": 13639.418428256018,
+          "unpriced": 0,
+          "ownersMin10": 95
+        },
+        "headlineTopOwnerShare": 0.3759973226729201
+      },
+      "sizeBands": [
+        {
+          "upTo": 1,
+          "positions": 4337
+        },
+        {
+          "upTo": 10,
+          "positions": 464
+        },
+        {
+          "upTo": 100,
+          "positions": 92
+        },
+        {
+          "upTo": 1000,
+          "positions": 19
+        },
+        {
+          "upTo": 10000,
+          "positions": 2
+        },
+        {
+          "upTo": null,
+          "positions": 0
+        }
+      ]
+    },
+    {
+      "id": "thala-vesting-matured",
+      "title": "Vested THL never claimed",
+      "summary": "Thala farm rewards you put into vesting finished vesting, but the THL was never claimed.",
+      "category": "closed_app",
+      "inclusionRule": "R2 ended position: vesting claim reached end_sec with a claimable amount.",
+      "protocolStatus": {
+        "state": "live",
+        "evidence": "Thala farming vesting is operating.",
+        "checkedAt": "2026-10-18"
+      },
+      "howTo": [
+        "Open Thala, go to vesting and claim the finished vesting.",
+        "Or call 0x3c4a58b4a8dffe6d14448072efcdd5a0e0089a22c6837b94f1d7e8bb1552137f::farming_vesting_scripts::claim(claim_id) from the beneficiary account."
+      ],
+      "officialUrl": "https://app.thala.fi",
+      "headlineAgeBases": [
+        "onchain_maturity"
+      ],
+      "run": {
+        "processor": "user_transaction_processor",
+        "scope": "senders of 0x3c4a58b4a8dffe6d14448072efcdd5a0e0089a22c6837b94f1d7e8bb1552137f::farming_vesting::start_vesting entry calls (calls made by other contracts excluded)",
+        "enumeration": {
+          "pages": 261,
+          "newCandidates": 4960,
+          "candidates": 4960,
+          "start": "2026-10-19T05:37:41.925Z",
+          "end": "2026-10-19T05:38:31.189Z",
+          "cursor": "{\"0x3c4a58b4a8dffe6d14448072efcdd5a0e0089a22c6837b94f1d7e8bb1552137f::farming_vesting::start_vesting\":\"7300676399\"}"
+        },
+        "verification": {
+          "read": 4960,
+          "incomplete": 0,
+          "notReread": 0,
+          "start": "2026-10-19T05:38:31.464Z",
+          "ledgerFrom": "7675365432",
+          "end": "2026-10-19T05:39:25.519Z",
+          "ledgerTo": "7675373213"
+        },
+        "completeness": "complete",
+        "degradedReasons": [],
+        "errors": [],
+        "watermarkBefore": {
+          "version": "7675357548",
+          "timestamp": "2026-10-19T05:37:39.645388Z"
+        },
+        "watermarkAfter": {
+          "version": "7675365026",
+          "timestamp": "2026-10-19T05:38:29.004165Z"
+        },
+        "sanity": {
+          "check": "none",
+          "ok": null,
+          "detail": "no contract total available: balances are stored per account"
+        }
+      },
+      "lastSuccessAt": "2026-10-19T05:39:25.519Z",
+      "totals": {
+        "face": {
+          "positions": 3676,
+          "owners": 2644,
+          "usd": 6198.593247786445,
+          "unpriced": 0,
+          "ownersMin10": 16
+        },
+        "byStatus": {
+          "recoverable": {
+            "positions": 3676,
+            "owners": 2644,
+            "usd": 6198.593247786445,
+            "unpriced": 0,
+            "ownersMin10": 16
+          },
+          "team_gated": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "blocked": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "aged": {
+          "ge30": {
+            "positions": 3675,
+            "owners": 2644,
+            "usd": 6198.587356793023,
+            "unpriced": 0,
+            "ownersMin10": 16
+          },
+          "ge90": {
+            "positions": 3673,
+            "owners": 2642,
+            "usd": 6198.430476449631,
+            "unpriced": 0,
+            "ownersMin10": 16
+          },
+          "ge180": {
+            "positions": 3670,
+            "owners": 2639,
+            "usd": 6198.416171032957,
+            "unpriced": 0,
+            "ownersMin10": 16
+          }
+        },
+        "agedEstimated": {
+          "ge30": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "byAgeBasis": {
+          "onchain_maturity": {
+            "positions": 3676,
+            "owners": 2644,
+            "usd": 6198.593247786445,
+            "unpriced": 0,
+            "ownersMin10": 16
+          },
+          "protocol_closure": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "position_interaction": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "headline": {
+          "positions": 3673,
+          "owners": 2642,
+          "usd": 6198.430476449631,
+          "unpriced": 0,
+          "ownersMin10": 16
+        },
+        "headlineTopOwnerShare": 0.5851276539634518
+      },
+      "sizeBands": [
+        {
+          "upTo": 1,
+          "positions": 3562
+        },
+        {
+          "upTo": 10,
+          "positions": 84
+        },
+        {
+          "upTo": 100,
+          "positions": 25
+        },
+        {
+          "upTo": 1000,
+          "positions": 4
+        },
+        {
+          "upTo": 10000,
+          "positions": 1
+        },
+        {
+          "upTo": null,
+          "positions": 0
+        }
+      ]
+    },
+    {
+      "id": "trufin-unlocks",
+      "title": "TruFin unlock never withdrawn",
+      "summary": "You unlocked TruAPT on TruFin. The validator lockup ended, but the APT was never withdrawn.",
+      "category": "liquid_staking",
+      "inclusionRule": "R2 ended position: unlock request claimable (staker::is_claimable), i.e. its pool lockup cycle ended.",
+      "protocolStatus": {
+        "state": "live",
+        "evidence": "TruFin staker module responds.",
+        "checkedAt": "2026-10-18"
+      },
+      "howTo": [
+        "Open TruFin and withdraw the finished unlock (whitelisted wallets only).",
+        "Or call 0x6f8ca77dd0a4c65362f475adb1c26ae921b1d75aa6b70e53d0e340efd7d8bc80::staker::withdraw(nonce) from the requesting account."
+      ],
+      "officialUrl": "https://app.trufin.io",
+      "headlineAgeBases": [
+        "onchain_maturity"
+      ],
+      "run": {
+        "processor": null,
+        "scope": "every entry of 0x6f8ca77dd0a4c65362f475adb1c26ae921b1d75aa6b70e53d0e340efd7d8bc80::staker::Unlocks (one global SmartTable), read at a pinned ledger version",
+        "enumeration": {
+          "pages": 1,
+          "newCandidates": 1,
+          "candidates": 1,
+          "start": "2026-10-19T05:39:25.586Z",
+          "end": "2026-10-19T05:39:25.748Z"
+        },
+        "verification": {
+          "read": 1,
+          "incomplete": 0,
+          "notReread": 0,
+          "start": "2026-10-19T05:39:25.786Z",
+          "ledgerFrom": "7675373253",
+          "end": "2026-10-19T05:39:27.892Z",
+          "ledgerTo": "7675373535"
+        },
+        "completeness": "complete",
+        "degradedReasons": [],
+        "errors": [],
+        "sanity": {
+          "check": "claimable requests found vs staker::Unlocks size (all pending requests)",
+          "ok": true,
+          "detail": "1 claimable of 1 pending"
+        }
+      },
+      "lastSuccessAt": "2026-10-19T05:39:27.892Z",
+      "totals": {
+        "face": {
+          "positions": 1,
+          "owners": 1,
+          "usd": 1858.256319927014,
+          "unpriced": 0,
+          "ownersMin10": 1
+        },
+        "byStatus": {
+          "recoverable": {
+            "positions": 1,
+            "owners": 1,
+            "usd": 1858.256319927014,
+            "unpriced": 0,
+            "ownersMin10": 1
+          },
+          "team_gated": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "blocked": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "aged": {
+          "ge30": {
+            "positions": 1,
+            "owners": 1,
+            "usd": 1858.256319927014,
+            "unpriced": 0,
+            "ownersMin10": 1
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "agedEstimated": {
+          "ge30": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "byAgeBasis": {
+          "onchain_maturity": {
+            "positions": 1,
+            "owners": 1,
+            "usd": 1858.256319927014,
+            "unpriced": 0,
+            "ownersMin10": 1
+          },
+          "protocol_closure": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "position_interaction": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "headline": {
+          "positions": 0,
+          "owners": 0,
+          "usd": 0,
+          "unpriced": 0,
+          "ownersMin10": 0
+        },
+        "headlineTopOwnerShare": 0
+      },
+      "sizeBands": [
+        {
+          "upTo": 1,
+          "positions": 0
+        },
+        {
+          "upTo": 10,
+          "positions": 0
+        },
+        {
+          "upTo": 100,
+          "positions": 0
+        },
+        {
+          "upTo": 1000,
+          "positions": 0
+        },
+        {
+          "upTo": 10000,
+          "positions": 1
+        },
+        {
+          "upTo": null,
+          "positions": 0
+        }
+      ]
     }
   ],
   "global": {
-    "headlineUsd": 1665537.7433608836,
-    "headlineOwners": 9496,
-    "headlineOwnersMin10": 1861,
-    "recoverableUsd": 3596474.4532545563,
-    "requests": 27007,
+    "headlineUsd": 9406316.171116266,
+    "headlineOwners": 19871,
+    "headlineOwnersMin10": 3631,
+    "recoverableUsd": 15141041.091929335,
+    "requests": 61693,
     "requestCap": 100000
   }
 }
