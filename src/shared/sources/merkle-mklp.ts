@@ -65,6 +65,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: MklpHint): Prom
 export const merkleMklp: SourceDef<MklpHint> = {
   id: SOURCE,
   chain: 'aptos',
+  protocol: 'Merkle Trade',
   title: 'Merkle Trade LP (MKLP) left after the wind-down',
   summary: 'Merkle Trade wound down in February 2026. MKLP can no longer be withdrawn or redeemed; only the Merkle team can enable a release for your wallet.',
   category: 'closed_app',

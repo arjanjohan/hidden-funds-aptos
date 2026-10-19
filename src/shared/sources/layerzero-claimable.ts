@@ -100,6 +100,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: ClaimableHint):
 export const layerzeroClaimable: SourceDef<ClaimableHint> = {
   id: SOURCE,
   chain: 'aptos',
+  protocol: 'LayerZero',
   title: 'LayerZero bridge transfer never claimed',
   summary: 'Tokens bridged to Aptos through LayerZero (lzUSDC, lzUSDT, lzWETH… on the LayerZero Aptos Bridge; CAKE and BTC.b) arrived but could not be delivered, so the bridge holds them until you claim.',
   category: 'bridge',

@@ -53,6 +53,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: TokensHint): Pr
 export const amnisWithdrawals: SourceDef<TokensHint> = {
   id: SOURCE,
   chain: 'aptos',
+  protocol: 'Amnis',
   title: 'Amnis withdrawal never redeemed',
   summary: 'You asked Amnis to turn amAPT into APT and received a withdrawal NFT. The lockup ended, but the APT was never redeemed.',
   category: 'liquid_staking',

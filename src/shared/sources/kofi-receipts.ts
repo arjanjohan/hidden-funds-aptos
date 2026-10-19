@@ -78,6 +78,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: ReceiptHint): P
 export const kofiReceipts: SourceDef<ReceiptHint> = {
   id: SOURCE,
   chain: 'aptos',
+  protocol: 'Kofi',
   title: 'kAPT / stkAPT still held after Kofi\'s wind-down',
   summary: 'Kofi is winding down. kAPT and stkAPT can still be redeemed for APT through a withdrawal ticket. Counted only if no market pays close to redemption value.',
   category: 'closed_app',

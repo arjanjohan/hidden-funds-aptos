@@ -1,0 +1,50 @@
+---
+// A donut of value shares with its legend. Colors come from the --c1..--c8 palette tokens.
+import { usd } from '../lib/format.ts';
+import type { Slice } from '../lib/data.ts';
+
+interface Props { slices: Slice[]; label: string }
+const { slices, label } = Astro.props;
+const total = slices.reduce((a, s) => a + s.usd, 0);
+// Circle of circumference 100: each slice is a dash of its percentage, offset by the slices before it.
+let start = 0;
+const arcs = slices.map((s, i) => {
+  const pct = total ? (s.usd / total) * 100 : 0;
+  const arc = { ...s, pct, offset: 25 - start, color: `var(--c${Math.min(i + 1, 8)})` };
+  start += pct;
+  return arc;
+});
+---
+<div class="donut">
+  {total > 0 ? (
+    <>
+      <svg viewBox="0 0 42 42" role="img" aria-label={`${label}: ${arcs.map(a => `${a.label} ${a.pct.toFixed(1)}%`).join(', ')}`}>
+        <circle cx="21" cy="21" r="15.915" fill="none" stroke="var(--soft)" stroke-width="6" />
+        {arcs.map(a => (
+          <circle cx="21" cy="21" r="15.915" fill="none" stroke={a.color} stroke-width="6"
+            stroke-dasharray={`${a.pct} ${100 - a.pct}`} stroke-dashoffset={a.offset} />
+        ))}
+        <text x="21" y="20.5" text-anchor="middle" class="total">{usd(total)}</text>
+        <text x="21" y="25.5" text-anchor="middle" class="sub">90+ days</text>
+      </svg>
+      <ul>
+        {arcs.map(a => (
+          <li><span class="dot" style={`background:${a.color}`}></span><span class="name">{a.label}</span><span class="val">{usd(a.usd)}</span><span class="pct">{a.pct < 0.1 ? '<0.1' : a.pct.toFixed(1)}%</span></li>
+        ))}
+      </ul>
+    </>
+  ) : <p class="muted">Nothing left behind for 90+ days here yet.</p>}
+</div>
+
+<style>
+  .donut { display: grid; grid-template-columns: minmax(160px, 220px) 1fr; gap: 28px; align-items: center; }
+  svg { width: 100%; height: auto; transform: rotate(0deg); }
+  .total { font-size: 5px; font-weight: 700; fill: var(--fg); }
+  .sub { font-size: 2.6px; fill: var(--muted); }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-width: 440px; }
+  li { display: grid; grid-template-columns: 12px 1fr auto 52px; gap: 10px; align-items: center; font-size: 15px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; }
+  .val, .pct { font-variant-numeric: tabular-nums; text-align: right; }
+  .pct { color: var(--muted); font-size: 14px; }
+  @media (max-width: 560px) { .donut { grid-template-columns: 1fr; } svg { max-width: 220px; margin: 0 auto; } }
+</style>

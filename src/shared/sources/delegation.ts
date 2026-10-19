@@ -111,8 +111,9 @@ function nativeDelegation(chain: keyof typeof NATIVE, id: string): SourceDef<Del
   return {
     id,
     chain,
+    protocol: `${name} native staking`,
     title: `Unstaked ${symbol} never withdrawn`,
-    summary: `You unstaked ${symbol} from a ${name} delegation pool. The lockup ended and the ${symbol} is withdrawable, but it was never withdrawn.`,
+    summary: `You unstaked ${symbol} from ${name === 'Aptos' ? 'an' : 'a'} ${name} delegation pool. The lockup ended and the ${symbol} is withdrawable, but it was never withdrawn.`,
     category: 'staking',
     inclusionRule: 'R2 ended position: unlock completed (stake is inactive, or pending-inactive in a pool whose validator left the set).',
     protocolStatus: { state: 'live', evidence: `${name} framework module 0x1::delegation_pool.`, checkedAt: '2026-10-19' },

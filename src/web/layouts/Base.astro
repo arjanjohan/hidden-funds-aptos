@@ -2,7 +2,9 @@
 import { snapshot, STALE_AFTER_MS } from '../lib/data.ts';
 
 interface Props { title: string; description?: string }
-const { title, description = 'Find APT and MOVE you left behind: unstaked but never withdrawn, unstake requests never claimed, stake with validators that stopped.' } = Astro.props;
+const { title, description = 'Find APT and MOVE you left behind: unstaked but never withdrawn, unstake requests never claimed, bridge transfers never collected, stakes in pools that ended.' } = Astro.props;
+const path = Astro.url.pathname;
+const REPO = 'https://github.com/arjanjohan/hidden-funds-aptos';
 ---
 <!doctype html>
 <html lang="en">
@@ -15,18 +17,52 @@ const { title, description = 'Find APT and MOVE you left behind: unstaked but ne
     <meta property="og:description" content={description} />
   </head>
   <body>
-    <header class="wrap top">
-      <a href="/" class="brand">hidden funds <span>· Aptos + Movement</span></a>
-      <nav><a href="/">Dashboard</a><a href="/check">Check wallets</a></nav>
+    <header class="topbar">
+      <div class="wrap bar">
+        <a href="/" class="brand" aria-label="hidden funds, home">
+          <span class="mark" aria-hidden="true"></span>hidden funds<span class="chains">Aptos · Movement</span>
+        </a>
+        <nav aria-label="Main">
+          <a href="/#cases">What we find</a>
+          <a href="/dashboard" aria-current={path.startsWith('/dashboard') ? 'page' : undefined}>Dashboard</a>
+          <a href="/check" class="cta" aria-current={path.startsWith('/check') ? 'page' : undefined}>Check wallets</a>
+        </nav>
+      </div>
     </header>
-    <div id="stale" class="wrap banner" hidden data-generated={snapshot?.generatedAt} data-limit={STALE_AFTER_MS}>
-      This data is older than a week. The weekly update may have failed; numbers can be out of date.
+    <div id="stale" class="wrap" hidden data-generated={snapshot?.generatedAt} data-limit={STALE_AFTER_MS}>
+      <p class="banner">This data is older than a week. The weekly update may have failed; numbers can be out of date.</p>
     </div>
     <main class="wrap"><slot /></main>
-    <footer class="wrap foot">
-      Read-only. This site never asks for a wallet connection, a signature or a seed phrase.
-      Data is read from Aptos mainnet; owners claim every day, so a listed position may already be claimed.
-      <a href="https://github.com/arjanjohan/hidden-funds-aptos/blob/main/docs/left-behind.md">What counts as left behind</a>
+    <footer class="foot">
+      <div class="wrap">
+        <div class="foot-grid">
+          <div class="foot-about">
+            <a href="/" class="brand"><span class="mark" aria-hidden="true"></span>hidden funds</a>
+            <p>Read from the blockchains. Owners claim positions every day, so a result may already be claimed.</p>
+          </div>
+          <div>
+            <h3>Product</h3>
+            <a href="/check">Check wallets</a>
+            <a href="/dashboard">Dashboard</a>
+          </div>
+          <div>
+            <h3>The data</h3>
+            <a href="/#cases">What we find</a>
+            <a href={`${REPO}/blob/main/docs/left-behind.md`}>How we count</a>
+            <a href={`${REPO}/blob/main/docs/sources.md`}>Sources and evidence</a>
+          </div>
+          <div>
+            <h3>Help</h3>
+            <a href="/#faq">Questions</a>
+            <a href={`${REPO}/issues`}>Report a problem</a>
+            <a href={REPO}>Source code</a>
+          </div>
+        </div>
+        <div class="disclaimers">
+          <p>Read-only: we never ask for a seed phrase, a private key, a wallet connection or a signature.</p>
+          <p>Not financial advice. Claim only through the official app or contract.</p>
+        </div>
+      </div>
     </footer>
     <script>
       const el = document.getElementById('stale');
@@ -38,38 +74,64 @@ const { title, description = 'Find APT and MOVE you left behind: unstaked but ne
 
 <style is:global>
   :root {
-    --bg: #fbfaf7; --fg: #1d1d1b; --muted: #6b6a66; --line: #e4e1da; --card: #ffffff;
-    --accent: #1f6f5c; --warn-bg: #fff4d6; --warn-fg: #6b4e00; --bad: #a33a2a;
+    --bg: #fbfaf7; --fg: #1d1d1b; --muted: #6b6a66; --line: #e4e1da; --card: #ffffff; --soft: #f3f1ec;
+    --accent: #1f6f5c; --accent-fg: #ffffff; --warn-bg: #fff4d6; --warn-fg: #6b4e00; --bad: #a33a2a;
+    --c1: #1f6f5c; --c2: #d08a2c; --c3: #3b6fb6; --c4: #b5483a; --c5: #7a5bb3; --c6: #4c9a8a; --c7: #a6763c; --c8: #9a9890;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #141413; --fg: #ecebe6; --muted: #9b9a94; --line: #2c2b28; --card: #1c1b19;
-      --accent: #5fc2a6; --warn-bg: #3a2f10; --warn-fg: #f3d58a; --bad: #e07b6a;
+      --bg: #141413; --fg: #ecebe6; --muted: #9b9a94; --line: #2c2b28; --card: #1c1b19; --soft: #22211e;
+      --accent: #5fc2a6; --accent-fg: #10221d; --warn-bg: #3a2f10; --warn-fg: #f3d58a; --bad: #e07b6a;
+      --c1: #5fc2a6; --c2: #e3a34c; --c3: #6f9fe0; --c4: #e07b6a; --c5: #a98be0; --c6: #7cc4b4; --c7: #c99a5e; --c8: #77756e;
       color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #141413; --fg: #ecebe6; --muted: #9b9a94; --line: #2c2b28; --card: #1c1b19;
-    --accent: #5fc2a6; --warn-bg: #3a2f10; --warn-fg: #f3d58a; --bad: #e07b6a;
+    --bg: #141413; --fg: #ecebe6; --muted: #9b9a94; --line: #2c2b28; --card: #1c1b19; --soft: #22211e;
+    --accent: #5fc2a6; --accent-fg: #10221d; --warn-bg: #3a2f10; --warn-fg: #f3d58a; --bad: #e07b6a;
+    --c1: #5fc2a6; --c2: #e3a34c; --c3: #6f9fe0; --c4: #e07b6a; --c5: #a98be0; --c6: #7cc4b4; --c7: #c99a5e; --c8: #77756e;
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, -apple-system, 'Segoe UI', sans-serif; }
   a { color: var(--accent); }
-  .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
-  .top { display: flex; justify-content: space-between; align-items: center; padding-top: 20px; padding-bottom: 20px; gap: 16px; flex-wrap: wrap; }
-  .brand { font-weight: 700; text-decoration: none; color: var(--fg); }
-  .brand span { color: var(--muted); font-weight: 400; }
-  nav { display: flex; gap: 16px; }
-  .banner { background: var(--warn-bg); color: var(--warn-fg); padding: 10px 16px; border-radius: 8px; margin-bottom: 16px; }
-  .foot { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); margin-top: 64px; padding-top: 20px; padding-bottom: 40px; }
-  .foot a { display: block; margin-top: 8px; }
-  h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.15; margin: 24px 0 8px; }
-  h2 { font-size: 20px; margin: 40px 0 12px; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+
+  .topbar { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 86%, transparent);
+    backdrop-filter: saturate(1.4) blur(10px); -webkit-backdrop-filter: saturate(1.4) blur(10px); border-bottom: 1px solid var(--line); }
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 60px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -0.01em; text-decoration: none; color: var(--fg); white-space: nowrap; }
+  .mark { width: 18px; height: 18px; border-radius: 6px; background: conic-gradient(from 210deg, var(--accent), var(--c2), var(--accent)); }
+  .chains { font-weight: 500; font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 2px 8px; }
+  nav { display: flex; align-items: center; gap: 4px; }
+  nav a { color: var(--muted); text-decoration: none; font-size: 15px; padding: 6px 10px; border-radius: 8px; white-space: nowrap; }
+  nav a:hover, nav a[aria-current="page"] { color: var(--fg); background: var(--soft); }
+  nav a.cta { color: var(--accent-fg); background: var(--accent); font-weight: 600; margin-left: 6px; }
+  nav a.cta:hover { filter: brightness(1.08); background: var(--accent); color: var(--accent-fg); }
+  @media (max-width: 640px) {
+    .chains { display: none; }
+    nav a:not(.cta) { padding: 6px 6px; font-size: 14px; }
+  }
+  @media (max-width: 400px) { nav a[href="/#cases"] { display: none; } }
+
+  .banner { background: var(--warn-bg); color: var(--warn-fg); padding: 10px 16px; border-radius: 8px; margin: 16px 0 0; }
+
+  .foot { border-top: 1px solid var(--line); margin-top: 80px; padding: 40px 0 48px; color: var(--muted); font-size: 14px; }
+  .foot-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 24px; }
+  .foot-grid h3 { font-size: 13px; font-weight: 600; color: var(--fg); margin: 0 0 10px; }
+  .foot-grid > div > a:not(.brand) { display: block; color: var(--muted); text-decoration: none; margin: 6px 0; }
+  .foot-grid > div > a:not(.brand):hover { color: var(--fg); }
+  .foot-about p { max-width: 34ch; margin: 12px 0 0; }
+  .disclaimers { border-top: 1px solid var(--line); margin-top: 32px; padding-top: 16px; }
+  .disclaimers p { margin: 4px 0; }
+  @media (max-width: 720px) { .foot-grid { grid-template-columns: 1fr 1fr; } .foot-about { grid-column: 1 / -1; } }
+
+  h1 { font-size: clamp(30px, 6vw, 48px); line-height: 1.1; letter-spacing: -0.02em; margin: 40px 0 12px; }
+  h2 { font-size: 22px; letter-spacing: -0.01em; margin: 56px 0 14px; }
   .muted { color: var(--muted); }
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
   .card b { display: block; font-size: 22px; }
   .table { width: 100%; overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 15px; }
@@ -78,6 +140,8 @@ const { title, description = 'Find APT and MOVE you left behind: unstaked but ne
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .badge { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
   .badge.degraded { background: var(--warn-bg); color: var(--warn-fg); border-color: transparent; }
-  .button { display: inline-block; background: var(--accent); color: var(--bg); padding: 10px 18px; border-radius: 8px; text-decoration: none; font-weight: 600; border: 0; cursor: pointer; font-size: 16px; }
+  .button { display: inline-block; background: var(--accent); color: var(--accent-fg); padding: 11px 20px; border-radius: 10px; text-decoration: none; font: inherit; font-weight: 600; border: 0; cursor: pointer; }
+  .button.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+  .button.ghost:hover { background: var(--soft); }
   code { font-size: 13px; overflow-wrap: anywhere; }
 </style>

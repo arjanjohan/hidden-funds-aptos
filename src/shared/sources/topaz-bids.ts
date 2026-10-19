@@ -111,6 +111,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: TopazHint): Pro
 export const topazBids: SourceDef<TopazHint> = {
   id: SOURCE,
   chain: 'aptos',
+  protocol: 'Topaz',
   title: 'Expired Topaz NFT bid never cancelled',
   summary: 'Topaz, an Aptos NFT marketplace, shut down in August 2024. APT you put into a bid stays in Topaz\'s contract after the bid expires, until you cancel it.',
   category: 'closed_app',

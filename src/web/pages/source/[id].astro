@@ -23,7 +23,7 @@ const basisLabel: Record<string, string> = {
 };
 ---
 <Base title={`${s.title} · hidden funds Aptos`} description={s.summary}>
-  <p class="muted"><a href="/">Dashboard</a> / {NETWORKS[s.chain as Network]?.name ?? s.chain} / {s.title}</p>
+  <p class="muted"><a href="/dashboard">Dashboard</a> / {NETWORKS[s.chain as Network]?.name ?? s.chain} / {s.title}</p>
   <h1>{s.title}</h1>
   <p>{s.summary}</p>
   <p class="muted">

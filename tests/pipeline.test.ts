@@ -22,7 +22,7 @@ function position(owner: string, raw = '100'): Position {
 }
 
 function source(read: (owner: string) => Promise<ReadResult>): SourceDef {
-  return { id: 't', chain: 'aptos', title: '', summary: '', category: 'staking', inclusionRule: '', howTo: [],
+  return { id: 't', chain: 'aptos', protocol: 'Test', title: '', summary: '', category: 'staking', inclusionRule: '', howTo: [],
     protocolStatus: { state: 'live', evidence: '', checkedAt: '' }, refresh: { nonZero: 'every_run', zero: 'weekly' },
     headlineAgeBases: ['onchain_maturity'], read: (_ctx, owner) => read(owner) };
 }

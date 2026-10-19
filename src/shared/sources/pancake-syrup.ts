@@ -91,6 +91,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
 export const pancakeSyrupEnded: SourceDef = {
   id: SOURCE,
   chain: 'aptos',
+  protocol: 'PancakeSwap',
   title: 'PancakeSwap syrup pool ended, still staked',
   summary: 'You staked CAKE (or GUI) in a PancakeSwap syrup pool on Aptos. The pool\'s rewards ended in 2023-2024, but your stake and the last rewards are still in the pool.',
   category: 'staking',

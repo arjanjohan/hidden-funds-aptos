@@ -62,6 +62,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
 export const tortugaTickets: SourceDef = {
   id: SOURCE,
   chain: 'aptos',
+  protocol: 'Tortuga',
   title: 'Tortuga unstake ticket never claimed',
   summary: 'You unstaked tAPT on Tortuga. The cooldown ended, but the APT ticket was never claimed.',
   category: 'liquid_staking',

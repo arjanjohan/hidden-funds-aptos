@@ -1,66 +1,133 @@
 ---
 import Base from '../layouts/Base.astro';
 import { snapshot } from '../lib/data.ts';
-import { count, date, usd } from '../lib/format.ts';
+import { count, usd } from '../lib/format.ts';
 import { NETWORKS, type Network } from '../../shared/chain.ts';
+import type { SnapshotSource } from '../../shared/snapshot.ts';
 
-const statuses = [
-  ['recoverable', 'You can claim'],
-  ['team_gated', 'Needs the team'],
-  ['blocked', 'May not work'],
-] as const;
+const sources = [...(snapshot?.sources ?? [])].sort((a, b) =>
+  b.totals.headline.usd - a.totals.headline.usd || b.totals.byStatus.recoverable.usd - a.totals.byStatus.recoverable.usd);
+const chains = new Set(sources.map(s => s.chain)).size;
+
+/** One line per source: its 90+ day value, or else what kind of positions it holds right now. */
+function meta(s: SnapshotSource): string {
+  const t = s.totals, b = t.byStatus;
+  if (t.headline.usd > 0) return `${usd(t.headline.usd)} · ${count(t.headline.owners)} wallets`;
+  if (b.team_gated.positions) return `${count(b.team_gated.positions)} positions need the team`;
+  if (b.recoverable.usd > 0) return `${usd(b.recoverable.usd)} claimable, under 90 days`;
+  const n = b.recoverable.positions + b.blocked.positions;
+  return n ? `${count(n)} positions without a price` : 'none found right now';
+}
+
+const safe = [
+  ['Read-only', 'No wallet connection, no signature, no seed phrase or private key. Ever.'],
+  ['Your browser reads the chain', 'The check runs in your browser against public Aptos and Movement nodes. Your addresses are not sent to this site.'],
+  ['Every number is re-read on chain', 'The indexer only finds candidates; each counted position is read again from a fullnode before it is counted.'],
+  ['Open method', 'What counts as left behind, and the evidence for every source, is published with the code.'],
+];
+const steps = [
+  ['Paste your wallets', 'Aptos or Movement addresses, up to 20 at a time.'],
+  ['See what is yours', 'Each position shows its amount, how long it has been waiting, and whether you, the team, or nobody can get it back.'],
+  ['Claim it officially', 'Use the protocol\'s own app, or the exact contract call we show. We never claim for you.'],
+];
+const faq = [
+  ['Is it safe?', 'The site only reads public chain data. It never asks you to connect a wallet or sign anything, and it never asks for a seed phrase or private key. Anyone who does is not us.'],
+  ['Does it cost anything?', 'No. Claiming costs the normal network fee, paid from your own wallet in the official app.'],
+  ['Where does the data come from?', 'Aptos and Movement mainnet. An indexer finds candidate wallets for each source; every counted position is then read from a fullnode. The dashboard updates weekly; the check is live.'],
+  ['Why might a claim fail?', 'Positions change every day: you, or anyone with access, may have claimed since. Some positions need the protocol team (for example after a wind-down), and some are blocked, such as when a protocol removed its reserves. Those are labelled.'],
+  ['Which chains and protocols?', `Aptos and Movement, ${sources.length} sources so far: native staking, liquid staking, closed apps and bridges. Something missing? Open an issue on GitHub.`],
+];
 ---
-<Base title="hidden funds · Aptos">
-  {snapshot ? (
-    <>
-      <h1>{usd(snapshot.global.headlineUsd)} left behind on Aptos and Movement</h1>
-      <p class="muted">
-        Withdrawable for 90 days or more and never withdrawn, across {count(snapshot.global.headlineOwners)} wallets
-        ({count(snapshot.global.headlineOwnersMin10)} with $10 or more). Updated weekly; as of {date(snapshot.generatedAt)}.
-      </p>
-      <p><a class="button" href="/check">Check my wallets</a></p>
+<Base title="hidden funds · Find the crypto you left behind on Aptos and Movement">
+  <section class="hero">
+    <h1>Find the crypto you left behind on Aptos and Movement</h1>
+    <p class="lead">
+      Unstaked but never withdrawn. Unstake requests never claimed. Bridge transfers never collected. Stakes in pools that ended.
+      hidden funds reads the chain and shows what is still yours, and how to get it back.
+    </p>
+    <p class="actions"><a class="button" href="/check">Check your wallets</a><a class="button ghost" href="/dashboard">Explore the data</a></p>
+  </section>
 
-      <h2>Who can get it back</h2>
-      <div class="cards">
-        {statuses.map(([key, label]) => (
-          <div class="card">
-            <span class="muted">{label}</span>
-            <b>{usd(snapshot.sources.reduce((s, x) => s + x.totals.byStatus[key].usd, 0))}</b>
-            <span class="muted">{count(snapshot.sources.reduce((s, x) => s + x.totals.byStatus[key].positions, 0))} positions{(() => {
-              const unpriced = snapshot.sources.reduce((s, x) => s + x.totals.byStatus[key].unpriced, 0);
-              return unpriced ? `, ${count(unpriced)} without a price (not in this value)` : '';
-            })()}</span>
-          </div>
-        ))}
-      </div>
-      <p class="muted">"You can claim" counts every withdrawable position, any age. The headline above counts only those aged 90+ days.</p>
-
-      <h2>Sources</h2>
-      <div class="table">
-        <table>
-          <thead><tr><th>Source</th><th class="num">Left behind 90+ days</th><th class="num">Wallets</th><th class="num">Claimable now</th><th>Data</th></tr></thead>
-          <tbody>
-            {snapshot.sources.map(s => (
-              <tr>
-                <td><a href={`/source/${s.id}`}>{s.title}</a><div class="muted">{NETWORKS[s.chain as Network]?.name ?? s.chain}</div></td>
-                <td class="num">{usd(s.totals.headline.usd)}</td>
-                <td class="num">{count(s.totals.headline.owners)}</td>
-                <td class="num">{usd(s.totals.byStatus.recoverable.usd)}</td>
-                <td>
-                  <span class={`badge ${s.run.completeness}`}>{s.run.completeness}</span>
-                  <div class="muted">as of {date(s.run.verification.end ?? s.lastSuccessAt)}</div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
-  ) : (
-    <>
-      <h1>hidden funds · Aptos</h1>
-      <p class="muted">The first weekly snapshot has not run yet. You can still check wallets live.</p>
-      <p><a class="button" href="/check">Check my wallets</a></p>
-    </>
+  {snapshot && (
+    <section class="stats" aria-label="Totals">
+      <div><b>{usd(snapshot.global.headlineUsd)}</b><span>left behind 90+ days</span></div>
+      <div><b>{count(snapshot.global.headlineOwners)}</b><span>wallets</span></div>
+      <div><b>{sources.length}</b><span>sources</span></div>
+      <div><b>{chains}</b><span>chains</span></div>
+    </section>
   )}
+
+  <section id="cases">
+    <h2>What we find</h2>
+    <p class="muted">Ranked by value left behind for 90+ days.</p>
+    {sources.length ? (
+      <ol class="cases">
+        {sources.map(s => (
+          <li>
+            <a href={`/source/${s.id}`}>
+              <span class="case-title">{s.title}</span>
+              <span class="case-meta">{NETWORKS[s.chain as Network]?.name ?? s.chain} · {meta(s)}</span>
+              <span class="case-text">{s.summary}</span>
+            </a>
+          </li>
+        ))}
+      </ol>
+    ) : <p class="muted">The first weekly snapshot has not run yet.</p>}
+  </section>
+
+  <section>
+    <h2>Safe by design</h2>
+    <div class="grid">
+      {safe.map(([t, d]) => <div class="card"><h3>{t}</h3><p>{d}</p></div>)}
+    </div>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <ol class="steps">
+      {steps.map(([t, d], i) => <li><span class="n">{i + 1}</span><div><h3>{t}</h3><p>{d}</p></div></li>)}
+    </ol>
+  </section>
+
+  <section id="faq">
+    <h2>Questions</h2>
+    {faq.map(([q, a]) => <details><summary>{q}</summary><p>{a}</p></details>)}
+  </section>
+
+  <section class="closing">
+    <h2>Ready to look?</h2>
+    <p class="muted">It takes a few seconds per wallet.</p>
+    <a class="button" href="/check">Check my wallets</a>
+  </section>
 </Base>
+
+<style>
+  .hero { padding: 24px 0 8px; }
+  .hero h1 { max-width: 18ch; }
+  .lead { font-size: 18px; color: var(--muted); max-width: 60ch; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-top: 40px; }
+  .stats div { background: var(--card); padding: 18px 20px; }
+  .stats b { display: block; font-size: 26px; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .stats span { color: var(--muted); font-size: 14px; }
+  @media (max-width: 640px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .cases { list-style: none; counter-reset: c; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .cases li { counter-increment: c; }
+  .cases a { display: grid; grid-template-columns: 36px 1fr; column-gap: 12px; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; text-decoration: none; color: var(--fg); }
+  .cases a::before { content: counter(c); grid-row: span 3; color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .cases a:hover { border-color: var(--accent); }
+  .case-title { font-weight: 600; }
+  .case-meta { color: var(--accent); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .case-text { color: var(--muted); font-size: 14px; margin-top: 4px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .grid h3, .steps h3 { font-size: 16px; margin: 0 0 4px; }
+  .grid p, .steps p { margin: 0; color: var(--muted); font-size: 15px; }
+  .steps { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .steps li { display: flex; gap: 12px; }
+  .n { flex: none; width: 28px; height: 28px; border-radius: 99px; display: grid; place-items: center; background: var(--soft); border: 1px solid var(--line); font-weight: 600; font-size: 14px; }
+  details { border-bottom: 1px solid var(--line); padding: 12px 0; }
+  summary { cursor: pointer; font-weight: 600; }
+  details p { color: var(--muted); margin: 8px 0 0; max-width: 70ch; }
+  .closing { text-align: center; margin-top: 24px; }
+  .closing h2 { margin-bottom: 4px; }
+</style>

@@ -46,6 +46,7 @@ async function readLock(ctx: ReadContext, ownerInput: string): Promise<ReadResul
 export const thalaVethlExpired: SourceDef = {
   id: VETHL,
   chain: 'aptos',
+  protocol: 'Thala',
   title: 'Expired veTHL lock never unlocked',
   summary: 'You locked THL for veTHL on Thala. The lock period ended, but the THL is still sitting in the lock.',
   category: 'closed_app',
@@ -98,6 +99,7 @@ async function readVesting(ctx: ReadContext, ownerInput: string): Promise<ReadRe
 export const thalaVestingMatured: SourceDef = {
   id: VESTING,
   chain: 'aptos',
+  protocol: 'Thala',
   title: 'Vested THL never claimed',
   summary: 'Thala farm rewards you put into vesting finished vesting, but the THL was never claimed.',
   category: 'closed_app',

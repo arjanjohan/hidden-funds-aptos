@@ -59,6 +59,8 @@ export interface ProtocolStatus {
 export interface SourceDef<Hint = unknown> {
   id: string;
   chain: 'aptos' | 'movement';
+  /** The protocol (or chain feature) the position lives in; dashboards group sources by it. */
+  protocol: string;
   title: string;
   summary: string;
   category: 'staking' | 'liquid_staking' | 'closed_app' | 'bridge';

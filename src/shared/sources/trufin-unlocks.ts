@@ -83,6 +83,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
 export const trufinUnlocks: SourceDef = {
   id: SOURCE,
   chain: 'aptos',
+  protocol: 'TruFin',
   title: 'TruFin unlock never withdrawn',
   summary: 'You unlocked TruAPT on TruFin. The validator lockup ended, but the APT was never withdrawn.',
   category: 'liquid_staking',

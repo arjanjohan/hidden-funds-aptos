@@ -95,8 +95,9 @@ function inactiveValidator(chain: keyof typeof NATIVE, id: string): SourceDef<In
   return {
     id,
     chain,
+    protocol: `${name} native staking`,
     title: `${symbol} staked with a validator that stopped`,
-    summary: `Your ${symbol} is still staked in a ${name} delegation pool whose validator left the validator set. It earns nothing and can be unlocked and withdrawn right away.`,
+    summary: `Your ${symbol} is still staked in ${name === 'Aptos' ? 'an' : 'a'} ${name} delegation pool whose validator left the validator set. It earns nothing and can be unlocked and withdrawn right away.`,
     category: 'staking',
     inclusionRule: 'R2 ended position: the pool\'s validator is inactive (stake::get_validator_state = 4), so staking stopped; unlock and withdraw are immediate.',
     protocolStatus: { state: 'live', evidence: `${name} framework module 0x1::delegation_pool; per-pool validator state read each run.`, checkedAt: '2026-10-19' },

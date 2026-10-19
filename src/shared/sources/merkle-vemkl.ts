@@ -61,6 +61,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: TokensHint): Pr
 export const merkleVemkl: SourceDef<TokensHint> = {
   id: SOURCE,
   chain: 'aptos',
+  protocol: 'Merkle Trade',
   title: 'Merkle Trade staked MKL (veMKL) never unlocked',
   summary: 'Merkle Trade wound down in February 2026. Locked MKL can be unlocked at any time since then, but these locks were never unlocked.',
   category: 'closed_app',

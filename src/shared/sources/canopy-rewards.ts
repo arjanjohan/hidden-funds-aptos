@@ -68,6 +68,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
 export const canopyEndedRewards: SourceDef = {
   id: SOURCE,
   chain: 'movement',
+  protocol: 'Canopy',
   title: 'Canopy staking rewards never claimed',
   summary: 'You staked on Canopy (Movement). A reward period you earned in has ended, but the rewards were never claimed.',
   category: 'staking',

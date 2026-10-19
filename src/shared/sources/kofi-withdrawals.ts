@@ -47,6 +47,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
 export const kofiWithdrawals: SourceDef = {
   id: SOURCE,
   chain: 'aptos',
+  protocol: 'Kofi',
   title: 'Kofi withdrawal never finalized',
   summary: 'You asked Kofi to turn kAPT into APT. The ticket unlocked, but the APT was never collected. Kofi is winding down.',
   category: 'closed_app',

@@ -47,6 +47,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
 export const thalaUnstake: SourceDef = {
   id: SOURCE,
   chain: 'aptos',
+  protocol: 'Thala',
   title: 'Thala APT unstake never claimed',
   summary: 'You asked Thala to turn thAPT back into APT. The 14-day wait ended, but the APT was never claimed.',
   category: 'liquid_staking',
