@@ -163,6 +163,12 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Amnis "$AMI Claim" NFTs:** a marker with an `is_claimed` flag; the tokens were paid through an off-chain claim portal. No on-chain claim exists.
 - **"Amnis Reward Voucher" NFTs:** phishing. They point to `pamnis.com`, and the creator account has no contract.
 
+- **Tapp Exchange** (wound down; reported full operation until 2026-05-31): the router has every hook paused (`paused_hooks = 0x020304`), so liquidity removal is blocked.
+  - Of 5,022 pools, most are meme-token launch pools.
+  - The main stable and APT pools hold under $20 (USDt/USDC ~$4; APT/USDC ~10 APT + 8 USDC).
+  - A full sizing needs ~5,000 single-pool reads, because the paginated view hits the read limit, and could only ever add to `blocked`. Skipped.
+- **Econia:** no public closure notice found (2026-10-18). The idle market accounts (~$31K, mostly lzUSDC) stay excluded under R2.
+
 ## Waiting on a decision
 
 - **Kofi kAPT/stkAPT receipts** (~135K APT, 7,244 + 4,521 holder stores; Kofi is winding down): these count only if stranded. The market test needs a Panora API key, which is a credential choice for the owner.
