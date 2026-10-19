@@ -431,7 +431,7 @@ describe('layerzero claimable dust', () => {
 describe('topaz bids', () => {
   const handles: Record<string, string> = { 'collection_marketplace::Index': '0xc1', 'collection_marketplace::Bids<': '0xc2', 'bid_any::Index': '0xa1', 'bid_any::CoinEscrow<': '0xa2', 'bid_any::Bids': '0xa3' };
   const pad = (h: string) => '0x' + h.slice(2).padStart(64, '0');
-  const chain = (bids: Record<string, { coins: string; deadline: number }>) => fakeChain({
+  const chain = (bids: Record<string, { coins: string; deadline: number; buyer?: string }>) => fakeChain({
     resource: (_a, type) => {
       const k = Object.keys(handles).find(k => type.includes(`::${k}`))!;
       return { bids: { handle: handles[k] }, coins: { handle: handles[k] } };
@@ -439,7 +439,7 @@ describe('topaz bids', () => {
     tableItem: (handle, _kt, _vt, key) => {
       if (handle === pad('0xc1')) return Object.keys(bids);
       if (handle === pad('0xa1')) return null;
-      if (handle === pad('0xc2')) return bids[String(key)] ? { coins: { value: bids[String(key)].coins }, deadline: String(bids[String(key)].deadline * 1e6), cancelled: false } : null;
+      if (handle === pad('0xc2')) return bids[String(key)] ? { coins: { value: bids[String(key)].coins }, deadline: String(bids[String(key)].deadline * 1e6), cancelled: false, buyer: bids[String(key)].buyer ?? OWNER } : null;
       throw new Error(`table ${handle}`);
     },
     gql: (query) => query.includes('current_table_items') ? { current_table_items: [{ last_transaction_version: 9 }] }
@@ -464,6 +464,21 @@ describe('topaz bids', () => {
     expect(r.positions).toHaveLength(1);
     expect(r.positions[0]).toMatchObject({ locator: 'token-bid:3', confidence: 'indexer_only' });
     expect(c.calls).toEqual([]);
+  });
+
+  it('with a hint, reads only the bids it lists as funded and expired, not the bidder\'s whole index', async () => {
+    const c = chain({ '7': { coins: '50000000', deadline: 1_700_000_000 }, '8': { coins: '30000000', deadline: 2_500_000_000 } });
+    const r = await topazBids.read(context(c), OWNER, { c: { 7: { raw: '50000000', deadline: 1_700_000_000 }, 8: { raw: '30000000', deadline: 2_500_000_000 } } });
+    expect(r.positions.map(p => p.locator)).toEqual(['collection-bid:7']);
+    expect(c.calls.filter(x => x.startsWith('tableItem'))).toEqual([`tableItem ${pad('0xc2')}`]);
+  });
+
+  it('ignores an id that Topaz\'s index lists under this bidder when the bid belongs to someone else', async () => {
+    expect((await topazBids.read(context(chain({ '1': { coins: '100000', deadline: 1_700_000_000, buyer: addr('77') } })), OWNER)).positions).toEqual([]);
+  });
+
+  it('does not count a bid without a deadline (0) as expired', async () => {
+    expect((await topazBids.read(context(chain({ '9': { coins: '50000000', deadline: 0 } })), OWNER)).positions).toEqual([]);
   });
 
   it('encodes u64 keys as the indexer stores them', () => {
