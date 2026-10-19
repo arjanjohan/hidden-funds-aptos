@@ -1,23 +1,23 @@
 {
   "schema": 1,
-  "generatedAt": "2026-10-19T05:48:19.198Z",
+  "generatedAt": "2026-10-19T09:02:40.045Z",
   "prices": {
     "0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.774246,
+      "usd": 0.785502,
       "decimals": 8,
-      "at": "2026-10-19T05:41:48.000Z",
+      "at": "2026-10-19T08:56:56.000Z",
       "source": "coingecko simple/price"
     },
     "0x07fd500c11216f0fe3095d0c4b8aa4d64a4e2e04f83758462f2b127255643615::thl_coin::THL": {
-      "usd": 0.00991927,
+      "usd": 0.00998083,
       "decimals": 8,
-      "at": "2026-10-19T05:41:48.000Z",
+      "at": "2026-10-19T08:57:10.000Z",
       "source": "coingecko simple/price"
     },
     "movement:0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.00735405,
+      "usd": 0.00738139,
       "decimals": 8,
-      "at": "2026-10-19T05:41:48.000Z",
+      "at": "2026-10-19T08:57:10.000Z",
       "source": "coingecko simple/price"
     }
   },
@@ -47,30 +47,30 @@
         "scope": "current_delegator_balances rows with pool_type=inactive_shares and shares>0 (stake_processor)",
         "enumeration": {
           "pages": 123,
-          "newCandidates": 2,
-          "candidates": 8712,
-          "start": "2026-10-19T05:42:03.219Z",
-          "end": "2026-10-19T05:42:07.432Z"
+          "newCandidates": 23,
+          "candidates": 8735,
+          "start": "2026-10-19T08:57:18.509Z",
+          "end": "2026-10-19T08:57:24.107Z"
         },
         "verification": {
-          "read": 8705,
+          "read": 7851,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-19T05:42:08.089Z",
-          "ledgerFrom": "7675398319",
-          "end": "2026-10-19T05:43:15.452Z",
-          "ledgerTo": "7675407890"
+          "start": "2026-10-19T08:57:24.589Z",
+          "ledgerFrom": "7677177762",
+          "end": "2026-10-19T08:58:35.825Z",
+          "ledgerTo": "7677187779"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "7675397266",
-          "timestamp": "2026-10-19T05:42:01.540748Z"
+          "version": "7677176604",
+          "timestamp": "2026-10-19T08:57:17.318603Z"
         },
         "watermarkAfter": {
-          "version": "7675397870",
-          "timestamp": "2026-10-19T05:42:05.557949Z"
+          "version": "7677177451",
+          "timestamp": "2026-10-19T08:57:22.082359Z"
         },
         "sanity": {
           "check": "per pool: sum of delegator inactive stake <= stake::get_stake(pool).inactive",
@@ -78,22 +78,22 @@
           "detail": "66 pools, 0 violations"
         }
       },
-      "lastSuccessAt": "2026-10-19T05:43:15.452Z",
+      "lastSuccessAt": "2026-10-19T08:58:35.825Z",
       "totals": {
         "face": {
-          "positions": 8483,
-          "owners": 7809,
-          "usd": 2650949.862692215,
+          "positions": 8476,
+          "owners": 7802,
+          "usd": 2689423.2363900444,
           "unpriced": 0,
-          "ownersMin10": 1787
+          "ownersMin10": 1897
         },
         "byStatus": {
           "recoverable": {
-            "positions": 8466,
-            "owners": 7792,
-            "usd": 2637887.054688535,
+            "positions": 8459,
+            "owners": 7785,
+            "usd": 2676170.5210870192,
             "unpriced": 0,
-            "ownersMin10": 1783
+            "ownersMin10": 1893
           },
           "team_gated": {
             "positions": 0,
@@ -112,7 +112,7 @@
           "unknown": {
             "positions": 17,
             "owners": 17,
-            "usd": 13062.808003679464,
+            "usd": 13252.715303025429,
             "unpriced": 0,
             "ownersMin10": 4
           }
@@ -121,55 +121,55 @@
           "ge30": {
             "positions": 7920,
             "owners": 7265,
-            "usd": 699754.3006474082,
+            "usd": 709927.3392011555,
             "unpriced": 0,
-            "ownersMin10": 1523
+            "ownersMin10": 1611
           },
           "ge90": {
             "positions": 7795,
             "owners": 7148,
-            "usd": 686160.0846550742,
+            "usd": 696135.4902921409,
             "unpriced": 0,
-            "ownersMin10": 1466
+            "ownersMin10": 1554
           },
           "ge180": {
             "positions": 7610,
             "owners": 6975,
-            "usd": 587899.7369060147,
+            "usd": 596446.6321287373,
             "unpriced": 0,
-            "ownersMin10": 1373
+            "ownersMin10": 1455
           }
         },
         "agedEstimated": {
           "ge30": {
             "positions": 85,
             "owners": 85,
-            "usd": 6400.761310593149,
+            "usd": 6493.815674854681,
             "unpriced": 0,
-            "ownersMin10": 38
+            "ownersMin10": 46
           },
           "ge90": {
             "positions": 79,
             "owners": 79,
-            "usd": 5239.594826201684,
+            "usd": 5315.76813463818,
             "unpriced": 0,
-            "ownersMin10": 36
+            "ownersMin10": 44
           },
           "ge180": {
             "positions": 64,
             "owners": 64,
-            "usd": 5079.136287423114,
+            "usd": 5152.976847208029,
             "unpriced": 0,
-            "ownersMin10": 33
+            "ownersMin10": 39
           }
         },
         "byAgeBasis": {
           "onchain_maturity": {
-            "positions": 8349,
-            "owners": 7680,
-            "usd": 2496537.7626290787,
+            "positions": 8342,
+            "owners": 7673,
+            "usd": 2532766.290892364,
             "unpriced": 0,
-            "ownersMin10": 1726
+            "ownersMin10": 1828
           },
           "protocol_closure": {
             "positions": 0,
@@ -181,14 +181,14 @@
           "position_interaction": {
             "positions": 101,
             "owners": 101,
-            "usd": 140035.10300802896,
+            "usd": 142070.9354430152,
             "unpriced": 0,
-            "ownersMin10": 53
+            "ownersMin10": 61
           },
           "unknown": {
             "positions": 16,
             "owners": 16,
-            "usd": 1314.1890514299816,
+            "usd": 1333.2947516375332,
             "unpriced": 0,
             "ownersMin10": 5
           }
@@ -196,11 +196,11 @@
         "headline": {
           "positions": 7795,
           "owners": 7148,
-          "usd": 686160.0846550742,
+          "usd": 696135.4902921409,
           "unpriced": 0,
-          "ownersMin10": 1466
+          "ownersMin10": 1554
         },
-        "headlineTopOwnerShare": 0.4974934700710049
+        "headlineTopOwnerShare": 0.4974934700710057
       },
       "sizeBands": [
         {
@@ -209,15 +209,15 @@
         },
         {
           "upTo": 10,
-          "positions": 2437
+          "positions": 2317
         },
         {
           "upTo": 100,
-          "positions": 1640
+          "positions": 1747
         },
         {
           "upTo": 1000,
-          "positions": 169
+          "positions": 175
         },
         {
           "upTo": 10000,
@@ -255,28 +255,28 @@
           "pages": 187,
           "newCandidates": 0,
           "candidates": 6821,
-          "start": "2026-10-19T05:43:16.407Z",
-          "end": "2026-10-19T05:44:00.159Z"
+          "start": "2026-10-19T08:58:38.417Z",
+          "end": "2026-10-19T08:59:23.657Z"
         },
         "verification": {
-          "read": 6821,
+          "read": 6820,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-19T05:44:00.489Z",
-          "ledgerFrom": "7675414593",
-          "end": "2026-10-19T05:45:33.269Z",
-          "ledgerTo": "7675427615"
+          "start": "2026-10-19T08:59:23.946Z",
+          "ledgerFrom": "7677194683",
+          "end": "2026-10-19T09:00:45.362Z",
+          "ledgerTo": "7677207679"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "7675407716",
-          "timestamp": "2026-10-19T05:43:14.057021Z"
+          "version": "7677187945",
+          "timestamp": "2026-10-19T08:58:36.958468Z"
         },
         "watermarkAfter": {
-          "version": "7675414313",
-          "timestamp": "2026-10-19T05:43:58.529896Z"
+          "version": "7677194409",
+          "timestamp": "2026-10-19T08:59:22.082512Z"
         },
         "sanity": {
           "check": "per pool: sum of delegator active stake <= stake::get_stake(pool).active",
@@ -284,22 +284,22 @@
           "detail": "43 pools, 0 violations"
         }
       },
-      "lastSuccessAt": "2026-10-19T05:45:33.269Z",
+      "lastSuccessAt": "2026-10-19T09:00:45.362Z",
       "totals": {
         "face": {
-          "positions": 6896,
-          "owners": 6820,
-          "usd": 11911472.041304315,
+          "positions": 6892,
+          "owners": 6816,
+          "usd": 12084601.590815,
           "unpriced": 0,
-          "ownersMin10": 2685
+          "ownersMin10": 2876
         },
         "byStatus": {
           "recoverable": {
-            "positions": 6881,
-            "owners": 6805,
-            "usd": 11537885.346412767,
+            "positions": 6877,
+            "owners": 6801,
+            "usd": 11705583.686930839,
             "unpriced": 0,
-            "ownersMin10": 2683
+            "ownersMin10": 2874
           },
           "team_gated": {
             "positions": 0,
@@ -311,39 +311,39 @@
           "blocked": {
             "positions": 12,
             "owners": 12,
-            "usd": 2.3057099767521603,
+            "usd": 2.33923042309392,
             "unpriced": 0,
             "ownersMin10": 0
           },
           "unknown": {
             "positions": 3,
             "owners": 3,
-            "usd": 373584.3891815682,
+            "usd": 379015.56465374073,
             "unpriced": 0,
             "ownersMin10": 2
           }
         },
         "aged": {
           "ge30": {
-            "positions": 4060,
-            "owners": 4034,
-            "usd": 10203830.449058771,
+            "positions": 4059,
+            "owners": 4033,
+            "usd": 10352164.257141037,
             "unpriced": 0,
-            "ownersMin10": 1646
+            "ownersMin10": 1788
           },
           "ge90": {
-            "positions": 4041,
-            "owners": 4015,
-            "usd": 7740271.011079638,
+            "positions": 4040,
+            "owners": 4014,
+            "usd": 7852789.554977269,
             "unpriced": 0,
-            "ownersMin10": 1634
+            "ownersMin10": 1776
           },
           "ge180": {
-            "positions": 3938,
-            "owners": 3917,
-            "usd": 100223.84191047137,
+            "positions": 3937,
+            "owners": 3916,
+            "usd": 101671.26508399018,
             "unpriced": 0,
-            "ownersMin10": 1582
+            "ownersMin10": 1724
           }
         },
         "agedEstimated": {
@@ -378,11 +378,11 @@
             "ownersMin10": 0
           },
           "protocol_closure": {
-            "positions": 4759,
-            "owners": 4717,
-            "usd": 11210427.718138954,
+            "positions": 4755,
+            "owners": 4713,
+            "usd": 11373365.4747291,
             "unpriced": 0,
-            "ownersMin10": 1889
+            "ownersMin10": 2051
           },
           "position_interaction": {
             "positions": 0,
@@ -394,19 +394,19 @@
           "unknown": {
             "positions": 2122,
             "owners": 2113,
-            "usd": 327457.62827383116,
+            "usd": 332218.21220174304,
             "unpriced": 0,
-            "ownersMin10": 809
+            "ownersMin10": 839
           }
         },
         "headline": {
-          "positions": 4041,
-          "owners": 4015,
-          "usd": 7740271.011079638,
+          "positions": 4040,
+          "owners": 4014,
+          "usd": 7852789.554977269,
           "unpriced": 0,
-          "ownersMin10": 1634
+          "ownersMin10": 1776
         },
-        "headlineTopOwnerShare": 0.12609829469318323
+        "headlineTopOwnerShare": 0.1260984493704392
       },
       "sizeBands": [
         {
@@ -415,19 +415,19 @@
         },
         {
           "upTo": 10,
-          "positions": 4159
+          "positions": 3960
         },
         {
           "upTo": 100,
-          "positions": 2490
+          "positions": 2683
         },
         {
           "upTo": 1000,
-          "positions": 187
+          "positions": 188
         },
         {
           "upTo": 10000,
-          "positions": 20
+          "positions": 21
         },
         {
           "upTo": null,
@@ -462,29 +462,29 @@
           "pages": 1,
           "newCandidates": 0,
           "candidates": 2467,
-          "start": "2026-10-19T05:45:34.049Z",
-          "end": "2026-10-19T05:45:34.308Z",
+          "start": "2026-10-19T09:00:46.038Z",
+          "end": "2026-10-19T09:00:46.265Z",
           "cursor": "{\"0xfaf4e633ae9eb31366c9ca24214231760926576c7b625313b3688b5e900731f6::scripts::request_unstake_APT\":\"7673120610\"}"
         },
         "verification": {
-          "read": 952,
+          "read": 951,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-19T05:45:34.534Z",
-          "ledgerFrom": "7675427760",
-          "end": "2026-10-19T05:45:42.284Z",
-          "ledgerTo": "7675428878"
+          "start": "2026-10-19T09:00:46.501Z",
+          "ledgerFrom": "7677207804",
+          "end": "2026-10-19T09:00:53.369Z",
+          "ledgerTo": "7677208928"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "7675427475",
-          "timestamp": "2026-10-19T05:45:31.973814Z"
+          "version": "7677207407",
+          "timestamp": "2026-10-19T09:00:43.681408Z"
         },
         "watermarkAfter": {
-          "version": "7675427475",
-          "timestamp": "2026-10-19T05:45:31.973814Z"
+          "version": "7677207542",
+          "timestamp": "2026-10-19T09:00:44.569296Z"
         },
         "sanity": {
           "check": "matured requests found <= TLSD.apt_pending_withdrawal (APT held for claims)",
@@ -492,22 +492,22 @@
           "detail": "matured 3840020838541 of 5461988122123 held (70.30%)"
         }
       },
-      "lastSuccessAt": "2026-10-19T05:45:42.284Z",
+      "lastSuccessAt": "2026-10-19T09:00:53.369Z",
       "totals": {
         "face": {
           "positions": 1094,
           "owners": 951,
-          "usd": 29731.20774157016,
+          "usd": 30163.440487156317,
           "unpriced": 0,
-          "ownersMin10": 91
+          "ownersMin10": 94
         },
         "byStatus": {
           "recoverable": {
             "positions": 1094,
             "owners": 951,
-            "usd": 29731.20774157016,
+            "usd": 30163.440487156317,
             "unpriced": 0,
-            "ownersMin10": 91
+            "ownersMin10": 94
           },
           "team_gated": {
             "positions": 0,
@@ -533,25 +533,25 @@
         },
         "aged": {
           "ge30": {
-            "positions": 1080,
-            "owners": 939,
-            "usd": 27760.14052146561,
+            "positions": 1082,
+            "owners": 940,
+            "usd": 28165.043600118104,
             "unpriced": 0,
-            "ownersMin10": 87
+            "ownersMin10": 90
           },
           "ge90": {
             "positions": 1066,
             "owners": 925,
-            "usd": 27727.70711614545,
+            "usd": 28130.81293948754,
             "unpriced": 0,
-            "ownersMin10": 86
+            "ownersMin10": 89
           },
           "ge180": {
             "positions": 1030,
             "owners": 891,
-            "usd": 26290.53262647715,
+            "usd": 26672.744785459705,
             "unpriced": 0,
-            "ownersMin10": 81
+            "ownersMin10": 83
           }
         },
         "agedEstimated": {
@@ -581,9 +581,9 @@
           "onchain_maturity": {
             "positions": 1094,
             "owners": 951,
-            "usd": 29731.20774157016,
+            "usd": 30163.440487156317,
             "unpriced": 0,
-            "ownersMin10": 91
+            "ownersMin10": 94
           },
           "protocol_closure": {
             "positions": 0,
@@ -610,16 +610,16 @@
         "headline": {
           "positions": 1066,
           "owners": 925,
-          "usd": 27727.70711614545,
+          "usd": 28130.81293948754,
           "unpriced": 0,
-          "ownersMin10": 86
+          "ownersMin10": 89
         },
-        "headlineTopOwnerShare": 0.5545870176282696
+        "headlineTopOwnerShare": 0.5545870176282702
       },
       "sizeBands": [
         {
           "upTo": 1,
-          "positions": 744
+          "positions": 742
         },
         {
           "upTo": 10,
@@ -627,7 +627,7 @@
         },
         {
           "upTo": 100,
-          "positions": 78
+          "positions": 80
         },
         {
           "upTo": 1000,
@@ -671,29 +671,29 @@
           "pages": 2,
           "newCandidates": 0,
           "candidates": 1258,
-          "start": "2026-10-19T05:45:42.637Z",
-          "end": "2026-10-19T05:45:43.281Z",
+          "start": "2026-10-19T09:00:53.728Z",
+          "end": "2026-10-19T09:00:54.151Z",
           "cursor": "{\"0x2cc52445acc4c5e5817a0ac475976fbef966fedb6e30e7db792e10619c76181f::gateway::request_withdrawal_entry\":\"7652867821\",\"0x2cc52445acc4c5e5817a0ac475976fbef966fedb6e30e7db792e10619c76181f::gateway::unstake_and_request_withdrawal_entry\":\"7467829604\"}"
         },
         "verification": {
           "read": 394,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-19T05:45:43.556Z",
-          "ledgerFrom": "7675429002",
-          "end": "2026-10-19T05:45:46.529Z",
-          "ledgerTo": "7675429475"
+          "start": "2026-10-19T09:00:54.430Z",
+          "ledgerFrom": "7677209090",
+          "end": "2026-10-19T09:00:57.182Z",
+          "ledgerTo": "7677209510"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "7675428707",
-          "timestamp": "2026-10-19T05:45:40.889527Z"
+          "version": "7677208758",
+          "timestamp": "2026-10-19T09:00:52.384172Z"
         },
         "watermarkAfter": {
-          "version": "7675428707",
-          "timestamp": "2026-10-19T05:45:40.889527Z"
+          "version": "7677208928",
+          "timestamp": "2026-10-19T09:00:53.238433Z"
         },
         "sanity": {
           "check": "matured tickets found vs vault::get_unlocked_apt_balance (APT ready for withdrawals)",
@@ -701,12 +701,12 @@
           "detail": "matured 1683114150199 vs 28951138828169 unlocked (5.81%)"
         }
       },
-      "lastSuccessAt": "2026-10-19T05:45:46.529Z",
+      "lastSuccessAt": "2026-10-19T09:00:57.182Z",
       "totals": {
         "face": {
           "positions": 504,
           "owners": 394,
-          "usd": 13031.443983349742,
+          "usd": 13220.895312096152,
           "unpriced": 0,
           "ownersMin10": 26
         },
@@ -714,7 +714,7 @@
           "recoverable": {
             "positions": 504,
             "owners": 394,
-            "usd": 13031.443983349742,
+            "usd": 13220.895312096152,
             "unpriced": 0,
             "ownersMin10": 26
           },
@@ -744,21 +744,21 @@
           "ge30": {
             "positions": 502,
             "owners": 392,
-            "usd": 13026.398335385735,
+            "usd": 13215.77631042611,
             "unpriced": 0,
             "ownersMin10": 26
           },
           "ge90": {
             "positions": 395,
             "owners": 287,
-            "usd": 12961.687039990544,
+            "usd": 13150.124241244594,
             "unpriced": 0,
             "ownersMin10": 24
           },
           "ge180": {
             "positions": 381,
             "owners": 273,
-            "usd": 3238.345670934713,
+            "usd": 3285.4247890341835,
             "unpriced": 0,
             "ownersMin10": 22
           }
@@ -790,7 +790,7 @@
           "onchain_maturity": {
             "positions": 504,
             "owners": 394,
-            "usd": 13031.443983349742,
+            "usd": 13220.895312096152,
             "unpriced": 0,
             "ownersMin10": 26
           },
@@ -819,11 +819,11 @@
         "headline": {
           "positions": 395,
           "owners": 287,
-          "usd": 12961.687039990544,
+          "usd": 13150.124241244594,
           "unpriced": 0,
           "ownersMin10": 24
         },
-        "headlineTopOwnerShare": 0.7459835565767116
+        "headlineTopOwnerShare": 0.7459835565767112
       },
       "sizeBands": [
         {
@@ -879,29 +879,29 @@
           "pages": 1,
           "newCandidates": 0,
           "candidates": 4460,
-          "start": "2026-10-19T05:45:46.835Z",
-          "end": "2026-10-19T05:45:47.046Z",
+          "start": "2026-10-19T09:00:57.515Z",
+          "end": "2026-10-19T09:00:57.742Z",
           "cursor": "{\"0x8f396e4246b2ba87b51c0739ef5ea4f26515a98375308c31ac2ec1e42142a57f::stake_router::unstake\":\"7496840494\"}"
         },
         "verification": {
           "read": 822,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-19T05:45:47.312Z",
-          "ledgerFrom": "7675429560",
-          "end": "2026-10-19T05:45:52.540Z",
-          "ledgerTo": "7675430311"
+          "start": "2026-10-19T09:00:58.027Z",
+          "ledgerFrom": "7677209692",
+          "end": "2026-10-19T09:01:03.614Z",
+          "ledgerTo": "7677210598"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "7675429340",
-          "timestamp": "2026-10-19T05:45:45.44973Z"
+          "version": "7677209415",
+          "timestamp": "2026-10-19T09:00:56.544452Z"
         },
         "watermarkAfter": {
-          "version": "7675429340",
-          "timestamp": "2026-10-19T05:45:45.44973Z"
+          "version": "7677209415",
+          "timestamp": "2026-10-19T09:00:56.544452Z"
         },
         "sanity": {
           "check": "tickets found <= outstanding claims (total_claims_balance - total_claims_balance_cleared)",
@@ -909,12 +909,12 @@
           "detail": "found 1608782966656 of 1608784960656 outstanding (99.99%)"
         }
       },
-      "lastSuccessAt": "2026-10-19T05:45:52.540Z",
+      "lastSuccessAt": "2026-10-19T09:01:03.614Z",
       "totals": {
         "face": {
           "positions": 839,
           "owners": 822,
-          "usd": 12455.937768015412,
+          "usd": 12637.022378742222,
           "unpriced": 0,
           "ownersMin10": 82
         },
@@ -922,7 +922,7 @@
           "recoverable": {
             "positions": 835,
             "owners": 818,
-            "usd": 12281.972581893153,
+            "usd": 12460.528084126032,
             "unpriced": 0,
             "ownersMin10": 79
           },
@@ -936,7 +936,7 @@
           "blocked": {
             "positions": 4,
             "owners": 4,
-            "usd": 173.96518612225765,
+            "usd": 176.4942946161887,
             "unpriced": 0,
             "ownersMin10": 3
           },
@@ -952,21 +952,21 @@
           "ge30": {
             "positions": 835,
             "owners": 818,
-            "usd": 12281.972581893153,
+            "usd": 12460.528084126032,
             "unpriced": 0,
             "ownersMin10": 79
           },
           "ge90": {
             "positions": 835,
             "owners": 818,
-            "usd": 12281.972581893153,
+            "usd": 12460.528084126032,
             "unpriced": 0,
             "ownersMin10": 79
           },
           "ge180": {
             "positions": 835,
             "owners": 818,
-            "usd": 12281.972581893153,
+            "usd": 12460.528084126032,
             "unpriced": 0,
             "ownersMin10": 79
           }
@@ -998,7 +998,7 @@
           "onchain_maturity": {
             "positions": 835,
             "owners": 818,
-            "usd": 12281.972581893153,
+            "usd": 12460.528084126032,
             "unpriced": 0,
             "ownersMin10": 79
           },
@@ -1027,20 +1027,20 @@
         "headline": {
           "positions": 835,
           "owners": 818,
-          "usd": 12281.972581893153,
+          "usd": 12460.528084126032,
           "unpriced": 0,
           "ownersMin10": 79
         },
-        "headlineTopOwnerShare": 0.5396120201577879
+        "headlineTopOwnerShare": 0.5396120201577872
       },
       "sizeBands": [
         {
           "upTo": 1,
-          "positions": 538
+          "positions": 537
         },
         {
           "upTo": 10,
-          "positions": 219
+          "positions": 220
         },
         {
           "upTo": 100,
@@ -1087,28 +1087,28 @@
           "pages": 5,
           "newCandidates": 0,
           "candidates": 455,
-          "start": "2026-10-19T05:45:52.899Z",
-          "end": "2026-10-19T05:46:05.526Z"
+          "start": "2026-10-19T09:01:03.965Z",
+          "end": "2026-10-19T09:01:14.445Z"
         },
         "verification": {
           "read": 438,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-19T05:46:05.805Z",
-          "ledgerFrom": "7675432170",
-          "end": "2026-10-19T05:46:09.766Z",
-          "ledgerTo": "7675432748"
+          "start": "2026-10-19T09:01:14.692Z",
+          "ledgerFrom": "7677212290",
+          "end": "2026-10-19T09:01:17.833Z",
+          "ledgerTo": "7677212779"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "7675430114",
-          "timestamp": "2026-10-19T05:45:51.183838Z"
+          "version": "7677210344",
+          "timestamp": "2026-10-19T09:01:01.455814Z"
         },
         "watermarkAfter": {
-          "version": "7675431839",
-          "timestamp": "2026-10-19T05:46:03.191981Z"
+          "version": "7677212003",
+          "timestamp": "2026-10-19T09:01:12.979708Z"
         },
         "sanity": {
           "check": "matured withdrawal tokens found <= withdrawal::total_pending_withdrawal (all open tokens)",
@@ -1116,22 +1116,22 @@
           "detail": "matured 163465849075123 of 164977436406151 pending (99.08%)"
         }
       },
-      "lastSuccessAt": "2026-10-19T05:46:09.766Z",
+      "lastSuccessAt": "2026-10-19T09:01:17.833Z",
       "totals": {
         "face": {
           "positions": 445,
           "owners": 438,
-          "usd": 1265627.7978301765,
+          "usd": 1284027.5138020723,
           "unpriced": 0,
-          "ownersMin10": 299
+          "ownersMin10": 300
         },
         "byStatus": {
           "recoverable": {
             "positions": 442,
             "owners": 435,
-            "usd": 957639.2475526943,
+            "usd": 971561.4213455886,
             "unpriced": 0,
-            "ownersMin10": 297
+            "ownersMin10": 298
           },
           "team_gated": {
             "positions": 0,
@@ -1150,7 +1150,7 @@
           "unknown": {
             "positions": 3,
             "owners": 3,
-            "usd": 307988.5502774826,
+            "usd": 312466.09245648433,
             "unpriced": 0,
             "ownersMin10": 2
           }
@@ -1159,23 +1159,23 @@
           "ge30": {
             "positions": 431,
             "owners": 424,
-            "usd": 952236.6063109135,
+            "usd": 966080.2364241278,
             "unpriced": 0,
-            "ownersMin10": 288
+            "ownersMin10": 289
           },
           "ge90": {
             "positions": 411,
             "owners": 404,
-            "usd": 951477.8794696355,
+            "usd": 965310.4792006131,
             "unpriced": 0,
-            "ownersMin10": 280
+            "ownersMin10": 281
           },
           "ge180": {
             "positions": 378,
             "owners": 372,
-            "usd": 920676.3418863942,
+            "usd": 934061.1484004398,
             "unpriced": 0,
-            "ownersMin10": 265
+            "ownersMin10": 266
           }
         },
         "agedEstimated": {
@@ -1205,9 +1205,9 @@
           "onchain_maturity": {
             "positions": 442,
             "owners": 435,
-            "usd": 957639.2475526943,
+            "usd": 971561.4213455886,
             "unpriced": 0,
-            "ownersMin10": 297
+            "ownersMin10": 298
           },
           "protocol_closure": {
             "positions": 0,
@@ -1234,11 +1234,11 @@
         "headline": {
           "positions": 411,
           "owners": 404,
-          "usd": 951477.8794696355,
+          "usd": 965310.4792006131,
           "unpriced": 0,
-          "ownersMin10": 280
+          "ownersMin10": 281
         },
-        "headlineTopOwnerShare": 0.8770212363613524
+        "headlineTopOwnerShare": 0.8770212363613519
       },
       "sizeBands": [
         {
@@ -1247,11 +1247,11 @@
         },
         {
           "upTo": 10,
-          "positions": 141
+          "positions": 140
         },
         {
           "upTo": 100,
-          "positions": 254
+          "positions": 255
         },
         {
           "upTo": 1000,
@@ -1294,29 +1294,29 @@
           "pages": 2,
           "newCandidates": 0,
           "candidates": 10745,
-          "start": "2026-10-19T05:46:10.130Z",
-          "end": "2026-10-19T05:46:10.638Z",
+          "start": "2026-10-19T09:01:18.205Z",
+          "end": "2026-10-19T09:01:18.660Z",
           "cursor": "{\"0x167f411fc5a678fb40d86e0af646fa8f62458b686ad8996215248447037af40c::scripts::lock\":\"7468293401\",\"0x3c4a58b4a8dffe6d14448072efcdd5a0e0089a22c6837b94f1d7e8bb1552137f::farming_vesting::convert_to_vethl\":\"3586223066\"}"
         },
         "verification": {
-          "read": 10745,
+          "read": 4914,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-19T05:46:10.920Z",
-          "ledgerFrom": "7675432878",
-          "end": "2026-10-19T05:47:20.557Z",
-          "ledgerTo": "7675443504"
+          "start": "2026-10-19T09:01:18.955Z",
+          "ledgerFrom": "7677212915",
+          "end": "2026-10-19T09:01:54.489Z",
+          "ledgerTo": "7677218059"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "7675432515",
-          "timestamp": "2026-10-19T05:46:08.109197Z"
+          "version": "7677212481",
+          "timestamp": "2026-10-19T09:01:15.910708Z"
         },
         "watermarkAfter": {
-          "version": "7675432708",
-          "timestamp": "2026-10-19T05:46:09.328345Z"
+          "version": "7677212613",
+          "timestamp": "2026-10-19T09:01:16.688137Z"
         },
         "sanity": {
           "check": "none",
@@ -1324,22 +1324,22 @@
           "detail": "no contract total available: balances are stored per account"
         }
       },
-      "lastSuccessAt": "2026-10-19T05:47:20.557Z",
+      "lastSuccessAt": "2026-10-19T09:01:54.489Z",
       "totals": {
         "face": {
           "positions": 4914,
           "owners": 4914,
-          "usd": 16261.974280887685,
+          "usd": 16362.897749724814,
           "unpriced": 0,
-          "ownersMin10": 115
+          "ownersMin10": 117
         },
         "byStatus": {
           "recoverable": {
             "positions": 4914,
             "owners": 4914,
-            "usd": 16261.974280887685,
+            "usd": 16362.897749724814,
             "unpriced": 0,
-            "ownersMin10": 115
+            "ownersMin10": 117
           },
           "team_gated": {
             "positions": 0,
@@ -1367,23 +1367,23 @@
           "ge30": {
             "positions": 4901,
             "owners": 4901,
-            "usd": 15455.929059965734,
+            "usd": 15551.850130057797,
             "unpriced": 0,
-            "ownersMin10": 110
+            "ownersMin10": 112
           },
           "ge90": {
             "positions": 4852,
             "owners": 4852,
-            "usd": 13719.542580708723,
+            "usd": 13804.687459441624,
             "unpriced": 0,
-            "ownersMin10": 97
+            "ownersMin10": 99
           },
           "ge180": {
             "positions": 4746,
             "owners": 4746,
-            "usd": 13437.864848731488,
+            "usd": 13521.26160676795,
             "unpriced": 0,
-            "ownersMin10": 89
+            "ownersMin10": 91
           }
         },
         "agedEstimated": {
@@ -1413,9 +1413,9 @@
           "onchain_maturity": {
             "positions": 4914,
             "owners": 4914,
-            "usd": 16261.974280887685,
+            "usd": 16362.897749724814,
             "unpriced": 0,
-            "ownersMin10": 115
+            "ownersMin10": 117
           },
           "protocol_closure": {
             "positions": 0,
@@ -1442,24 +1442,24 @@
         "headline": {
           "positions": 4852,
           "owners": 4852,
-          "usd": 13719.542580708723,
+          "usd": 13804.687459441624,
           "unpriced": 0,
-          "ownersMin10": 97
+          "ownersMin10": 99
         },
-        "headlineTopOwnerShare": 0.37599732267292263
+        "headlineTopOwnerShare": 0.37599732267292135
       },
       "sizeBands": [
         {
           "upTo": 1,
-          "positions": 4317
+          "positions": 4312
         },
         {
           "upTo": 10,
-          "positions": 482
+          "positions": 485
         },
         {
           "upTo": 100,
-          "positions": 94
+          "positions": 96
         },
         {
           "upTo": 1000,
@@ -1502,29 +1502,29 @@
           "pages": 1,
           "newCandidates": 0,
           "candidates": 4960,
-          "start": "2026-10-19T05:47:21.077Z",
-          "end": "2026-10-19T05:47:21.348Z",
+          "start": "2026-10-19T09:01:54.889Z",
+          "end": "2026-10-19T09:01:55.307Z",
           "cursor": "{\"0x3c4a58b4a8dffe6d14448072efcdd5a0e0089a22c6837b94f1d7e8bb1552137f::farming_vesting::start_vesting\":\"7300676399\"}"
         },
         "verification": {
-          "read": 4960,
+          "read": 2644,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-19T05:47:21.627Z",
-          "ledgerFrom": "7675443615",
-          "end": "2026-10-19T05:48:11.307Z",
-          "ledgerTo": "7675450758"
+          "start": "2026-10-19T09:01:55.542Z",
+          "ledgerFrom": "7677218206",
+          "end": "2026-10-19T09:02:32.224Z",
+          "ledgerTo": "7677223609"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "7675443163",
-          "timestamp": "2026-10-19T05:47:18.161972Z"
+          "version": "7677217830",
+          "timestamp": "2026-10-19T09:01:52.829681Z"
         },
         "watermarkAfter": {
-          "version": "7675443488",
-          "timestamp": "2026-10-19T05:47:20.345807Z"
+          "version": "7677217830",
+          "timestamp": "2026-10-19T09:01:52.829681Z"
         },
         "sanity": {
           "check": "none",
@@ -1532,12 +1532,12 @@
           "detail": "no contract total available: balances are stored per account"
         }
       },
-      "lastSuccessAt": "2026-10-19T05:48:11.307Z",
+      "lastSuccessAt": "2026-10-19T09:02:32.224Z",
       "totals": {
         "face": {
           "positions": 3676,
           "owners": 2644,
-          "usd": 6235.006606097199,
+          "usd": 6273.701692194407,
           "unpriced": 0,
           "ownersMin10": 16
         },
@@ -1545,7 +1545,7 @@
           "recoverable": {
             "positions": 3676,
             "owners": 2644,
-            "usd": 6235.006606097199,
+            "usd": 6273.701692194407,
             "unpriced": 0,
             "ownersMin10": 16
           },
@@ -1575,21 +1575,21 @@
           "ge30": {
             "positions": 3675,
             "owners": 2644,
-            "usd": 6235.000680497401,
+            "usd": 6273.695729819732,
             "unpriced": 0,
             "ownersMin10": 16
           },
           "ge90": {
             "positions": 3673,
             "owners": 2642,
-            "usd": 6234.8428785674605,
+            "usd": 6273.536948554941,
             "unpriced": 0,
             "ownersMin10": 16
           },
           "ge180": {
             "positions": 3670,
             "owners": 2639,
-            "usd": 6234.828489114257,
+            "usd": 6273.522469799325,
             "unpriced": 0,
             "ownersMin10": 16
           }
@@ -1621,7 +1621,7 @@
           "onchain_maturity": {
             "positions": 3676,
             "owners": 2644,
-            "usd": 6235.006606097199,
+            "usd": 6273.701692194407,
             "unpriced": 0,
             "ownersMin10": 16
           },
@@ -1650,11 +1650,11 @@
         "headline": {
           "positions": 3673,
           "owners": 2642,
-          "usd": 6234.8428785674605,
+          "usd": 6273.536948554941,
           "unpriced": 0,
           "ownersMin10": 16
         },
-        "headlineTopOwnerShare": 0.5851276539634532
+        "headlineTopOwnerShare": 0.585127653963452
       },
       "sizeBands": [
         {
@@ -1710,17 +1710,17 @@
           "pages": 1,
           "newCandidates": 0,
           "candidates": 1,
-          "start": "2026-10-19T05:48:11.396Z",
-          "end": "2026-10-19T05:48:11.575Z"
+          "start": "2026-10-19T09:02:32.298Z",
+          "end": "2026-10-19T09:02:32.499Z"
         },
         "verification": {
           "read": 1,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-19T05:48:11.622Z",
-          "ledgerFrom": "7675450791",
-          "end": "2026-10-19T05:48:11.903Z",
-          "ledgerTo": "7675450834"
+          "start": "2026-10-19T09:02:32.550Z",
+          "ledgerFrom": "7677223642",
+          "end": "2026-10-19T09:02:32.862Z",
+          "ledgerTo": "7677223703"
         },
         "completeness": "complete",
         "degradedReasons": [],
@@ -1731,12 +1731,12 @@
           "detail": "1 claimable of 1 pending"
         }
       },
-      "lastSuccessAt": "2026-10-19T05:48:11.903Z",
+      "lastSuccessAt": "2026-10-19T09:02:32.862Z",
       "totals": {
         "face": {
           "positions": 1,
           "owners": 1,
-          "usd": 1867.0484332704527,
+          "usd": 1894.1916114914475,
           "unpriced": 0,
           "ownersMin10": 1
         },
@@ -1744,7 +1744,7 @@
           "recoverable": {
             "positions": 1,
             "owners": 1,
-            "usd": 1867.0484332704527,
+            "usd": 1894.1916114914475,
             "unpriced": 0,
             "ownersMin10": 1
           },
@@ -1774,7 +1774,7 @@
           "ge30": {
             "positions": 1,
             "owners": 1,
-            "usd": 1867.0484332704527,
+            "usd": 1894.1916114914475,
             "unpriced": 0,
             "ownersMin10": 1
           },
@@ -1820,7 +1820,7 @@
           "onchain_maturity": {
             "positions": 1,
             "owners": 1,
-            "usd": 1867.0484332704527,
+            "usd": 1894.1916114914475,
             "unpriced": 0,
             "ownersMin10": 1
           },
@@ -1906,30 +1906,30 @@
         "scope": "current_delegator_balances rows with pool_type=inactive_shares and shares>0 (stake_processor)",
         "enumeration": {
           "pages": 16,
-          "newCandidates": 121,
+          "newCandidates": 0,
           "candidates": 121,
-          "start": "2026-10-19T05:48:12.290Z",
-          "end": "2026-10-19T05:48:12.712Z"
+          "start": "2026-10-19T09:02:33.263Z",
+          "end": "2026-10-19T09:02:33.626Z"
         },
         "verification": {
           "read": 121,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-19T05:48:12.911Z",
-          "ledgerFrom": "230058451",
-          "end": "2026-10-19T05:48:18.542Z",
-          "ledgerTo": "230058488"
+          "start": "2026-10-19T09:02:33.982Z",
+          "ledgerFrom": "230133861",
+          "end": "2026-10-19T09:02:39.017Z",
+          "ledgerTo": "230133896"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "230058445",
-          "timestamp": "2026-10-19T05:48:11.158314Z"
+          "version": "230133853",
+          "timestamp": "2026-10-19T09:02:31.654173Z"
         },
         "watermarkAfter": {
-          "version": "230058445",
-          "timestamp": "2026-10-19T05:48:11.158314Z"
+          "version": "230133853",
+          "timestamp": "2026-10-19T09:02:31.654173Z"
         },
         "sanity": {
           "check": "per pool: sum of delegator inactive stake <= stake::get_stake(pool).inactive",
@@ -1937,12 +1937,12 @@
           "detail": "4 pools, 0 violations"
         }
       },
-      "lastSuccessAt": "2026-10-19T05:48:18.542Z",
+      "lastSuccessAt": "2026-10-19T09:02:39.017Z",
       "totals": {
         "face": {
           "positions": 116,
           "owners": 101,
-          "usd": 2890.95981544148,
+          "usd": 2901.7074771182665,
           "unpriced": 0,
           "ownersMin10": 11
         },
@@ -1950,7 +1950,7 @@
           "recoverable": {
             "positions": 112,
             "owners": 100,
-            "usd": 2409.536393171437,
+            "usd": 2418.494276921114,
             "unpriced": 0,
             "ownersMin10": 10
           },
@@ -1971,7 +1971,7 @@
           "unknown": {
             "positions": 4,
             "owners": 1,
-            "usd": 481.42342227004343,
+            "usd": 483.2132001971534,
             "unpriced": 0,
             "ownersMin10": 1
           }
@@ -1980,21 +1980,21 @@
           "ge30": {
             "positions": 89,
             "owners": 81,
-            "usd": 2304.025205662435,
+            "usd": 2312.590832646588,
             "unpriced": 0,
             "ownersMin10": 8
           },
           "ge90": {
             "positions": 63,
             "owners": 57,
-            "usd": 2203.7624926345648,
+            "usd": 2211.9553749985166,
             "unpriced": 0,
             "ownersMin10": 6
           },
           "ge180": {
             "positions": 29,
             "owners": 26,
-            "usd": 102.90571484553914,
+            "usd": 103.28828529908202,
             "unpriced": 0,
             "ownersMin10": 2
           }
@@ -2026,7 +2026,7 @@
           "onchain_maturity": {
             "positions": 98,
             "owners": 89,
-            "usd": 2395.874245719652,
+            "usd": 2404.7813379855434,
             "unpriced": 0,
             "ownersMin10": 9
           },
@@ -2047,7 +2047,7 @@
           "unknown": {
             "positions": 14,
             "owners": 11,
-            "usd": 13.662147451784833,
+            "usd": 13.712938935570198,
             "unpriced": 0,
             "ownersMin10": 1
           }
@@ -2055,11 +2055,11 @@
         "headline": {
           "positions": 63,
           "owners": 57,
-          "usd": 2203.7624926345648,
+          "usd": 2211.9553749985166,
           "unpriced": 0,
           "ownersMin10": 6
         },
-        "headlineTopOwnerShare": 0.2416185792011369
+        "headlineTopOwnerShare": 0.24161857920113702
       },
       "sizeBands": [
         {
@@ -2111,26 +2111,39 @@
         "processor": "stake_processor",
         "scope": "active_shares rows (shares > 0) in delegation pools whose validator state is inactive (4) at enumeration time",
         "enumeration": {
-          "pages": 0,
+          "pages": 1,
           "newCandidates": 0,
           "candidates": 0,
-          "start": "2026-10-19T05:48:18.889Z"
+          "start": "2026-10-19T09:02:39.323Z",
+          "end": "2026-10-19T09:02:39.779Z"
         },
         "verification": {
           "read": 0,
           "incomplete": 0,
-          "notReread": 0
+          "notReread": 0,
+          "start": "2026-10-19T09:02:39.869Z",
+          "ledgerFrom": "230133900",
+          "end": "2026-10-19T09:02:39.869Z",
+          "ledgerTo": "230133900"
         },
-        "completeness": "degraded",
-        "degradedReasons": [
-          "run failed: Error: view 0x1::stake::get_validator_state: HTTP 404 {\"message\":\"Ledger version not found by Ledger version(230058492)\",\"error_code\":\"version_not_found\",\"vm_error_code\":null}"
-        ],
+        "completeness": "complete",
+        "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "230058484",
-          "timestamp": "2026-10-19T05:48:16.941614Z"
+          "version": "230133892",
+          "timestamp": "2026-10-19T09:02:37.564438Z"
+        },
+        "watermarkAfter": {
+          "version": "230133900",
+          "timestamp": "2026-10-19T09:02:38.881771Z"
+        },
+        "sanity": {
+          "check": "per pool: sum of delegator active stake <= stake::get_stake(pool).active",
+          "ok": true,
+          "detail": "0 pools, 0 violations"
         }
       },
+      "lastSuccessAt": "2026-10-19T09:02:39.869Z",
       "totals": {
         "face": {
           "positions": 0,
@@ -2283,11 +2296,11 @@
     }
   ],
   "global": {
-    "headlineUsd": 9453038.489894286,
-    "headlineOwners": 19926,
-    "headlineOwnersMin10": 3681,
-    "recoverableUsd": 15215229.838674236,
-    "requests": 39239,
+    "headlineUsd": 9590267.169517873,
+    "headlineOwners": 19925,
+    "headlineOwnersMin10": 3917,
+    "recoverableUsd": 15436109.778577155,
+    "requests": 29826,
     "requestCap": 100000
   }
 }
