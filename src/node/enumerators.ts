@@ -95,11 +95,14 @@ const delegationEnumeratorFor = (sourceId: string): Enumerator => ({
 export const delegationEnumerator = delegationEnumeratorFor('native-delegation');
 export const movementDelegationEnumerator = delegationEnumeratorFor('movement-native-delegation');
 
-const SENDERS_QUERY = `query($c:String!,$m:String!,$f:String!,$after:bigint!){
+const SENDERS_QUERY = `query($c:String!,$m:String!,$f:String!,$after:bigint!,$until:bigint!){
   user_transactions(where:{entry_function_contract_address:{_eq:$c}, entry_function_module_name:{_eq:$m},
-    entry_function_function_name:{_eq:$f}, version:{_gt:$after}}, order_by:{version:asc}, limit:${PAGE}){ version sender } }`;
+    entry_function_function_name:{_eq:$f}, version:{_gt:$after, _lte:$until}}, order_by:{version:asc}, limit:${PAGE}){ version sender } }`;
 
-type EntryFunction = { contract: string; module: string; name: string };
+/** An entry function whose senders are candidates. `untilVersion` ends the scan where later calls cannot matter
+ *  (for example deposits into pools that had already ended). */
+type EntryFunction = { contract: string; module: string; name: string; untilVersion?: number };
+const NO_LIMIT = '9223372036854775807';
 
 /** New senders of entry functions since per-function version cursors (stored as one JSON object). Only the
  *  (contract, module, function) filter is indexed; entry_function_id_str alone times out. */
@@ -113,7 +116,7 @@ async function senders(chain: ChainReader, fns: EntryFunction[], cursor: string 
     const key = `${fn.contract}::${fn.module}::${fn.name}`;
     let after = cursors[key] ?? '0';
     for (;;) {
-      const page = (await chain.gql(SENDERS_QUERY, { c: fn.contract, m: fn.module, f: fn.name, after })).user_transactions;
+      const page = (await chain.gql(SENDERS_QUERY, { c: fn.contract, m: fn.module, f: fn.name, after, until: String(fn.untilVersion ?? NO_LIMIT) })).user_transactions;
       pages++;
       page.forEach((t: any) => owners.add(normalizeAddress(t.sender)));
       if (page.length) after = String(page[page.length - 1].version);
@@ -128,7 +131,7 @@ function entrySenders(sourceId: string, fns: EntryFunction[], sanity: Enumerator
   return {
     sourceId,
     processor: 'user_transaction_processor',
-    scope: `senders of ${fns.map(f => `${f.contract}::${f.module}::${f.name}`).join(', ')} entry calls (calls made by other contracts excluded)`,
+    scope: `senders of ${fns.map(f => `${f.contract}::${f.module}::${f.name}${f.untilVersion ? ` up to version ${f.untilVersion}` : ''}`).join(', ')} entry calls (calls made by other contracts excluded)`,
     run: (chain, cursor) => senders(chain, fns, cursor),
     sanity,
   };
@@ -535,8 +538,9 @@ export const canopyEndedRewardsEnumerator: Enumerator = {
   sanity: async () => ({ check: 'none', ok: null, detail: 'no contract total: earned rewards are computed per staker' }),
 };
 
-// Senders of smart_chef::deposit: everyone who ever staked in a PancakeSwap (Aptos) syrup pool.
-export const pancakeSyrupEnumerator = entrySenders('pancake-syrup-ended', [{ contract: SMART_CHEF, module: 'smart_chef', name: 'deposit' }],
+// Senders of smart_chef::deposit: everyone who staked in a PancakeSwap (Aptos) CAKE syrup pool.
+// Deposits after the last CAKE pool ended (version ~444.55M, 2024-02-09 14:05 UTC) only went to the Gui Inu pools.
+export const pancakeSyrupEnumerator = entrySenders('pancake-syrup-ended', [{ contract: SMART_CHEF, module: 'smart_chef', name: 'deposit', untilVersion: 444_552_000 }],
   async (chain, ledger, positions) => {
     const parts: string[] = [];
     let ok = true;
