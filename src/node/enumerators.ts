@@ -4,6 +4,7 @@ import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-with
 import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
 import { MKLP } from '../shared/sources/merkle-mklp.ts';
+import { VEMKL_COLLECTION } from '../shared/sources/merkle-vemkl.ts';
 import { THALA_VE, THALA_VEST } from '../shared/sources/thala-thl.ts';
 import { THALA_LSD } from '../shared/sources/thala-unstake.ts';
 import { TORTUGA, TORTUGA_STATE } from '../shared/sources/tortuga-tickets.ts';
@@ -350,6 +351,9 @@ export const merkleMklpEnumerator: Enumerator = {
   },
 };
 
+export const merkleVemklEnumerator = collectionOwners('merkle-vemkl', VEMKL_COLLECTION,
+  async () => ({ check: 'none', ok: null, detail: 'no contract total available: each lock holds its own stores' }));
+
 const noContractTotal: Enumerator['sanity'] = async () =>
   ({ check: 'none', ok: null, detail: 'no contract total available: balances are stored per account' });
 
@@ -364,4 +368,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator];

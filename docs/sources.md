@@ -22,6 +22,7 @@ Measurement runs use a fresh local state (`node src/node/snapshot.ts --source <i
 | `movement-inactive-validator` | all pools → inactive validators (Movement) | ended position | none: no inactive Movement pool holds active stake | — |
 | `kofi-receipts` | primary stores holding kAPT / stkAPT | stranded receipt? market not checked → all `unknown` | 11,619 positions, 8,063 owners, ~$98K redemption value, none in headline | request step 38/38 ok; finalize = kofi-withdrawals sample |
 | `merkle-mklp` | stores holding MKLP (Coin + paired FA) | wound down; exits deprecated → team_gated | 9,152 team_gated positions (9,088 owners), 4 recoverable; MKLP units, unpriced | whitelisted release 4/4 ok; every team_gated sample aborts as classified |
+| `merkle-vemkl` | collection owners (veMKL) | wound down; unlock works any time → recoverable | 1,340 locks (unpriced: ~496K MKL, 74K PreMKL, 15K esMKL) | 10/10 ok, payout = expected (PreMKL paid as MKL) |
 | `tortuga-tickets` | entry-function senders → per-user `TicketStore` | ended position (cooldown passed); reserve-queued tickets blocked | headline $12.2K, 818 owners; blocked $172 | recoverable 10/10 exact; blocked 4/4 abort `EFUND_NOT_AVAILABLE_YET` as predicted |
 
 Native delegation and Thala are documented in [phase0-report.md](phase0-report.md).
@@ -216,6 +217,19 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - 9,152 `team_gated` positions (9,088 owners). 4 `recoverable` (whitelisted). 41 `unknown` (contract-held).
   - Sanity: holders hold 99.89% of the MKLP (lzUSDC) supply but only 10.47% of the MKLP (USDC) supply; the rest is held elsewhere.
 - **Re-read schedule:** monthly, or when a holder's store changes. The first run took 45.8K requests; a re-read takes 10K.
+
+## merkle-vemkl
+
+- **Status:** Merkle Trade wound down (see merkle-mklp). The announcement says staked MKL can be redeemed after the final distribution (2026-02-12).
+  - On chain, `managed_staking::unlock` succeeds even for a lock whose `unlock_time` is still in the future (one due 2026-12-03, simulated 2026-10-19). Every remaining lock is recoverable now.
+- **Enumeration:** owners in the veMKL collection (`0xe101e80f…3216`), keyset-paged on token id. 14 pages, 1,366 locks, one per owner.
+- **Read:** `staking::VoteEscrowedMKL` per token (owner checked through ObjectCore), and the lock's two fungible stores.
+  - Locked PreMKL is paid out 1:1 as MKL from Merkle's community pool (`mkl_token::MklClaimEve`). The gross claim stays in PreMKL; the expected payout is in MKL.
+- **Value:** unpriced. CoinGecko's MKL quote was last updated 2026-05-04, older than the 7-day rule.
+- **Result (2026-10-19):** 1,340 `recoverable` locks. 26 contract-held locks are `unknown`. They hold about 496K MKL, 74K PreMKL and 15K esMKL.
+- **Age:** from the wind-down (2026-02-12), or the lock time if later.
+- **Recovery:** `managed_staking::unlock(token)`. Sample simulation: 10/10, paying exactly the expected MKL (and esMKL); 2 owners need gas.
+- **Re-read schedule:** monthly, or when the collection's owner list changes. The first run took 6.8K requests.
 
 ## Waiting on a decision
 

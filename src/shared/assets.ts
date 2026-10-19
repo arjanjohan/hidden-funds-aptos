@@ -2,6 +2,7 @@
 import { APT, MOVE } from './sources/delegation.ts';
 import { KAPT, STKAPT } from './sources/kofi-receipts.ts';
 import { MKLP } from './sources/merkle-mklp.ts';
+import { ESMKL, MKL, PREMKL } from './sources/merkle-vemkl.ts';
 import { THL } from './sources/thala-thl.ts';
 
 export const ASSETS: Record<string, { symbol: string; decimals: number }> = {
@@ -12,4 +13,7 @@ export const ASSETS: Record<string, { symbol: string; decimals: number }> = {
   [STKAPT]: { symbol: 'stkAPT', decimals: 8 },
   [MKLP[0].coin]: { symbol: 'MKLP', decimals: 6 },
   [MKLP[1].coin]: { symbol: 'MKLP', decimals: 6 },
+  [MKL]: { symbol: 'MKL', decimals: 6 },
+  [ESMKL]: { symbol: 'esMKL', decimals: 6 },
+  [PREMKL]: { symbol: 'PreMKL', decimals: 6 },
 };

@@ -5,6 +5,7 @@ import { delegationInactiveValidator } from '../src/shared/sources/delegation-in
 import { KAPT, kofiReceipts, STKAPT } from '../src/shared/sources/kofi-receipts.ts';
 import { kofiWithdrawals } from '../src/shared/sources/kofi-withdrawals.ts';
 import { merkleMklp, MKLP } from '../src/shared/sources/merkle-mklp.ts';
+import { ESMKL, MKL, merkleVemkl, PREMKL } from '../src/shared/sources/merkle-vemkl.ts';
 import { thalaVestingMatured, thalaVethlExpired } from '../src/shared/sources/thala-thl.ts';
 import { THALA_LSD, thalaUnstake } from '../src/shared/sources/thala-unstake.ts';
 import { tortugaTickets } from '../src/shared/sources/tortuga-tickets.ts';
@@ -320,5 +321,31 @@ describe('merkle mklp', () => {
   it('keeps amounts in MKLP units (unpriced), never a guessed USD value', async () => {
     const r = await merkleMklp.read(context(chain({ [NEW.coin]: '5000000' }, '0')), OWNER, { versions: { [NEW.coin]: 1 } });
     expect(r.positions[0].expectedPayout).toEqual([{ asset: NEW.coin, raw: '5000000' }]);
+  });
+});
+
+describe('merkle veMKL', () => {
+  const TOKEN = addr('7e');
+  const chain = (balances: { mkl?: string; premkl?: string; es?: string }, owner = OWNER) => fakeChain({
+    resource: (address, type) => type === '0x1::object::ObjectCore' ? { owner }
+      : type.endsWith('::staking::VoteEscrowedMKL') ? { lock_time: '1722470400', mkl_token: { inner: addr('51') }, esmkl_token: { inner: addr('52') } }
+      : address === addr('51') ? { balance: balances.premkl ?? balances.mkl ?? '0', metadata: { inner: balances.premkl ? PREMKL : MKL } }
+      : address === addr('52') ? { balance: balances.es ?? '0', metadata: { inner: ESMKL } } : null,
+  });
+
+  it('pays locked PreMKL out as MKL, keeping the gross claim in PreMKL', async () => {
+    const r = await merkleVemkl.read(context(chain({ premkl: '34161152' })), OWNER, { tokens: [TOKEN] });
+    expect(r.positions[0].grossClaim).toEqual([{ asset: PREMKL, raw: '34161152' }]);
+    expect(r.positions[0].expectedPayout).toEqual([{ asset: MKL, raw: '34161152' }]);
+  });
+
+  it('lists MKL and esMKL, dated from the wind-down', async () => {
+    const r = await merkleVemkl.read(context(chain({ mkl: '100', es: '20' })), OWNER, { tokens: [TOKEN] });
+    expect(r.positions[0].expectedPayout).toEqual([{ asset: MKL, raw: '100' }, { asset: ESMKL, raw: '20' }]);
+    expect(r.positions[0].claimableSince).toBe('2026-02-12T00:00:00.000Z');
+  });
+
+  it('skips a lock that moved to another owner', async () => {
+    expect((await merkleVemkl.read(context(chain({ mkl: '100' }, addr(9))), OWNER, { tokens: [TOKEN] })).positions).toEqual([]);
   });
 });
