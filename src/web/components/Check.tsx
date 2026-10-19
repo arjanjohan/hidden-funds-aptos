@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { usd as toUsd, type PriceBook } from '../../shared/accounting.ts';
 import { createReader, NETWORKS, normalizeAddress } from '../../shared/chain.ts';
 import { ASSETS } from '../../shared/assets.ts';
+import { tableProvider, type MarketTable } from '../../shared/market.ts';
+import { APT } from '../../shared/sources/delegation.ts';
 import { SOURCES } from '../../shared/sources/index.ts';
 import type { Memo, Position, ReadContext, ReadResult } from '../../shared/types.ts';
 import { date, short, units, usd } from '../lib/format.ts';
@@ -27,7 +29,7 @@ function memory(): Memo {
   return { get: async k => data.get(k), set: async (k, v) => { data.set(k, v); } };
 }
 
-export default function Check({ prices }: { prices: PriceBook }) {
+export default function Check({ prices, markets }: { prices: PriceBook; markets?: MarketTable }) {
   const [text, setText] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState('');
@@ -43,7 +45,8 @@ export default function Check({ prices }: { prices: PriceBook }) {
       const contexts = new Map<string, ReadContext>();
       for (const network of new Set(SOURCES.map(s => s.chain))) {
         const chain = createReader({ network, retries: 3 });
-        contexts.set(network, { chain, ledger: await chain.ledger(), memo: memory(), scratch: new Map() });
+        contexts.set(network, { chain, ledger: await chain.ledger(), memo: memory(), scratch: new Map(),
+          market: tableProvider(markets, prices[APT]?.usd ?? null) });
       }
       const out: Row[] = [];
       for (const [i, address] of addresses.entries()) {

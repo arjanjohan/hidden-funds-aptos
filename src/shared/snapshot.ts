@@ -1,5 +1,6 @@
 // Published snapshot format: aggregates only, never owner addresses.
 import type { PriceBook, SourceTotals } from './accounting.ts';
+import type { MarketTable } from './market.ts';
 import type { SourceDef } from './types.ts';
 
 export interface Sanity { check: string; ok: boolean | null; detail: string }
@@ -32,6 +33,8 @@ export interface Snapshot {
   generatedAt: string;
   prices: PriceBook;
   priceErrors: string[];
+  /** Market-test verdicts for receipt tokens (asset → value bucket → verdict). */
+  markets?: MarketTable;
   sources: SnapshotSource[];
   global: { headlineUsd: number; headlineOwners: number; headlineOwnersMin10: number; recoverableUsd: number; requests: number; requestCap: number };
 }

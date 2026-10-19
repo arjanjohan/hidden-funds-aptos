@@ -1,4 +1,5 @@
 // Domain contract. Rules behind these fields: docs/left-behind.md.
+import type { MarketProvider } from './market.ts';
 
 export type Status = 'recoverable' | 'team_gated' | 'blocked' | 'unknown';
 export type AgeBasis = 'onchain_maturity' | 'protocol_closure' | 'position_interaction' | 'unknown';
@@ -65,6 +66,8 @@ export interface SourceDef<Hint = unknown> {
   inclusionRule: string;
   protocolStatus: ProtocolStatus;
   refresh: { nonZero: 'every_run' | 'weekly' | 'monthly'; zero: 'weekly' | 'monthly' };
+  /** Bump when the source's rules change: every candidate is then re-read on the next run. Default 1. */
+  version?: number;
   /** Age bases this source documents as valid for the headline. */
   headlineAgeBases: AgeBasis[];
   howTo: string[];
@@ -102,4 +105,6 @@ export interface ReadContext {
   memo: Memo;
   /** Per-run, in-memory: shared reads (pool state, flags) and in-flight promises. */
   scratch: Map<string, Promise<unknown>>;
+  /** Market test for receipt tokens; absent → verdicts are unknown. */
+  market?: MarketProvider;
 }

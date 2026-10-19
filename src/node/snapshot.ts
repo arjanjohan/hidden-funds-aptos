@@ -12,6 +12,9 @@ import { processorWatermark, readers, RequestCapReached } from './client.ts';
 import { ENUMERATORS, type Enumerator } from './enumerators.ts';
 import type { Snapshot, SnapshotSource, SourceRun } from '../shared/snapshot.ts';
 import { fetchPrices } from './prices.ts';
+import { panoraProvider } from './panora.ts';
+import type { MarketProvider } from '../shared/market.ts';
+import { APT } from '../shared/sources/delegation.ts';
 import { AGE_LIMIT_MS, State } from './state.ts';
 
 const args = process.argv.slice(2);
@@ -38,7 +41,7 @@ export function sizeBands(positions: Position[], prices: PriceBook) {
   return counts.map((positions, i) => ({ upTo: SIZE_BANDS[i] ?? null, positions }));
 }
 
-export async function runSource(def: SourceDef<any>, en: Enumerator, state: State, chain: ChainReader, capHit: { hit: boolean }): Promise<{ run: SourceRun; ledger?: Ledger }> {
+export async function runSource(def: SourceDef<any>, en: Enumerator, state: State, chain: ChainReader, capHit: { hit: boolean }, market?: MarketProvider): Promise<{ run: SourceRun; ledger?: Ledger }> {
   const run: SourceRun = { processor: en.processor, scope: en.scope, enumeration: { pages: 0, newCandidates: 0, candidates: 0 },
     verification: { read: 0, incomplete: 0, notReread: 0 }, completeness: 'complete', degradedReasons: [], errors: [] };
   const runStart = new Date().toISOString();
@@ -58,8 +61,14 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
       if (lagMs > WATERMARK_MAX_LAG_MS) run.degradedReasons.push(`indexer ${en.processor} is ${Math.round(lagMs / 60_000)} min behind`);
     }
 
+    // A changed source version means changed rules: stored positions must not survive until their next refresh.
+    const rules = String(def.version ?? 1);
+    if (state.cursor(`rules:${def.id}`) !== rules) {
+      if (state.cursor(`rules:${def.id}`) !== undefined || state.candidateCount(def.id) > 0) state.markAllChanged(def.id, runStart);
+      state.setCursor(`rules:${def.id}`, rules);
+    }
     ledger = await chain.ledger();
-    const ctx: ReadContext = { chain, ledger, memo: state.memo(), scratch: new Map() };
+    const ctx: ReadContext = { chain, ledger, memo: state.memo(), scratch: new Map(), market };
     const enumerated = new Set(result.candidates.map(c => c.owner));
     const due = state.due(def, Date.now(), enumerated);
     const batch = due.slice(0, LIMIT);
@@ -105,6 +114,8 @@ async function main() {
   const capHit = { hit: false };
   const now = Math.floor(Date.now() / 1000);
   const { prices, errors: priceErrors } = await fetchPrices(now);
+  // Market test for receipt tokens; without a key, receipt verdicts stay unknown.
+  const panora = process.env.PANORA_API_KEY ? panoraProvider(process.env.PANORA_API_KEY, prices[APT]?.usd ?? null) : undefined;
 
   const sources: SnapshotSource[] = [];
   for (const def of SOURCES) {
@@ -117,7 +128,7 @@ async function main() {
       ? { run: { processor: en.processor, scope: en.scope, enumeration: { pages: 0, newCandidates: 0, candidates: state.candidateCount(def.id) },
           verification: { read: 0, incomplete: 0, notReread: state.positionsOf(def.id).length }, completeness: 'degraded' as const,
           degradedReasons: ['skipped: request cap reached earlier in the run'], errors: [] }, ledger: undefined }
-      : await runSource(def, en, state, chains[def.chain], capHit);
+      : await runSource(def, en, state, chains[def.chain], capHit, panora?.provider);
     const positions = state.positionsOf(def.id);
     if (en.sanity && ledger) {
       try { run.sanity = await en.sanity(chains[def.chain], ledger, positions); if (run.sanity.ok === false) run.degradedReasons.push('sanity check failed'); }
@@ -142,7 +153,7 @@ async function main() {
     headlineOwners.set(p.owner, (headlineOwners.get(p.owner) ?? 0) + (usd(p.expectedPayout, prices) ?? 0));
   }
   const snapshot: Snapshot = {
-    schema: 1, generatedAt: new Date().toISOString(), prices, priceErrors, sources,
+    schema: 1, generatedAt: new Date().toISOString(), prices, priceErrors, markets: { ...previous?.markets, ...panora?.table }, sources,
     global: {
       headlineUsd: sources.reduce((s, x) => s + x.totals.headline.usd, 0),
       headlineOwners: headlineOwners.size,

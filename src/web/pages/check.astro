@@ -9,5 +9,5 @@ import { snapshot } from '../lib/data.ts';
     Paste Aptos or Movement addresses. Your browser reads both mainnets directly; addresses are not sent to this site.
     The public Aptos Labs and Movement APIs see the requests.
   </p>
-  <Check client:load prices={snapshot?.prices ?? {}} />
+  <Check client:load prices={snapshot?.prices ?? {}} markets={snapshot?.markets} />
 </Base>

@@ -29,7 +29,7 @@ The market test:
 
 - Provider: Panora quote API.
 - Input: the exact asset identity (FA metadata address or Coin type), never a ticker. Output: APT.
-- Reference input = min($1k, the holder's redemption value). Quotes are cached per (asset, amount bucket), each with its quote timestamp.
+- Reference input = min($1k, the holder's redemption value). Holders fall into buckets with lower bounds $0.10 / $1 / $10 / $100 / $1k. Each bucket is quoted once per run at its lower bound: a smaller amount has less price impact, so a market that is usable for some holder in the bucket is never called unusable. Each quote stores its time.
 - Usable market = a well-formed quote with output ≥ 80% of the input's redemption value.
 - No usable market = a well-formed "no route" response, or output < 80%.
 - An error, timeout or malformed response → `unknown`, never "no market".

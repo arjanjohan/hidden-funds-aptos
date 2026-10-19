@@ -20,7 +20,7 @@ Measurement runs use a fresh local state (`node src/node/snapshot.ts --source <i
 | `trufin-unlocks` | one global table (`staker::Unlocks`) | ended position (request claimable); off-whitelist → team_gated | 1 request, $1.8K, 85 days old (not yet in headline) | 1/1 ok, payout = expected |
 | `movement-native-delegation` | indexer staking table (Movement indexer) | ended position (unlock done) | headline $2.2K, 57 owners (MOVE $0.0073) | 10/10 ok, payout = expected |
 | `movement-inactive-validator` | all pools → inactive validators (Movement) | ended position | none: no inactive Movement pool holds active stake | — |
-| `kofi-receipts` | primary stores holding kAPT / stkAPT | stranded receipt? market not checked → all `unknown` | 11,619 positions, 8,063 owners, ~$98K redemption value, none in headline | request step 38/38 ok; finalize = kofi-withdrawals sample |
+| `kofi-receipts` | primary stores holding kAPT / stkAPT | stranded receipt only if no usable market (Panora) | 0 positions: both tokens have usable markets in every bucket (97–100% of redemption) | request step 38/38 ok; finalize = kofi-withdrawals sample |
 | `merkle-mklp` | stores holding MKLP (Coin + paired FA) | wound down; exits deprecated → team_gated | 9,152 team_gated positions (9,088 owners), 4 recoverable; MKLP units, unpriced | whitelisted release 4/4 ok; every team_gated sample aborts as classified |
 | `merkle-vemkl` | collection owners (veMKL) | wound down; unlock works any time → recoverable | 1,340 locks (unpriced: ~496K MKL, 74K PreMKL, 15K esMKL) | 10/10 ok, payout = expected (PreMKL paid as MKL) |
 | `tortuga-tickets` | entry-function senders → per-user `TicketStore` | ended position (cooldown passed); reserve-queued tickets blocked | headline $12.2K, 818 owners; blocked $172 | recoverable 10/10 exact; blocked 4/4 abort `EFUND_NOT_AVAILABLE_YET` as predicted |
@@ -191,7 +191,14 @@ Each source page also states the largest single wallet's share of its 90+ day to
 
 ## kofi-receipts
 
-- **Why it exists before the market test:** Kofi is winding down (evidenced). kAPT and stkAPT can still be redeemed for APT through a withdrawal ticket. They count as left behind only if stranded, and no quote provider is configured, so every position is `unknown` (`market_check_unavailable`) and never reaches the headline. Holders who check an address still see that they must redeem.
+- **Market test (2026-10-19, Panora public API key):** quotes into APT per value bucket (quoted at each bucket's lower bound; cached per run). Every bucket is usable for both tokens:
+  - kAPT: 99.91–99.99% of redemption value.
+  - stkAPT: 97.0–99.93%.
+- Under the rules, a wallet token with a usable market is not left behind, so the source currently yields **0 positions**.
+- When every bucket is usable, the run skips reading holders altogether: 124 requests instead of ~11.7K. If the markets dry up, holders are read again and those without a usable market become `recoverable` (stranded).
+- The verdicts are published in `snapshot.markets`; the check page applies them without calling Panora.
+- **History:** before the market test, every position was `unknown` (`market_check_unavailable`).
+- **Why it was added before the test:** Kofi is winding down (evidenced). kAPT and stkAPT can still be redeemed for APT through a withdrawal ticket. They count as left behind only if stranded, and no quote provider is configured, so every position is `unknown` (`market_check_unavailable`) and never reaches the headline. Holders who check an address still see that they must redeem.
 - **Enumeration:** primary stores (the only stores entry functions spend) holding kAPT or stkAPT, keyset-paged on `storage_id`. 117 pages, 8,063 owners. The hint carries each store's last change version.
 - **Read:** `primary_fungible_store::balance`.
   - Redemption value: kAPT 1:1 in APT; stkAPT × `rewards_manager::get_exchange_rate` / 1e8 (1.0856 on 2026-10-19).
@@ -238,6 +245,4 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Thala MOD** (CDP vaults and stability pool): no deprecation notice found.
 
 ## Waiting on a decision
-
-- **Kofi receipt market test:** with a Panora key, `kofi-receipts` positions with no usable market become `recoverable` and can reach the headline.
 - **Aries** (blocked; pre-drain face ≈ 60× the current quote): 455K registered users. Per-user revalidation would cost ~285K reads a week, so it waits until the real Geomi cost per request is known.

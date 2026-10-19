@@ -154,3 +154,18 @@ describe('prices', () => {
     expect(errors[0]).toMatch(/older than 7 days/);
   });
 });
+
+describe('source version', () => {
+  it('re-reads every candidate when a source\'s rules change', async () => {
+    const state = new State(':memory:');
+    const owner = addr(1);
+    let reads = 0;
+    const read = async (o: string) => { reads++; return { positions: [position(o)], complete: true, errors: [], ledgerVersion: '1' }; };
+    const def = { ...source(read), refresh: { nonZero: 'monthly' as const, zero: 'monthly' as const } };
+    await runSource(def, enumerator([owner]), state, chain(), { hit: false });
+    await runSource(def, enumerator([owner]), state, chain(), { hit: false });
+    expect(reads).toBe(1);                              // monthly: not due again
+    await runSource({ ...def, version: 2 }, enumerator([owner]), state, chain(), { hit: false });
+    expect(reads).toBe(2);                              // new rules: due at once
+  });
+});

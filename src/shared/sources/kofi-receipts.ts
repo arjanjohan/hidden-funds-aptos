@@ -1,6 +1,6 @@
 // Kofi kAPT / stkAPT still held after Kofi's wind-down. They count as left behind only if stranded (no usable market,
-// docs/left-behind.md). No quote provider is configured, so the market test cannot run: positions stay `unknown`
-// (market_check_unavailable) and never reach the headline, but holders checking an address learn they must redeem.
+// docs/left-behind.md). The market test runs per value bucket: usable → not counted; none → recoverable at redemption
+// value; quote failed or no provider → unknown (market_check_unavailable).
 import { iso, positionIds } from '../accounting.ts';
 import { mapLimit, normalizeAddress, once, transactionTime } from '../chain.ts';
 import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
@@ -33,6 +33,11 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: ReceiptHint): P
         .map((r: any) => [normalizeAddress(r.asset_type), Number(r.last_transaction_version)]));
     const rate = await once(ctx, `kofi-rate:${version}`, async () =>
       BigInt((await ctx.chain.view(`${KOFI}::rewards_manager::get_exchange_rate`, [], [], version))[0]));
+    const query = (asset: string) => ({ asset, decimals: 8, redemptionPerToken: asset === KAPT ? 1 : Number(rate) / Number(RATE_SCALE) });
+    // When every value bucket has a usable market, no holder can be stranded: nothing to read.
+    if (ctx.market && (await Promise.all(TOKENS.map(t => ctx.market!.allUsable(query(t.asset))))).every(Boolean)) {
+      return { positions: [], complete: true, errors: [], ledgerVersion: version };
+    }
     const found = await mapLimit([...TOKENS], 2, async (t): Promise<Position | null> => {
       if (versions[t.asset] === undefined) return null;
       // Entry functions spend from the primary store only.
@@ -46,14 +51,16 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: ReceiptHint): P
         if (Number.isFinite(since)) await ctx.memo.set(memo, String(since));
       }
       const payout = [{ asset: APT, raw: redeemable.toString() }];
+      const verdict = ctx.market ? await ctx.market.verdict(query(t.asset), Number(redeemable) / 1e8) : 'unknown';
+      if (verdict === 'usable') return null;   // a wallet token with a usable market is not left behind
       return {
         ...positionIds(SOURCE, owner, t.symbol, 'principal', t.asset), source: SOURCE, owner, locator: t.symbol, positionKind: 'principal', asset: t.asset,
         claimableSince: Number.isFinite(since) ? iso(since) : undefined, ageBasis: Number.isFinite(since) ? 'protocol_closure' : 'unknown',
         provenance: { reader: '0x1::primary_fungible_store::balance', ledgerVersion: version },
         grossClaim: [{ asset: t.asset, raw: held.toString() }], expectedPayout: payout, payoutBasis: 'derived',
-        status: 'unknown',
-        blockers: [{ code: 'market_check_unavailable',
-          detail: 'Counts only if no market pays at least 80% of redemption value; no quote provider is configured, so this is not checked.' }],
+        status: verdict === 'none' ? 'recoverable' : 'unknown',
+        blockers: verdict === 'none' ? [] : [{ code: 'market_check_unavailable',
+          detail: 'Counts only if no market pays at least 80% of redemption value; the market quote could not be obtained.' }],
         confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
         steps: [
           { function: `${KOFI}::gateway::${t.entry}`, arguments: [held.toString()], prerequisites: [], expectedOutputs: [] },
@@ -74,7 +81,7 @@ export const kofiReceipts: SourceDef<ReceiptHint> = {
   title: 'kAPT / stkAPT still held after Kofi\'s wind-down',
   summary: 'Kofi is winding down. kAPT and stkAPT can still be redeemed for APT through a withdrawal ticket. Counted only if no market pays close to redemption value.',
   category: 'closed_app',
-  inclusionRule: 'Stranded receipt: protocol wound down and redemption needs an owner action; counted only when no usable market exists (not checked: no quote provider).',
+  inclusionRule: 'Stranded receipt: protocol wound down, redemption needs an owner action, and no market pays at least 80% of redemption value (Panora quote).',
   protocolStatus: {
     state: 'wound_down',
     evidence: 'config::is_winddown became true at version 6,429,705,721 (multisig transaction); deposits and staking paused.',
@@ -83,6 +90,7 @@ export const kofiReceipts: SourceDef<ReceiptHint> = {
   },
   // Never in the headline; a changed balance (new hint version) still makes the holder due at once.
   refresh: { nonZero: 'monthly', zero: 'monthly' },
+  version: 2,   // 2: market test applied (usable market → not counted)
   headlineAgeBases: ['protocol_closure'],
   howTo: [
     'In the Kofi app, redeem kAPT (or unstake stkAPT) for APT; after the 14-day withdrawal period, finalize the ticket.',
