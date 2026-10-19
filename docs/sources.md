@@ -21,6 +21,7 @@ Measurement runs use a fresh local state (`node src/node/snapshot.ts --source <i
 | `movement-native-delegation` | indexer staking table (Movement indexer) | ended position (unlock done) | headline $2.2K, 57 owners (MOVE $0.0073) | 10/10 ok, payout = expected |
 | `movement-inactive-validator` | all pools → inactive validators (Movement) | ended position | none: no inactive Movement pool holds active stake | — |
 | `kofi-receipts` | primary stores holding kAPT / stkAPT | stranded receipt? market not checked → all `unknown` | 11,619 positions, 8,063 owners, ~$98K redemption value, none in headline | request step 38/38 ok; finalize = kofi-withdrawals sample |
+| `merkle-mklp` | stores holding MKLP (Coin + paired FA) | wound down; exits deprecated → team_gated | 9,152 team_gated positions (9,088 owners), 4 recoverable; MKLP units, unpriced | whitelisted release 4/4 ok; every team_gated sample aborts as classified |
 | `tortuga-tickets` | entry-function senders → per-user `TicketStore` | ended position (cooldown passed); reserve-queued tickets blocked | headline $12.2K, 818 owners; blocked $172 | recoverable 10/10 exact; blocked 4/4 abort `EFUND_NOT_AVAILABLE_YET` as predicted |
 
 Native delegation and Thala are documented in [phase0-report.md](phase0-report.md).
@@ -200,6 +201,21 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - Request step sample: 38/38 succeed across the four variants.
   - The finalize step is the `kofi-withdrawals` sample (10/10 exact).
 - **To count it:** a market test, Panora per the rules, which needs the owner's decision on a key.
+
+## merkle-mklp
+
+- **Status:** Merkle Trade wound down.
+  - Announced 2026-02-03: new positions disabled 02-06, force-closed 02-10, final distribution 02-12 (secondary reports: Whale Alert, The Defiant).
+  - On chain (simulated 2026-10-19): `managed_house_lp::withdraw` and `redeem` abort `E_DEPRECATED`. The last user `withdraw` was on 2026-03-06.
+- **Routes left:**
+  - MKLP (USDC, `fa_box::W_USDC`): `release_mklp<W_USDC>` works only for wallets the team whitelisted (`house_lp::get_release_mklp_whitelist_amount > 0`). It succeeded in 4/4 whitelisted samples and aborted for every non-whitelisted one.
+  - MKLP (lzUSDC): no user route. `release_mklp<lzUSDC>` aborts `E_DEPRECATED`, and both conversions to the USDC MKLP (`convert_mklp_type`, `migrate_all_zmklp_to_mklp`) are admin-only (`E_NOT_AUTHORIZED`). Always `team_gated` (`admin_migration_required`).
+- **Value:** MKLP units only. The protocol's `highest_price` is a historical high-water mark, not current backing, and the vault's backing per MKLP is not read, so positions are unpriced rather than guessed.
+- **Enumeration:** stores holding either MKLP type, in Coin or paired-FA form. 93 pages, 9,132 owners.
+- **Result (2026-10-19):**
+  - 9,152 `team_gated` positions (9,088 owners). 4 `recoverable` (whitelisted). 41 `unknown` (contract-held).
+  - Sanity: holders hold 99.89% of the MKLP (lzUSDC) supply but only 10.47% of the MKLP (USDC) supply; the rest is held elsewhere.
+- **Re-read schedule:** monthly, or when a holder's store changes. The first run took 45.8K requests; a re-read takes 10K.
 
 ## Waiting on a decision
 

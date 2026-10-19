@@ -4,6 +4,7 @@ import { delegation, MOVE, movementDelegation } from '../src/shared/sources/dele
 import { delegationInactiveValidator } from '../src/shared/sources/delegation-inactive.ts';
 import { KAPT, kofiReceipts, STKAPT } from '../src/shared/sources/kofi-receipts.ts';
 import { kofiWithdrawals } from '../src/shared/sources/kofi-withdrawals.ts';
+import { merkleMklp, MKLP } from '../src/shared/sources/merkle-mklp.ts';
 import { thalaVestingMatured, thalaVethlExpired } from '../src/shared/sources/thala-thl.ts';
 import { THALA_LSD, thalaUnstake } from '../src/shared/sources/thala-unstake.ts';
 import { tortugaTickets } from '../src/shared/sources/tortuga-tickets.ts';
@@ -293,5 +294,31 @@ describe('kofi receipts', () => {
     const later = NOW - 10 * 86_400;
     const late = await kofiReceipts.read(context(chain({ [KAPT]: '5' }, later)), OWNER, { versions: { [KAPT]: 10 } });
     expect(late.positions[0].claimableSince).toBe(new Date(later * 1000).toISOString());
+  });
+});
+
+describe('merkle mklp', () => {
+  const [OLD, NEW] = MKLP;
+  const chain = (balances: Record<string, string>, whitelist: string) => fakeChain({
+    view: (fn, _args, typeArgs) => fn === '0x1::coin::balance' ? [balances[typeArgs[0]] ?? '0']
+      : fn.endsWith('::get_release_mklp_whitelist_amount') ? [whitelist] : [],
+    gql: () => ({ user_transactions: [] }),
+  });
+
+  it('needs the team for old lzUSDC MKLP even when whitelisted', async () => {
+    const r = await merkleMklp.read(context(chain({ [OLD.coin]: '5000000' }, '5000000')), OWNER, { versions: { [OLD.coin]: 1 } });
+    expect(r.positions[0]).toMatchObject({ status: 'team_gated', blockers: [{ code: 'admin_migration_required' }] });
+  });
+
+  it('lets a whitelisted wallet release USDC MKLP, and needs the team otherwise', async () => {
+    const listed = await merkleMklp.read(context(chain({ [NEW.coin]: '5000000' }, '5000000')), OWNER, { versions: { [NEW.coin]: 1 } });
+    expect(listed.positions[0].status).toBe('recoverable');
+    const unlisted = await merkleMklp.read(context(chain({ [NEW.coin]: '5000000' }, '0')), OWNER, { versions: { [NEW.coin]: 1 } });
+    expect(unlisted.positions[0]).toMatchObject({ status: 'team_gated', blockers: [{ code: 'release_whitelist_required' }] });
+  });
+
+  it('keeps amounts in MKLP units (unpriced), never a guessed USD value', async () => {
+    const r = await merkleMklp.read(context(chain({ [NEW.coin]: '5000000' }, '0')), OWNER, { versions: { [NEW.coin]: 1 } });
+    expect(r.positions[0].expectedPayout).toEqual([{ asset: NEW.coin, raw: '5000000' }]);
   });
 });

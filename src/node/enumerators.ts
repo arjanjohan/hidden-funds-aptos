@@ -3,6 +3,7 @@ import { mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
 import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
+import { MKLP } from '../shared/sources/merkle-mklp.ts';
 import { THALA_VE, THALA_VEST } from '../shared/sources/thala-thl.ts';
 import { THALA_LSD } from '../shared/sources/thala-unstake.ts';
 import { TORTUGA, TORTUGA_STATE } from '../shared/sources/tortuga-tickets.ts';
@@ -310,6 +311,45 @@ export const kofiReceiptsEnumerator: Enumerator = {
   },
 };
 
+// Every store holding Merkle MKLP, in Coin or paired-FA form.
+export const merkleMklpEnumerator: Enumerator = {
+  sourceId: 'merkle-mklp',
+  processor: 'fungible_asset_processor',
+  scope: 'stores holding Merkle MKLP (both collateral types, Coin and paired FA; current_fungible_asset_balances, amount > 0)',
+  async run(chain) {
+    const holders = new Map<string, Record<string, number>>();
+    let pages = 0;
+    for (const m of MKLP) {
+      const [paired] = await chain.view('0x1::coin::paired_metadata', [], [m.coin]);
+      const ids = [m.coin, ...(paired?.vec?.[0]?.inner ? [normalizeAddress(paired.vec[0].inner)] : [])];
+      let after = '';
+      for (;;) {
+        const rows = (await chain.gql(`query($a:[String!]!,$s:String!){ current_fungible_asset_balances(where:{asset_type:{_in:$a}, amount:{_gt:"0"},
+          storage_id:{_gt:$s}}, order_by:{storage_id:asc}, limit:${PAGE}){ owner_address storage_id last_transaction_version } }`, { a: ids, s: after })).current_fungible_asset_balances;
+        pages++;
+        for (const r of rows) {
+          const owner = normalizeAddress(r.owner_address), prev = holders.get(owner) ?? {};
+          holders.set(owner, { ...prev, [m.coin]: Math.max(prev[m.coin] ?? 0, Number(r.last_transaction_version)) });
+        }
+        if (rows.length < PAGE) break;
+        after = rows[rows.length - 1].storage_id;
+      }
+    }
+    return { candidates: [...holders].map(([owner, versions]) => ({ owner, hint: { versions } })), pages };
+  },
+  async sanity(chain, ledger, positions) {
+    const parts: string[] = [];
+    let ok = true;
+    for (const m of MKLP) {
+      const [supply] = await chain.view('0x1::coin::supply', [], [m.coin], ledger.version);
+      const total = BigInt(supply.vec[0]), found = positions.filter(p => p.asset === m.coin).reduce((s, p) => s + BigInt(p.grossClaim[0].raw), 0n);
+      ok &&= found <= total;
+      parts.push(`${m.label} ${found} of ${total} supply (${pct(found, total)})`);
+    }
+    return { check: 'MKLP found in holder accounts <= MKLP supply', ok, detail: parts.join('; ') };
+  },
+};
+
 const noContractTotal: Enumerator['sanity'] = async () =>
   ({ check: 'none', ok: null, detail: 'no contract total available: balances are stored per account' });
 
@@ -323,4 +363,5 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
-  trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator];
+  trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
+  merkleMklpEnumerator];
