@@ -184,6 +184,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
 
 ## Sized and not added
 
+- **Echelon farming rewards (Aptos):** 5 of 7 reward programs have ended: USDC 2025-08-23, Amnis amAPT 2025-10-13, Kofi kAPT 2026-02-21, Goblin stAPT 2026-04-12, Thala sthAPT 2026-08-17. Unclaimed amounts are bounded by what the package holds to pay them: 3,540 USDC and 95 kAPT (~$3.6K). Reading every Echelon supplier for that is not worth it. Skipped.
 - **Echelon farming rewards (Movement):** the only reward ("Move Coin") last ran 2026-05-18 → 06-02, so every unclaimed reward is from an ended period. But Echelon holds only 296K MOVE (~$2.1K) to pay them, which caps the total. Too small for a new enumerator (stakers are senders of Echelon's `scripts::supply*`).
 - **Meridian farming (Movement):** staked LP is live principal; the extra rewards are MOVE. Not sized further.
 - **PancakeSwap (Aptos) MasterChef farms:** CAKE emissions ended 2025-03-16 (`end_timestamp`; every pool's alloc point is 0). The CAKE single-stake pool is empty. The other 28 pools hold LP, which is live liquidity (R4). Only the unclaimed CAKE rewards and APT incentive count, and they are bounded by what MasterChef still holds: 5,771 CAKE (~$12.5K) and 12,988 APT (~$9.9K). 10 of 10 sampled farmers had already withdrawn. Finding the rest means reading ~30K depositors (60–100K requests) for at most ~$22K. Deferred.
