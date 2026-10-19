@@ -183,6 +183,9 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - A full sizing needs ~5,000 single-pool reads, because the paginated view hits the read limit, and could only ever add to `blocked`. Skipped.
 - **Econia:** no public closure notice found (2026-10-18). The idle market accounts (~$31K, mostly lzUSDC) stay excluded under R2.
 
+- **Echo lending:** reports describe Echo moving BTC-bridge liquidity off Aptos, but no closure or withdrawal deadline was found. Not R2.
+- **Kana perps** (`blocked`, payout $0): every market is deprecated and the collateral stores hold no USDt, so recorded balances are face value only. There are 13,408 depositors (senders of `perpetual_scripts::deposit*`), and sizing them needs ~3 reads each (~40K requests) for value that never reaches a total besides "may not work". Skipped; Aptin is treated the same way.
+
 ## Waiting on a decision
 
 - **Kofi kAPT/stkAPT receipts** (~135K APT, 7,244 + 4,521 holder stores; Kofi is winding down): these count only if stranded. The market test needs a Panora API key, which is a credential choice for the owner.
