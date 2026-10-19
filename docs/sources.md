@@ -294,7 +294,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
 
 ## pancake-syrup-ended
 
-- **What:** PancakeSwap (Aptos) syrup pools (`0xfd1d…::smart_chef`). All 10 pools the contract created ended between 2023-01-19 and 2024-04-16. Stakers who never withdrew still have their stake and the final reward in the pool.
+- **What:** PancakeSwap (Aptos) CAKE syrup pools (`0xfd1d…::smart_chef`). All 10 pools the contract created ended between 2023-01-19 and 2024-04-16; the 6 CAKE pools by 2024-02-09. Stakers who never withdrew still have their stake and the final reward in the pool.
 - **Status:** PancakeSwap Aptos is live; the pools are not. Each pool's reward accumulator was last updated at or after its end, so the pending reward is final.
 - **Size (pool totals, 2026-10-19):**
   - CAKE staked in the 6 CAKE pools: **60,052 CAKE (~$130K at $2.17)**, 49,547 of it in the MoveCoin-reward pool that ended 2024-02-09.
@@ -308,7 +308,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Spot check (anonymous public endpoint, 2026-10-19):** of 14 depositors sampled from older deposits, 11 still hold CAKE in pool U2 (0.02–8.2 CAKE each). Simulated `withdraw` for 3 of them: 3/3 succeed and pay exactly the derived stake and reward.
 - **Enumeration size (anonymous indexer, 2026-10-19):** 32,900 deposits by 14,589 depositors up to version 444,552,000, when the last CAKE pool ended. Later deposits only went to the Gui Inu pools. The first run reads 6 `UserInfo` per depositor (~88K requests), so it needs its own run; later runs read only the pools each depositor was found in.
 - **Sample (the earliest 400 depositors):** 40 still hold CAKE (10%), 1,720 CAKE in total, median 1.5 CAKE, 13 of 40 with ≥ $10. That suggests ~1,500 stakers across all depositors; the sample leans to the early pools.
-- **Not measured per staker yet:** the full run needs the Geomi key (anonymously, ~200 depositors per 9 minutes).
+- **Published (CI run, 2026-10-19):** complete. **$130.3K** of CAKE, 3,781 stakers, 377 with ≥ $10; the largest holds 28%. 7,675 positions: 3,844 stakes plus 3,831 pending rewards in unpriced tokens. Sanity: stake found per pool = 99.98–100% of each pool's `total_staked_token`. First run: ~93.8K requests (330 indexer pages, 14,589 depositors).
 
 ## topaz-bids (built, not enabled)
 
