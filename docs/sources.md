@@ -184,6 +184,8 @@ Each source page also states the largest single wallet's share of its 90+ day to
 
 ## Sized and not added
 
+- **Echelon farming rewards (Movement):** the only reward ("Move Coin") last ran 2026-05-18 → 06-02, so every unclaimed reward is from an ended period. But Echelon holds only 296K MOVE (~$2.1K) to pay them, which caps the total. Too small for a new enumerator (stakers are senders of Echelon's `scripts::supply*`).
+- **Meridian farming (Movement):** staked LP is live principal; the extra rewards are MOVE. Not sized further.
 - **Hyperion fridge** (delayed LP withdrawals): `fridge::asset_unclaimed_all()` reports 4.70 APT in total across all users, about $3.50. Too small to maintain.
 - **Superposition** (Aptos lending): not left behind. Its markets are unpaused and still used (last deposit 2026-10-14). Operator-signed packets are its normal app flow, not closure evidence.
 - **Validator-owned stake pools** (not delegation pools): 43.6K APT of withdrawable inactive stake in 13 pools, plus 13.4K APT active in pools whose validator stopped. Owners are `staking_contract` or vesting resource accounts, which the owner rule makes `unknown`.
