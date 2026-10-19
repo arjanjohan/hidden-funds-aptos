@@ -1,23 +1,23 @@
 {
   "schema": 1,
-  "generatedAt": "2026-10-19T11:05:34.143Z",
+  "generatedAt": "2026-10-19T11:34:42.447Z",
   "prices": {
     "0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.773692,
+      "usd": 0.768905,
       "decimals": 8,
-      "at": "2026-10-19T10:58:50.000Z",
+      "at": "2026-10-19T11:28:00.000Z",
       "source": "coingecko simple/price"
     },
     "0x07fd500c11216f0fe3095d0c4b8aa4d64a4e2e04f83758462f2b127255643615::thl_coin::THL": {
-      "usd": 0.00988046,
+      "usd": 0.00990032,
       "decimals": 8,
-      "at": "2026-10-19T10:59:01.000Z",
+      "at": "2026-10-19T11:28:21.000Z",
       "source": "coingecko simple/price"
     },
     "movement:0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.00728488,
+      "usd": 0.00724771,
       "decimals": 8,
-      "at": "2026-10-19T10:59:01.000Z",
+      "at": "2026-10-19T11:28:21.000Z",
       "source": "coingecko simple/price"
     }
   },
@@ -2091,6 +2091,214 @@
       ]
     },
     {
+      "id": "merkle-mklp",
+      "chain": "aptos",
+      "title": "Merkle Trade LP (MKLP) left after the wind-down",
+      "summary": "Merkle Trade wound down in February 2026. MKLP can no longer be withdrawn or redeemed; only the Merkle team can enable a release for your wallet.",
+      "category": "closed_app",
+      "inclusionRule": "Protocol wound down (positions force-closed 2026-02-10); MKLP exits abort E_DEPRECATED on chain.",
+      "protocolStatus": {
+        "state": "wound_down",
+        "evidence": "Wind-down announced 2026-02-03 (new positions disabled 02-06, force-closed 02-10, final distribution 02-12); managed_house_lp withdraw and redeem abort E_DEPRECATED (simulated 2026-10-19).",
+        "checkedAt": "2026-10-19",
+        "effectiveAt": "2026-02-12T00:00:00Z"
+      },
+      "howTo": [
+        "Contact the Merkle Trade team: old lzUSDC MKLP must be migrated by them first; then they whitelist your wallet for an MKLP release.",
+        "Once whitelisted, call 0x5ae6789dd2fec1a9ec9cccfb3acaf12e93d432f0a3a42c92fe1a9d490b7bbc06::managed_house_lp::release_mklp<collateral>() from the holding account."
+      ],
+      "officialUrl": "https://app.merkle.trade",
+      "headlineAgeBases": [
+        "protocol_closure"
+      ],
+      "run": {
+        "processor": "fungible_asset_processor",
+        "scope": "stores holding Merkle MKLP (both collateral types, Coin and paired FA; current_fungible_asset_balances, amount > 0)",
+        "enumeration": {
+          "pages": 93,
+          "newCandidates": 9132,
+          "candidates": 9132,
+          "start": "2026-10-19T11:28:43.493Z",
+          "end": "2026-10-19T11:29:03.201Z"
+        },
+        "verification": {
+          "read": 9132,
+          "incomplete": 0,
+          "notReread": 0,
+          "start": "2026-10-19T11:29:03.474Z",
+          "ledgerFrom": "7678565304",
+          "end": "2026-10-19T11:34:41.824Z",
+          "ledgerTo": "7678618778"
+        },
+        "completeness": "complete",
+        "degradedReasons": [],
+        "errors": [],
+        "watermarkBefore": {
+          "version": "7678562277",
+          "timestamp": "2026-10-19T11:28:41.215548Z"
+        },
+        "watermarkAfter": {
+          "version": "7678565179",
+          "timestamp": "2026-10-19T11:29:02.459474Z"
+        },
+        "sanity": {
+          "check": "MKLP found in holder accounts <= MKLP supply",
+          "ok": true,
+          "detail": "MKLP (lzUSDC) 442993054055 of 443459703816 supply (99.89%); MKLP (USDC) 14300821918 of 136543386280 supply (10.47%)"
+        }
+      },
+      "lastSuccessAt": "2026-10-19T11:34:41.824Z",
+      "totals": {
+        "face": {
+          "positions": 9197,
+          "owners": 9132,
+          "usd": 0,
+          "unpriced": 9197,
+          "ownersMin10": 0
+        },
+        "byStatus": {
+          "recoverable": {
+            "positions": 4,
+            "owners": 4,
+            "usd": 0,
+            "unpriced": 4,
+            "ownersMin10": 0
+          },
+          "team_gated": {
+            "positions": 9152,
+            "owners": 9088,
+            "usd": 0,
+            "unpriced": 9152,
+            "ownersMin10": 0
+          },
+          "blocked": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 41,
+            "owners": 41,
+            "usd": 0,
+            "unpriced": 41,
+            "ownersMin10": 0
+          }
+        },
+        "aged": {
+          "ge30": {
+            "positions": 4,
+            "owners": 4,
+            "usd": 0,
+            "unpriced": 4,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 4,
+            "owners": 4,
+            "usd": 0,
+            "unpriced": 4,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 4,
+            "owners": 4,
+            "usd": 0,
+            "unpriced": 4,
+            "ownersMin10": 0
+          }
+        },
+        "agedEstimated": {
+          "ge30": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "byAgeBasis": {
+          "onchain_maturity": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "protocol_closure": {
+            "positions": 4,
+            "owners": 4,
+            "usd": 0,
+            "unpriced": 4,
+            "ownersMin10": 0
+          },
+          "position_interaction": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "headline": {
+          "positions": 4,
+          "owners": 4,
+          "usd": 0,
+          "unpriced": 4,
+          "ownersMin10": 0
+        },
+        "headlineTopOwnerShare": 0
+      },
+      "sizeBands": [
+        {
+          "upTo": 1,
+          "positions": 0
+        },
+        {
+          "upTo": 10,
+          "positions": 0
+        },
+        {
+          "upTo": 100,
+          "positions": 0
+        },
+        {
+          "upTo": 1000,
+          "positions": 0
+        },
+        {
+          "upTo": 10000,
+          "positions": 0
+        },
+        {
+          "upTo": null,
+          "positions": 0
+        }
+      ]
+    },
+    {
       "id": "movement-native-delegation",
       "chain": "movement",
       "title": "Unstaked MOVE never withdrawn",
@@ -2505,10 +2713,10 @@
   ],
   "global": {
     "headlineUsd": 9590267.169517873,
-    "headlineOwners": 19925,
-    "headlineOwnersMin10": 3677,
+    "headlineOwners": 19927,
+    "headlineOwnersMin10": 3600,
     "recoverableUsd": 15436109.778577155,
-    "requests": 31068,
+    "requests": 27382,
     "requestCap": 100000
   }
 }
