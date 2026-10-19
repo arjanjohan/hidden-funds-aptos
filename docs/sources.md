@@ -303,7 +303,9 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - A staker who deposits into a pool not in their memo after the first read would be missed. The pools are over, so nobody has a reason to join one.
 - **Sanity:** stake found per pool ≤ the pool's `total_staked_token`.
 - **Spot check (anonymous public endpoint, 2026-10-19):** of 14 depositors sampled from older deposits, 11 still hold CAKE in pool U2 (0.02–8.2 CAKE each). Simulated `withdraw` for 3 of them: 3/3 succeed and pay exactly the derived stake and reward.
-- **Not measured per staker yet:** enumeration needs the Geomi key.
+- **Enumeration size (anonymous indexer, 2026-10-19):** 32,900 deposits by 14,589 depositors up to version 444,552,000, when the last CAKE pool ended. Later deposits only went to the Gui Inu pools. The first run reads 6 `UserInfo` per depositor (~88K requests), so it needs its own run; later runs read only the pools each depositor was found in.
+- **Sample (the earliest 400 depositors):** 40 still hold CAKE (10%), 1,720 CAKE in total, median 1.5 CAKE, 13 of 40 with ≥ $10. That suggests ~1,500 stakers across all depositors; the sample leans to the early pools.
+- **Not measured per staker yet:** the full run needs the Geomi key (anonymously, ~200 depositors per 9 minutes).
 
 ## topaz-bids (built, not enabled)
 
