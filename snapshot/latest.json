@@ -1,53 +1,53 @@
 {
   "schema": 1,
-  "generatedAt": "2026-10-19T15:42:52.516Z",
+  "generatedAt": "2026-10-19T18:52:20.722Z",
   "prices": {
     "0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.767898,
+      "usd": 0.755521,
       "decimals": 8,
-      "at": "2026-10-19T15:38:43.000Z",
+      "at": "2026-10-19T18:30:40.000Z",
       "source": "coingecko simple/price"
     },
     "0x07fd500c11216f0fe3095d0c4b8aa4d64a4e2e04f83758462f2b127255643615::thl_coin::THL": {
-      "usd": 0.00990367,
+      "usd": 0.00983045,
       "decimals": 8,
-      "at": "2026-10-19T15:38:43.000Z",
+      "at": "2026-10-19T18:30:40.000Z",
       "source": "coingecko simple/price"
     },
     "movement:0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.00725836,
+      "usd": 0.0071968,
       "decimals": 8,
-      "at": "2026-10-19T15:38:43.000Z",
+      "at": "2026-10-19T18:30:40.000Z",
       "source": "coingecko simple/price"
     },
     "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC": {
-      "usd": 0.999893,
+      "usd": 0.999927,
       "decimals": 6,
-      "at": "2026-10-19T15:38:43.000Z",
+      "at": "2026-10-19T18:30:40.000Z",
       "source": "coingecko simple/price"
     },
     "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDT": {
-      "usd": 0.999304,
+      "usd": 0.999287,
       "decimals": 6,
-      "at": "2026-10-19T15:38:43.000Z",
+      "at": "2026-10-19T18:30:40.000Z",
       "source": "coingecko simple/price"
     },
     "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::WETH": {
-      "usd": 2402.98,
+      "usd": 2390.19,
       "decimals": 6,
-      "at": "2026-10-19T15:38:43.000Z",
+      "at": "2026-10-19T18:30:40.000Z",
       "source": "coingecko simple/price"
     },
     "0x159df6b7689437016108a019fd5bef736bac692b6d4a1f10c941f6fbb9a74ca6::oft::CakeOFT": {
-      "usd": 2.18,
+      "usd": 2.16,
       "decimals": 8,
-      "at": "2026-10-19T15:38:43.000Z",
+      "at": "2026-10-19T18:30:40.000Z",
       "source": "coingecko simple/price"
     },
     "0x8b107b816356295ea62750020edea701bfc6d11575953d0e146c20d7b9409300::oft::BTCbOFT": {
-      "usd": 82140,
+      "usd": 81738,
       "decimals": 8,
-      "at": "2026-10-19T15:38:43.000Z",
+      "at": "2026-10-19T18:30:40.000Z",
       "source": "coingecko simple/price"
     }
   },
@@ -2540,6 +2540,221 @@
       ]
     },
     {
+      "id": "layerzero-claimable",
+      "chain": "aptos",
+      "title": "LayerZero bridge transfer never claimed",
+      "summary": "Tokens bridged to Aptos through LayerZero (lzUSDC, lzUSDT, lzWETH… on the LayerZero Aptos Bridge; CAKE and BTC.b) arrived but could not be delivered, so the bridge holds them until you claim.",
+      "category": "bridge",
+      "inclusionRule": "R2 ended position: the bridge transfer completed on Aptos and is waiting in the app's claimable storage.",
+      "protocolStatus": {
+        "state": "live",
+        "evidence": "LayerZero Aptos Bridge coin_bridge and LayerZero OFT modules respond.",
+        "checkedAt": "2026-10-19"
+      },
+      "howTo": [
+        "Claim in the LayerZero Aptos Bridge app (lz coins), or",
+        "call the claim function from the receiving account: 0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::coin_bridge::claim_coin<coin type>() for lz coins, 0x43d8cad89263e6936921a0adb8d5d49f0e236c229460f01b14dca073114df2b9::oft::claim<coin type>() for CAKE and BTC.b."
+      ],
+      "officialUrl": "https://theaptosbridge.com",
+      "headlineAgeBases": [
+        "onchain_maturity"
+      ],
+      "run": {
+        "processor": "default_processor",
+        "scope": "entries of the LayerZero claimable tables (coin_bridge::CoinStore<T>.claimable_amt_ld, oft::CoinStore<T>.claimable_amount) for lzUSDC, lzUSDT, lzWETH, lzWBTC, lzUSDD, CAKE, BTC.b (current_table_items)",
+        "enumeration": {
+          "pages": 3135,
+          "newCandidates": 250283,
+          "candidates": 250283,
+          "start": "2026-10-19T18:30:59.345Z",
+          "end": "2026-10-19T18:37:48.946Z",
+          "cursor": "{\"0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC\":\"1020719142\",\"0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDT\":\"487852592\",\"0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::WETH\":\"487685593\",\"0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::WBTC\":\"0\",\"0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDD\":\"231265954\",\"0x159df6b7689437016108a019fd5bef736bac692b6d4a1f10c941f6fbb9a74ca6::oft::CakeOFT\":\"2815409645\",\"0x8b107b816356295ea62750020edea701bfc6d11575953d0e146c20d7b9409300::oft::BTCbOFT\":\"2687695667\"}"
+        },
+        "verification": {
+          "read": 250283,
+          "incomplete": 0,
+          "notReread": 0,
+          "start": "2026-10-19T18:37:50.840Z",
+          "ledgerFrom": "7683199656",
+          "end": "2026-10-19T18:52:14.240Z",
+          "ledgerTo": "7683332936"
+        },
+        "completeness": "complete",
+        "degradedReasons": [],
+        "errors": [],
+        "watermarkBefore": {
+          "version": "7683132303",
+          "timestamp": "2026-10-19T18:30:57.44845Z"
+        },
+        "watermarkAfter": {
+          "version": "7683199273",
+          "timestamp": "2026-10-19T18:37:46.952933Z"
+        },
+        "sanity": {
+          "check": "none",
+          "ok": null,
+          "detail": "no contract total: claimable amounts are minted on claim"
+        }
+      },
+      "lastSuccessAt": "2026-10-19T18:52:14.240Z",
+      "totals": {
+        "face": {
+          "positions": 42757,
+          "owners": 41462,
+          "usd": 263671.5722221899,
+          "unpriced": 4,
+          "ownersMin10": 3772
+        },
+        "byStatus": {
+          "recoverable": {
+            "positions": 42756,
+            "owners": 41461,
+            "usd": 263669.80316534045,
+            "unpriced": 4,
+            "ownersMin10": 3772
+          },
+          "team_gated": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "blocked": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 1,
+            "owners": 1,
+            "usd": 1.769056849422,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "aged": {
+          "ge30": {
+            "positions": 42756,
+            "owners": 41461,
+            "usd": 263669.80316534045,
+            "unpriced": 4,
+            "ownersMin10": 3772
+          },
+          "ge90": {
+            "positions": 42756,
+            "owners": 41461,
+            "usd": 263669.80316534045,
+            "unpriced": 4,
+            "ownersMin10": 3772
+          },
+          "ge180": {
+            "positions": 42756,
+            "owners": 41461,
+            "usd": 263669.80316534045,
+            "unpriced": 4,
+            "ownersMin10": 3772
+          }
+        },
+        "agedEstimated": {
+          "ge30": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "byAgeBasis": {
+          "onchain_maturity": {
+            "positions": 42756,
+            "owners": 41461,
+            "usd": 263669.80316534045,
+            "unpriced": 4,
+            "ownersMin10": 3772
+          },
+          "protocol_closure": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "position_interaction": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "headline": {
+          "positions": 42756,
+          "owners": 41461,
+          "usd": 263669.80316534045,
+          "unpriced": 4,
+          "ownersMin10": 3772
+        },
+        "headlineTopOwnerShare": 0.008194286292809794,
+        "unverified": {
+          "positions": 215187,
+          "owners": 206898,
+          "usd": 31841.322452675522,
+          "unpriced": 4,
+          "ownersMin10": 0
+        }
+      },
+      "sizeBands": [
+        {
+          "upTo": 1,
+          "positions": 219160
+        },
+        {
+          "upTo": 10,
+          "positions": 35029
+        },
+        {
+          "upTo": 100,
+          "positions": 3419
+        },
+        {
+          "upTo": 1000,
+          "positions": 310
+        },
+        {
+          "upTo": 10000,
+          "positions": 17
+        },
+        {
+          "upTo": null,
+          "positions": 0
+        }
+      ]
+    },
+    {
       "id": "movement-native-delegation",
       "chain": "movement",
       "title": "Unstaked MOVE never withdrawn",
@@ -3168,11 +3383,11 @@
     }
   ],
   "global": {
-    "headlineUsd": 9595124.133904262,
-    "headlineOwners": 25961,
-    "headlineOwnersMin10": 3599,
-    "recoverableUsd": 15440966.742963543,
-    "requests": 12485,
+    "headlineUsd": 9858793.937069602,
+    "headlineOwners": 67359,
+    "headlineOwnersMin10": 7247,
+    "recoverableUsd": 15704636.546128884,
+    "requests": 89849,
     "requestCap": 100000
   }
 }
