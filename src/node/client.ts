@@ -14,15 +14,18 @@ function apiKey(): string {
 
 export class RequestCapReached extends Error {}
 
+/** `requests` counts keyed Aptos requests (the capped ones); `byLabel` counts every request. */
 export interface Usage { requests: number; byLabel: Record<string, number> }
 
-/** Readers for every network, sharing one request counter that stops the run at `cap`. The Geomi key is sent to
- *  Aptos Labs hosts only; Movement's public endpoints get no credentials. */
+/** Readers for every network. `cap` bounds the keyed (paid) Aptos requests of a run: past it, Aptos reads throw
+ *  RequestCapReached. Movement's public endpoints are free, get no credentials and never count. */
 export function readers(cap: number): { chains: Record<Network, ChainReader>; usage: Usage } {
   const usage: Usage = { requests: 0, byLabel: {} };
   const count = (network: Network) => (label: string) => {
-    if (usage.requests >= cap) throw new RequestCapReached(`Request cap ${cap} reached`);
-    usage.requests++;
+    if (network === 'aptos') {
+      if (usage.requests >= cap) throw new RequestCapReached(`Request cap ${cap} reached`);
+      usage.requests++;
+    }
     const kind = `${network === 'aptos' ? '' : network + ' '}${label.split(' ')[0]}`;
     usage.byLabel[kind] = (usage.byLabel[kind] ?? 0) + 1;
   };

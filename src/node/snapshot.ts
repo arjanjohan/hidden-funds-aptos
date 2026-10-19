@@ -125,11 +125,12 @@ async function main() {
     const prev = previous?.sources.find(s => s.id === def.id);
     if (ONLY && def.id !== ONLY) { if (prev) sources.push(prev); continue; }
     console.error(`${def.id}: start`);
-    const { run, ledger } = capHit.hit
+    // The cap only limits keyed Aptos requests, so Movement sources still run after it is hit.
+    const { run, ledger } = capHit.hit && def.chain === 'aptos'
       ? { run: { processor: en.processor, scope: en.scope, enumeration: { pages: 0, newCandidates: 0, candidates: state.candidateCount(def.id) },
           verification: { read: 0, incomplete: 0, notReread: state.positionsOf(def.id).length }, completeness: 'degraded' as const,
           degradedReasons: ['skipped: request cap reached earlier in the run'], errors: [] }, ledger: undefined }
-      : await runSource(def, en, state, chains[def.chain], capHit, panora?.provider);
+      : await runSource(def, en, state, chains[def.chain], def.chain === 'aptos' ? capHit : { hit: false }, panora?.provider);
     const positions = state.positionsOf(def.id);
     if (en.sanity && ledger) {
       try { run.sanity = await en.sanity(chains[def.chain], ledger, positions); if (run.sanity.ok === false) run.degradedReasons.push('sanity check failed'); }
