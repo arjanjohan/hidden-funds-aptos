@@ -1,53 +1,53 @@
 {
   "schema": 1,
-  "generatedAt": "2026-10-19T18:52:20.722Z",
+  "generatedAt": "2026-10-19T19:04:35.686Z",
   "prices": {
     "0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.755521,
+      "usd": 0.763331,
       "decimals": 8,
-      "at": "2026-10-19T18:30:40.000Z",
+      "at": "2026-10-19T18:54:20.000Z",
       "source": "coingecko simple/price"
     },
     "0x07fd500c11216f0fe3095d0c4b8aa4d64a4e2e04f83758462f2b127255643615::thl_coin::THL": {
-      "usd": 0.00983045,
+      "usd": 0.0099489,
       "decimals": 8,
-      "at": "2026-10-19T18:30:40.000Z",
+      "at": "2026-10-19T18:54:20.000Z",
       "source": "coingecko simple/price"
     },
     "movement:0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.0071968,
+      "usd": 0.00723633,
       "decimals": 8,
-      "at": "2026-10-19T18:30:40.000Z",
+      "at": "2026-10-19T18:54:20.000Z",
       "source": "coingecko simple/price"
     },
     "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC": {
-      "usd": 0.999927,
+      "usd": 0.999914,
       "decimals": 6,
-      "at": "2026-10-19T18:30:40.000Z",
+      "at": "2026-10-19T18:54:20.000Z",
       "source": "coingecko simple/price"
     },
     "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDT": {
-      "usd": 0.999287,
+      "usd": 0.999275,
       "decimals": 6,
-      "at": "2026-10-19T18:30:40.000Z",
+      "at": "2026-10-19T18:54:20.000Z",
       "source": "coingecko simple/price"
     },
     "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::WETH": {
-      "usd": 2390.19,
+      "usd": 2401.28,
       "decimals": 6,
-      "at": "2026-10-19T18:30:40.000Z",
+      "at": "2026-10-19T18:54:20.000Z",
       "source": "coingecko simple/price"
     },
     "0x159df6b7689437016108a019fd5bef736bac692b6d4a1f10c941f6fbb9a74ca6::oft::CakeOFT": {
-      "usd": 2.16,
+      "usd": 2.17,
       "decimals": 8,
-      "at": "2026-10-19T18:30:40.000Z",
+      "at": "2026-10-19T18:54:20.000Z",
       "source": "coingecko simple/price"
     },
     "0x8b107b816356295ea62750020edea701bfc6d11575953d0e146c20d7b9409300::oft::BTCbOFT": {
-      "usd": 81738,
+      "usd": 81926,
       "decimals": 8,
-      "at": "2026-10-19T18:30:40.000Z",
+      "at": "2026-10-19T18:54:20.000Z",
       "source": "coingecko simple/price"
     }
   },
@@ -2755,6 +2755,221 @@
       ]
     },
     {
+      "id": "pancake-syrup-ended",
+      "chain": "aptos",
+      "title": "PancakeSwap syrup pool ended, still staked",
+      "summary": "You staked CAKE in a PancakeSwap syrup pool on Aptos. The pool's rewards ended in 2023-2024, but your CAKE and the last rewards are still in the pool.",
+      "category": "staking",
+      "inclusionRule": "R2 ended position: the pool's reward period ended; the stake earns nothing and waits for a withdraw.",
+      "protocolStatus": {
+        "state": "live",
+        "evidence": "smart_chef CAKE pools all ended (last on 2024-02-09); withdraw still works (simulated).",
+        "checkedAt": "2026-10-19"
+      },
+      "howTo": [
+        "Withdraw in the PancakeSwap app (Aptos, Pools, show finished pools), or",
+        "call 0xfd1d8a523f1be89277ac0787ae3469312667e3d0b3f75a5f01bfc95530a2dc91::smart_chef::withdraw<stake, reward, pool id>(amount) from the staking account."
+      ],
+      "officialUrl": "https://aptos.pancakeswap.finance/pools",
+      "headlineAgeBases": [
+        "onchain_maturity"
+      ],
+      "run": {
+        "processor": "user_transaction_processor",
+        "scope": "senders of 0xfd1d8a523f1be89277ac0787ae3469312667e3d0b3f75a5f01bfc95530a2dc91::smart_chef::deposit up to version 444552000 entry calls (calls made by other contracts excluded)",
+        "enumeration": {
+          "pages": 330,
+          "newCandidates": 14589,
+          "candidates": 14589,
+          "start": "2026-10-19T18:54:27.497Z",
+          "end": "2026-10-19T18:55:39.720Z",
+          "cursor": "{\"0xfd1d8a523f1be89277ac0787ae3469312667e3d0b3f75a5f01bfc95530a2dc91::smart_chef::deposit\":\"444364208\"}"
+        },
+        "verification": {
+          "read": 14589,
+          "incomplete": 0,
+          "notReread": 0,
+          "start": "2026-10-19T18:55:40.204Z",
+          "ledgerFrom": "7683363220",
+          "end": "2026-10-19T19:04:33.312Z",
+          "ledgerTo": "7683443079"
+        },
+        "completeness": "complete",
+        "degradedReasons": [],
+        "errors": [],
+        "watermarkBefore": {
+          "version": "7683352392",
+          "timestamp": "2026-10-19T18:54:25.365511Z"
+        },
+        "watermarkAfter": {
+          "version": "7683362911",
+          "timestamp": "2026-10-19T18:55:37.547018Z"
+        },
+        "sanity": {
+          "check": "stake found per pool <= pool total_staked_token",
+          "ok": true,
+          "detail": "U0 99.98%; U1 100.00%; U2 100.00%; U4 100.00%; U5 100.00%"
+        }
+      },
+      "lastSuccessAt": "2026-10-19T19:04:33.312Z",
+      "totals": {
+        "face": {
+          "positions": 7675,
+          "owners": 3781,
+          "usd": 130313.15796890597,
+          "unpriced": 3831,
+          "ownersMin10": 377
+        },
+        "byStatus": {
+          "recoverable": {
+            "positions": 7675,
+            "owners": 3781,
+            "usd": 130313.15796890597,
+            "unpriced": 3831,
+            "ownersMin10": 377
+          },
+          "team_gated": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "blocked": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "aged": {
+          "ge30": {
+            "positions": 7675,
+            "owners": 3781,
+            "usd": 130313.15796890597,
+            "unpriced": 3831,
+            "ownersMin10": 377
+          },
+          "ge90": {
+            "positions": 7675,
+            "owners": 3781,
+            "usd": 130313.15796890597,
+            "unpriced": 3831,
+            "ownersMin10": 377
+          },
+          "ge180": {
+            "positions": 7675,
+            "owners": 3781,
+            "usd": 130313.15796890597,
+            "unpriced": 3831,
+            "ownersMin10": 377
+          }
+        },
+        "agedEstimated": {
+          "ge30": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "byAgeBasis": {
+          "onchain_maturity": {
+            "positions": 7675,
+            "owners": 3781,
+            "usd": 130313.15796890597,
+            "unpriced": 3831,
+            "ownersMin10": 377
+          },
+          "protocol_closure": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "position_interaction": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "headline": {
+          "positions": 7675,
+          "owners": 3781,
+          "usd": 130313.15796890597,
+          "unpriced": 3831,
+          "ownersMin10": 377
+        },
+        "headlineTopOwnerShare": 0.2841147400390241,
+        "unverified": {
+          "positions": 0,
+          "owners": 0,
+          "usd": 0,
+          "unpriced": 0,
+          "ownersMin10": 0
+        }
+      },
+      "sizeBands": [
+        {
+          "upTo": 1,
+          "positions": 2918
+        },
+        {
+          "upTo": 10,
+          "positions": 526
+        },
+        {
+          "upTo": 100,
+          "positions": 150
+        },
+        {
+          "upTo": 1000,
+          "positions": 232
+        },
+        {
+          "upTo": 10000,
+          "positions": 17
+        },
+        {
+          "upTo": null,
+          "positions": 1
+        }
+      ]
+    },
+    {
       "id": "movement-native-delegation",
       "chain": "movement",
       "title": "Unstaked MOVE never withdrawn",
@@ -3383,11 +3598,11 @@
     }
   ],
   "global": {
-    "headlineUsd": 9858793.937069602,
-    "headlineOwners": 67359,
-    "headlineOwnersMin10": 7247,
-    "recoverableUsd": 15704636.546128884,
-    "requests": 89849,
+    "headlineUsd": 9989107.095038509,
+    "headlineOwners": 70916,
+    "headlineOwnersMin10": 7709,
+    "recoverableUsd": 15834949.70409779,
+    "requests": 93811,
     "requestCap": 100000
   }
 }
