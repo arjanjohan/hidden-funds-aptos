@@ -1,6 +1,7 @@
 // Chain-wide candidate enumeration and source-level sanity checks (node-only: keyed indexer use).
 import { mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
+import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
 import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
 import { type ClaimableHint, claimableHandle, LZ_COINS } from '../shared/sources/layerzero-claimable.ts';
@@ -527,6 +528,22 @@ export const topazBidsEnumerator: Enumerator = {
   sanity: async () => ({ check: 'none', ok: null, detail: 'no contract total: each bid holds its own coins' }),
 };
 
+// Canopy stakers on Movement: every key of multi_rewards' user_staked_balances table (staker → staked tokens). The
+// table key is not decoded by the indexer; it is the staker's address. Incremental by version: a stake or withdraw
+// rewrites the staker's row. Claims do not, so stakers are also re-read monthly.
+export const canopyEndedRewardsEnumerator: Enumerator = {
+  sourceId: 'canopy-ended-rewards',
+  processor: 'default_processor',
+  scope: `stakers in ${CANOPY_REWARDS}::multi_rewards (MultiRewardsModule.user_staked_balances, current_table_items)`,
+  async run(chain, cursor) {
+    const state = await chain.resource(CANOPY_REWARDS_STATE, `${CANOPY_REWARDS}::multi_rewards::MultiRewardsModule`);
+    if (!state) throw new Error('Canopy MultiRewardsModule missing');
+    const table = await tableRows(chain, normalizeAddress(state.user_staked_balances.handle), cursor || undefined);
+    return { candidates: [...new Set(table.rows.map(r => normalizeAddress(r.key)))].map(owner => ({ owner })), cursor: table.cursor, pages: table.pages, incremental: true };
+  },
+  sanity: async () => ({ check: 'none', ok: null, detail: 'no contract total: earned rewards are computed per staker' }),
+};
+
 const noContractTotal: Enumerator['sanity'] = async () =>
   ({ check: 'none', ok: null, detail: 'no contract total available: balances are stored per account' });
 
@@ -541,4 +558,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator];

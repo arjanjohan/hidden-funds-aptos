@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ownerKind } from '../src/shared/owners.ts';
+import { canopyEndedRewards } from '../src/shared/sources/canopy-rewards.ts';
 import { delegation, MOVE, movementDelegation } from '../src/shared/sources/delegation.ts';
 import { delegationInactiveValidator } from '../src/shared/sources/delegation-inactive.ts';
 import { KAPT, kofiReceipts, STKAPT } from '../src/shared/sources/kofi-receipts.ts';
@@ -467,6 +468,39 @@ describe('topaz bids', () => {
 
   it('encodes u64 keys as the indexer stores them', () => {
     expect(u64Key('310341')).toBe('0x45bc040000000000');
+  });
+});
+
+describe('canopy ended rewards', () => {
+  const POOL_ENDED = addr('e1'), POOL_LIVE = addr('e2'), STAKE = addr('5a');
+  const row = (pool: string, earned: string, subscribed = true) => ({ pool: { inner: pool }, is_subscribed: subscribed, pool_staking_token: { inner: STAKE },
+    effective_staked_amount: '1', rewards: [{ reward_token: { inner: '0xa' }, earned_amount: earned, reward_per_token_paid: '0' }] });
+  const chain = (rows: unknown[]) => fakeChain({
+    view: (fn, args) => {
+      if (fn.endsWith('::get_user_pool_positions')) return [rows];
+      if (fn.endsWith('::get_all_pool_list')) return [[{ inner: POOL_ENDED }, { inner: POOL_LIVE }]];
+      if (fn.endsWith('::get_reward_token_details')) return [[{ token: { inner: '0xa' }, period_finish: String(args[0] === POOL_ENDED ? NOW - 100 * 86_400 : NOW + 86_400) }]];
+      throw new Error(fn);
+    },
+  });
+
+  it('lists rewards of an ended period, aged from its finish, and skips a running one', async () => {
+    const r = await canopyEndedRewards.read(context(chain([row(POOL_ENDED, '500'), row(POOL_LIVE, '700')])), OWNER);
+    expect(r.positions).toHaveLength(1);
+    expect(r.positions[0]).toMatchObject({ asset: MOVE, positionKind: 'reward', status: 'recoverable', ageBasis: 'onchain_maturity',
+      claimableSince: new Date((NOW - 100 * 86_400) * 1000).toISOString(), expectedPayout: [{ asset: MOVE, raw: '500' }] });
+    expect(r.positions[0].steps[0].arguments).toEqual([STAKE]);
+  });
+
+  it('blocks rewards of a pool the staker left', async () => {
+    const r = await canopyEndedRewards.read(context(chain([row(POOL_ENDED, '500', false)])), OWNER);
+    expect(r.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'unsubscribed' }] });
+  });
+
+  it('reads nothing more when nothing was earned', async () => {
+    const c = chain([row(POOL_ENDED, '0')]);
+    expect((await canopyEndedRewards.read(context(c), OWNER)).positions).toEqual([]);
+    expect(c.calls).toHaveLength(1);
   });
 });
 

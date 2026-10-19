@@ -171,6 +171,17 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **movement-inactive-validator:** no Movement pool with an inactive validator holds active stake. The source stays, so new cases are picked up.
 - **Simulation:** Movement credits the native coin through legacy `0x1::coin::DepositEvent` handle events, identified only by the owner's event handle; the simulator accepts those for the native coin. Recoverable 10/10 exact, plus 4/4 resource-account positions (which simulate, but cannot be signed).
 
+## canopy-ended-rewards (Movement)
+
+- **What:** staking rewards on Canopy (`0x113a…::multi_rewards`) earned in a reward period that has ended and were never claimed. Each pool streams a reward token until its `period_finish`; what a staker earned stays in the pool until claimed. Rewards of pools still streaming are excluded.
+- **Status:** live. Movement acquired Canopy in May 2026. On 2026-10-19, 22 of 56 registered pools are streaming and 34 have ended. All rewards are MOVE.
+- **Enumeration:** every key of `MultiRewardsModule.user_staked_balances` (the staker's address; the indexer does not decode it), incremental by version. 7,497 stakers in 82 pages on Movement's public indexer.
+- **Read:** one view per staker, `rewards_view::get_user_pool_positions`, with each pool's reward periods (`get_reward_token_details`, read once per run).
+  - A staker who left a pool (`is_subscribed = false`) cannot claim its accrual through `claim_reward`: `blocked` (`unsubscribed`). None found.
+- **Result (2026-10-19):** 5,620 `recoverable` positions, 4,925 stakers, **$4.8K** (MOVE at $0.0072), all aged ≥ 90 days; 15 stakers with ≥ $10. Sanity: the ended pools hold 669K MOVE; the earned amounts are part of that.
+- **Recovery:** `multi_rewards::claim_reward(staking token)`. It claims every subscribed pool of that staking token, live ones included. Sample simulation: 12/12, paying exactly the expected MOVE; 1 needs gas.
+- **Re-read schedule:** monthly, or when a stake changes. First run: 12.6K requests, all to Movement's public endpoints.
+
 ## Sized and not added
 
 - **Hyperion fridge** (delayed LP withdrawals): `fridge::asset_unclaimed_all()` reports 4.70 APT in total across all users, about $3.50. Too small to maintain.

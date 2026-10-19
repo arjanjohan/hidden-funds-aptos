@@ -21,6 +21,7 @@ Sources (evidence for each in [docs/sources.md](docs/sources.md)):
 | `layerzero-claimable` | Aptos | Tokens bridged in through LayerZero (lzUSDC, lzUSDT, lzWETH, lzWBTC, lzUSDD, CAKE, BTC.b) that arrived but were never claimed |
 | `movement-native-delegation` | Movement | Unstaked MOVE whose lockup ended, never withdrawn |
 | `movement-inactive-validator` | Movement | MOVE still staked with a validator that left the set |
+| `canopy-ended-rewards` | Movement | Canopy staking rewards from reward periods that ended, never claimed |
 
 - **Dashboard:** weekly aggregate snapshot per source. Only totals are published, never addresses.
 - **Check:** paste addresses. Your browser reads Aptos mainnet directly; the addresses are not sent to this site.
