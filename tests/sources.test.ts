@@ -10,7 +10,7 @@ import { merkleMklp, MKLP } from '../src/shared/sources/merkle-mklp.ts';
 import { ESMKL, MKL, merkleVemkl, PREMKL } from '../src/shared/sources/merkle-vemkl.ts';
 import { thalaVestingMatured, thalaVethlExpired } from '../src/shared/sources/thala-thl.ts';
 import { THALA_LSD, thalaUnstake } from '../src/shared/sources/thala-unstake.ts';
-import { TOPAZ_CLOSED_SECS, topazBids, u64Key } from '../src/shared/sources/topaz-bids.ts';
+import { topazBids, u64Key } from '../src/shared/sources/topaz-bids.ts';
 import { tortugaTickets } from '../src/shared/sources/tortuga-tickets.ts';
 import { trufinUnlocks } from '../src/shared/sources/trufin-unlocks.ts';
 import { addr, context, fakeChain, memoryMemo } from './fake-chain.ts';
@@ -445,13 +445,12 @@ describe('topaz bids', () => {
       : { user_transactions: [{ timestamp: '2023-01-01T00:00:00' }] },
   });
 
-  it('ages an expired bid from its deadline and a live one from the closure', async () => {
+  it('counts an expired bid from its deadline and leaves out one still open', async () => {
     const r = await topazBids.read(context(chain({ '7': { coins: '50000000', deadline: 1_700_000_000 }, '8': { coins: '30000000', deadline: 2_500_000_000 } })), OWNER);
     expect(r.complete).toBe(true);
-    const [expired, live] = r.positions;
-    expect(expired).toMatchObject({ locator: 'collection-bid:7', ageBasis: 'onchain_maturity', claimableSince: new Date(1_700_000_000_000).toISOString(), status: 'recoverable' });
-    expect(expired.steps[0]).toMatchObject({ function: expect.stringContaining('::collection_marketplace::cancel<0x1::aptos_coin::AptosCoin>'), arguments: ['7'] });
-    expect(live).toMatchObject({ locator: 'collection-bid:8', ageBasis: 'protocol_closure', claimableSince: new Date(TOPAZ_CLOSED_SECS * 1000).toISOString() });
+    expect(r.positions).toHaveLength(1);
+    expect(r.positions[0]).toMatchObject({ locator: 'collection-bid:7', ageBasis: 'onchain_maturity', claimableSince: new Date(1_700_000_000_000).toISOString(), status: 'recoverable' });
+    expect(r.positions[0].steps[0]).toMatchObject({ function: expect.stringContaining('::collection_marketplace::cancel<0x1::aptos_coin::AptosCoin>'), arguments: ['7'] });
   });
 
   it('skips bids whose escrow is empty', async () => {
@@ -460,7 +459,7 @@ describe('topaz bids', () => {
 
   it('lists a bidder below the verification threshold as indexer-only, without reading the chain', async () => {
     const c = fakeChain({});
-    const r = await topazBids.read(context(c), OWNER, { a: { 3: { raw: '1000' }, 4: { raw: '0' } } });
+    const r = await topazBids.read(context(c), OWNER, { a: { 3: { raw: '1000', deadline: 1 }, 4: { raw: '0', deadline: 1 }, 5: { raw: '9', deadline: 2_500_000_000 } } });
     expect(r.positions).toHaveLength(1);
     expect(r.positions[0]).toMatchObject({ locator: 'token-bid:3', confidence: 'indexer_only' });
     expect(c.calls).toEqual([]);

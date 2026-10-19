@@ -251,7 +251,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Recovery:** `managed_staking::unlock(token)`. Sample simulation: 10/10, paying exactly the expected MKL (and esMKL); 2 owners need gas.
 - **Re-read schedule:** monthly, or when the collection's owner list changes. The first run took 6.8K requests.
 
-- **Aave on Aptos:** an Aave governance proposal (ARFC, filed 2026-07-29) winds down the Aptos deployment by freezing every reserve. On 2026-10-19 all 4 Aptos reserves (USDt, APT, sUSDe, USDC) are still unfrozen and active with borrowing enabled, so it is not closed on chain yet. It becomes a source once the reserves freeze; the freeze is the effective date.
+- **Aave on Aptos:** an Aave governance proposal (ARFC, filed 2026-07-29) winds down the Aptos deployment by freezing every reserve. On 2026-10-19 (checked twice) all 4 Aptos reserves (USDt, APT, sUSDe, USDC) are still unfrozen and active with borrowing enabled, so it is not closed on chain yet. It becomes a source once the reserves freeze; the freeze is the effective date.
 - **Ditto (stAPT), Celer cBridge tokens:** no closure evidence found.
 
 - **Merkle protocol rewards** (`protocol_reward::EpochReward<T>` tables, read through `current_table_items`): only 1,003 MKLP (USDC) units are unclaimed across 3 epochs (Jan–Feb 2026), paid in MKLP, which itself needs the team. Too small to add.
@@ -291,8 +291,8 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - Token bids: `bid_any::CoinEscrow<APT>` (bid → coins), bidder and deadline in `bid_any::Bids`; `cancel_bid<APT>(bid id)`.
 - **Size (indexer, 2026-10-19):** 30,567 APT in 22,879 collection bids (17,880 bidders, 1,084 with ≥ 1 APT, top bidder 11,266 APT), plus 7,617 APT in 190,176 token-bid escrows (mostly dust). About $29K at $0.76/APT. 64/64 sampled bids match the chain.
 - **Simulation:** a collection bid with a 2058 deadline cancels and returns exactly its 33.33 APT. Expired token bids not simulated yet.
-- **Open question:** a bid whose deadline has not passed can still be filled by calling the contract directly, so it is technically an open order (rule R4). Expired bids are clearly ended.
-- **Not enabled yet:** the measurement run stopped when the Geomi credit ran out. Indexer `key: {_in: …}` lookups on these tables take 6–46 s (no key index), so the enumerator pages the bid tables themselves (~850K rows).
+- **Rule:** only expired bids count (R2: the order ended on its deadline). A bid whose deadline has not passed can still be filled by calling the contract directly, so it is an open order (R4) and is left out, even though Topaz is closed. Age: the deadline.
+- **Not enabled yet:** the measurement run stopped when the Geomi credit ran out (the anonymous limit, 40,000 compute units per 5 minutes, is about 73 indexer pages). Indexer `key: {_in: …}` lookups on these tables take 6–46 s (no key index), so the enumerator pages the bid tables themselves (~850K rows).
 
 ## Other bridges and NFT marketplaces checked
 

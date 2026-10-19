@@ -11,7 +11,7 @@ import { THALA_VE, THALA_VEST } from '../shared/sources/thala-thl.ts';
 import { THALA_LSD } from '../shared/sources/thala-unstake.ts';
 import { TORTUGA, TORTUGA_STATE } from '../shared/sources/tortuga-tickets.ts';
 import { TRUFIN, unlockTable } from '../shared/sources/trufin-unlocks.ts';
-import { TOPAZ, TOPAZ_VERIFY_MIN, type TopazBid, type TopazHint, type TopazKind, topazTables, u64Key } from '../shared/sources/topaz-bids.ts';
+import { TOPAZ, type TopazBid, type TopazHint, type TopazKind, topazTables, u64Key } from '../shared/sources/topaz-bids.ts';
 import type { Sanity } from '../shared/snapshot.ts';
 import type { ChainReader, Ledger, Position } from '../shared/types.ts';
 
@@ -463,7 +463,7 @@ async function versionTimes(chain: ChainReader, versions: number[]): Promise<{ t
   return { times, pages: batches.length };
 }
 
-// Topaz bids with their bidder, escrowed APT, deadline and write time, read from the bid tables themselves
+// Topaz bids with their bidder, escrowed APT and deadline, read from the bid tables themselves
 // (collection_marketplace::Bids<APT>; bid_any::CoinEscrow<APT> joined to bid_any::Bids for the bidder). Rows are never
 // deleted: a cancel or fill rewrites the bid with empty coins, so the per-table version cursors catch every change.
 export const topazBidsEnumerator: Enumerator = {
@@ -478,13 +478,11 @@ export const topazBidsEnumerator: Enumerator = {
     const ctx = { chain, ledger, memo: { get: async () => undefined, set: async () => {} }, scratch: new Map() };
     const tables = await topazTables(ctx);
     const hints = new Map<string, TopazHint>();
-    const written = new Map<TopazBid, number>();   // bid → version of its last write
-    const add = (buyer: string, kind: TopazKind, id: string, bid: TopazBid, version: number) => {
+    const add = (buyer: string, kind: TopazKind, id: string, bid: TopazBid) => {
       const owner = normalizeAddress(buyer);
       const hint = hints.get(owner) ?? {};
       hint[kind] = { ...hint[kind], [id]: bid };
       hints.set(owner, hint);
-      written.set(bid, version);
     };
     const full = !cursors.c && !cursors.a && !cursors.b;
     const deadlineOf = (v: any) => v?.deadline !== undefined ? Math.floor(Number(v.deadline) / 1e6) : undefined;
@@ -498,7 +496,7 @@ export const topazBidsEnumerator: Enumerator = {
 
     for (const r of await scan('c', tables.c.store)) {
       const v = r.decoded_value;
-      add(v.buyer, 'c', String(r.decoded_key), { raw: String(v.coins?.value ?? 0), deadline: deadlineOf(v) }, Number(r.last_transaction_version));
+      add(v.buyer, 'c', String(r.decoded_key), { raw: String(v.coins?.value ?? 0), deadline: deadlineOf(v) });
     }
     const escrow = await scan('a', tables.a.store);
     const details = new Map((await scan('b', tables.anyBids)).map(r => [String(r.decoded_key), r.decoded_value]));
@@ -511,18 +509,10 @@ export const topazBidsEnumerator: Enumerator = {
     for (const r of escrow) {
       const id = String(r.decoded_key), d = details.get(id);
       if (!d?.buyer) continue;   // bidder unknown: counted nowhere (the bid row is never deleted, so this should not happen)
-      add(d.buyer, 'a', id, { raw: String(r.decoded_value?.value ?? 0), deadline: deadlineOf(d) }, Number(r.last_transaction_version));
+      add(d.buyer, 'a', id, { raw: String(r.decoded_value?.value ?? 0), deadline: deadlineOf(d) });
     }
     // A full scan keeps only bidders with escrowed coins; an incremental one keeps every change (a cancel empties a bid).
     const owners = [...hints].filter(([, h]) => !full || Object.values(h).some(m => Object.values(m).some(b => BigInt(b.raw) > 0n)));
-
-    // Bids that will be verified and have not expired are aged from their last write.
-    const verified = owners.filter(([, h]) => Object.values(h).flatMap(m => Object.values(m)).reduce((s, b) => s + BigInt(b.raw), 0n) >= TOPAZ_VERIFY_MIN);
-    const live = verified.flatMap(([, h]) => Object.values(h).flatMap(m => Object.values(m)))
-      .filter(b => BigInt(b.raw) > 0n && !(b.deadline !== undefined && b.deadline <= ledger.timestampSecs));
-    const { times, pages: timePages } = await versionTimes(chain, live.map(b => written.get(b)!));
-    pages += timePages;
-    for (const b of live) b.t = times.get(written.get(b)!);
     return { candidates: owners.map(([owner, hint]) => ({ owner, hint })), cursor: JSON.stringify(cursors), pages, incremental: true };
   },
   sanity: async () => ({ check: 'none', ok: null, detail: 'no contract total: each bid holds its own coins' }),
