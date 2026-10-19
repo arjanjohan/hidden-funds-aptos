@@ -157,3 +157,13 @@ Each source page also states the largest single wallet's share of its 90+ day to
 ## Sized and not added
 
 - **Hyperion fridge** (delayed LP withdrawals): `fridge::asset_unclaimed_all()` reports 4.70 APT in total across all users, about $3.50. Too small to maintain.
+- **Superposition** (Aptos lending): not left behind. Its markets are unpaused and still used (last deposit 2026-10-14). Operator-signed packets are its normal app flow, not closure evidence.
+- **Validator-owned stake pools** (not delegation pools): 43.6K APT of withdrawable inactive stake in 13 pools, plus 13.4K APT active in pools whose validator stopped. Owners are `staking_contract` or vesting resource accounts, which the owner rule makes `unknown`.
+- **Moar farming rewards:** paid in Moar's own token, which has no CoinGecko price, so the value would be unpriced. Skipped.
+- **Amnis "$AMI Claim" NFTs:** a marker with an `is_claimed` flag; the tokens were paid through an off-chain claim portal. No on-chain claim exists.
+- **"Amnis Reward Voucher" NFTs:** phishing. They point to `pamnis.com`, and the creator account has no contract.
+
+## Waiting on a decision
+
+- **Kofi kAPT/stkAPT receipts** (~135K APT, 7,244 + 4,521 holder stores; Kofi is winding down): these count only if stranded. The market test needs a Panora API key, which is a credential choice for the owner.
+- **Aries** (blocked; pre-drain face ≈ 60× the current quote): 455K registered users. Per-user revalidation would cost ~285K reads a week, so it waits until the real Geomi cost per request is known.
