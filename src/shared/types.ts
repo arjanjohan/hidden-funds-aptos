@@ -67,7 +67,9 @@ export interface SourceDef<Hint = unknown> {
   /** Which left-behind rule (R2 branch) makes a position count. */
   inclusionRule: string;
   protocolStatus: ProtocolStatus;
-  refresh: { nonZero: 'every_run' | 'weekly' | 'monthly'; zero: 'weekly' | 'monthly' };
+  /** How often known owners are re-read. `zero: 'never'`: an owner without positions is only re-read when the enumerator
+   *  reports it again; for sources where nothing can accrue any more (ended emissions). */
+  refresh: { nonZero: 'every_run' | 'weekly' | 'monthly'; zero: 'weekly' | 'monthly' | 'never' };
   /** Bump when the source's rules change: every candidate is then re-read on the next run. Default 1. */
   version?: number;
   /** Age bases this source documents as valid for the headline. */

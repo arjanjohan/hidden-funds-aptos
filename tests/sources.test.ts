@@ -8,6 +8,7 @@ import { kofiWithdrawals } from '../src/shared/sources/kofi-withdrawals.ts';
 import { BTCB, layerzeroClaimable, LZ_COINS } from '../src/shared/sources/layerzero-claimable.ts';
 import { merkleMklp, MKLP } from '../src/shared/sources/merkle-mklp.ts';
 import { ESMKL, MKL, merkleVemkl, PREMKL } from '../src/shared/sources/merkle-vemkl.ts';
+import { MASTERCHEF, pancakeFarmEndedRewards } from '../src/shared/sources/pancake-farm.ts';
 import { pancakeSyrupEnded, SYRUP_POOLS } from '../src/shared/sources/pancake-syrup.ts';
 import { thalaVestingMatured, thalaVethlExpired } from '../src/shared/sources/thala-thl.ts';
 import { THALA_LSD, thalaUnstake } from '../src/shared/sources/thala-unstake.ts';
@@ -551,6 +552,43 @@ describe('pancake syrup ended', () => {
     await pancakeSyrupEnded.read(context(c, undefined, memo), OWNER);
     expect(first).toBe(SYRUP_POOLS.length);
     expect(c.calls.filter(x => x.startsWith('resource ' + OWNER)).length - first).toBe(1);
+  });
+});
+
+describe('pancake farm ended rewards', () => {
+  const LP = '0xc7::swap::LPToken<A, B>';
+  const chain = (opts: { amount: string; debt: string; apt: string; cakeLeft?: string; end?: number }) => fakeChain({
+    resource: (address, type) => {
+      if (type.endsWith('::masterchef::MasterChef')) return { end_timestamp: String(opts.end ?? NOW - 200 * 86_400), lps: ['x', LP], pool_info: [{ acc_cake_per_share: '0' }, { acc_cake_per_share: '1086204168124' }] };
+      if (type.endsWith('::masterchef::PoolUserInfo') && address === OWNER) return { pids: ['1'], pid_to_user_info: { inner: { handle: '0xab' } } };
+      return null;
+    },
+    tableItem: () => ({ amount: opts.amount, reward_debt: opts.debt }),
+    view: (fn, _args, types) => {
+      if (fn === '0x1::coin::balance') return [types[0] === '0x1::aptos_coin::AptosCoin' ? '1000000000' : opts.cakeLeft ?? '577073010581'];
+      if (fn.endsWith('::get_pending_apt')) return [opts.apt];
+      throw new Error(fn);
+    },
+  });
+
+  it('lists the CAKE and APT a staked LP earned before emissions ended, harvested with withdraw(0)', async () => {
+    const r = await pancakeFarmEndedRewards.read(context(chain({ amount: '111190', debt: '41917', apt: '33565' })), OWNER);
+    expect(r.positions.map(p => [p.asset, p.expectedPayout[0]?.raw, p.status, p.confidence])).toEqual([
+      ['0x159df6b7689437016108a019fd5bef736bac692b6d4a1f10c941f6fbb9a74ca6::oft::CakeOFT', '78858', 'recoverable', 'derived_math'],
+      ['0x000000000000000000000000000000000000000000000000000000000000000a', '33565', 'recoverable', 'verified_view'],
+    ]);
+    expect(r.positions[0].steps[0]).toMatchObject({ function: `${MASTERCHEF}::masterchef::withdraw<${LP}>`, arguments: ['0'] });
+    expect(r.positions[0]).toMatchObject({ ageBasis: 'onchain_maturity', claimableSince: new Date((NOW - 200 * 86_400) * 1000).toISOString() });
+  });
+
+  it('lists nothing for a farmer who harvested after the end, or while emissions still run', async () => {
+    expect((await pancakeFarmEndedRewards.read(context(chain({ amount: '40332529', debt: '43809361', apt: '0' })), OWNER)).positions).toEqual([]);
+    expect((await pancakeFarmEndedRewards.read(context(chain({ amount: '111190', debt: '41917', apt: '1', end: NOW + 86_400 })), OWNER)).positions).toEqual([]);
+  });
+
+  it('blocks a reward MasterChef cannot pay', async () => {
+    const r = await pancakeFarmEndedRewards.read(context(chain({ amount: '111190', debt: '41917', apt: '0', cakeLeft: '10' })), OWNER);
+    expect(r.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'reward_unfunded' }], expectedPayout: [] });
   });
 });
 

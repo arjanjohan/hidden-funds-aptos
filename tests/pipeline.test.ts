@@ -103,6 +103,16 @@ describe('state', () => {
     expect(due).toContain(addr(3));      // never read
   });
 
+  it('never re-reads a zero owner of a never-refresh source unless the enumerator reports it', () => {
+    const state = new State(':memory:');
+    const def = { ...source(async () => { throw new Error(); }), refresh: { nonZero: 'monthly', zero: 'never' } } as SourceDef;
+    state.upsertCandidates('t', [{ owner: addr(1) }], '2026-01-01T00:00:00Z');
+    state.recordRead('t', addr(1), [], true, '2026-01-01T00:00:00Z');
+    expect(state.due(def, Date.parse('2027-01-01T00:00:00Z'), new Set())).toEqual([]);
+    state.upsertCandidates('t', [{ owner: addr(1) }], '2027-01-01T00:00:00Z', true);
+    expect(state.due(def, Date.parse('2027-01-01T00:00:00Z'), new Set()).map(d => d.owner)).toEqual([addr(1)]);
+  });
+
   it('spreads monthly re-reads over four weekly runs and reads everyone within 35 days', () => {
     const state = new State(':memory:');
     const def = { ...source(async () => { throw new Error(); }), refresh: { nonZero: 'monthly', zero: 'monthly' } } as SourceDef;
