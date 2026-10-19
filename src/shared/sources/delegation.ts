@@ -1,11 +1,18 @@
-// Native delegation stake that finished unlocking but was never withdrawn.
-// Evidence and measurements: docs/phase0-report.md §1.
+// Native delegation stake that finished unlocking but was never withdrawn. Same framework module on Aptos and
+// Movement. Evidence and measurements: docs/phase0-report.md §1.
 import { iso, positionIds } from '../accounting.ts';
 import { mapLimit, normalizeAddress, once, transactionTime } from '../chain.ts';
 import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
 
 export const APT = '0x000000000000000000000000000000000000000000000000000000000000000a';
-const SOURCE = 'native-delegation';
+/** Native MOVE is also FA 0xa, on Movement; the prefix keeps it apart from APT in prices and totals. */
+export const MOVE = 'movement:0x000000000000000000000000000000000000000000000000000000000000000a';
+
+/** Native coin per chain: asset id, symbol and the user-facing chain name. */
+export const NATIVE = {
+  aptos: { asset: APT, symbol: 'APT', name: 'Aptos' },
+  movement: { asset: MOVE, symbol: 'MOVE', name: 'Movement' },
+} as const;
 
 export type DelegationHint = { pools: string[]; version?: number };
 
@@ -33,9 +40,9 @@ async function lockedUntilAt(ctx: ReadContext, pool: string, version: number, se
 
 type Age = { claimableSince?: string; ageBasis: Position['ageBasis'] };
 
-async function age(ctx: ReadContext, owner: string, pool: string, kind: 'inactive' | 'pending_inactive', raw: bigint): Promise<Age> {
+async function age(ctx: ReadContext, source: string, owner: string, pool: string, kind: 'inactive' | 'pending_inactive', raw: bigint): Promise<Age> {
   // claimableSince never changes while the amount is unchanged, so it is memoized across runs.
-  const key = `${SOURCE}:age:${owner}:${pool}:${kind}:${raw}`;
+  const key = `${source}:age:${owner}:${pool}:${kind}:${raw}`;
   const cached = await ctx.memo.get(key);
   if (cached) return JSON.parse(cached);
   const event = (await ctx.chain.gql(UNLOCK_QUERY, { d: owner, p: pool })).delegated_staking_activities[0];
@@ -56,7 +63,7 @@ async function age(ctx: ReadContext, owner: string, pool: string, kind: 'inactiv
   return result;
 }
 
-async function read(ctx: ReadContext, ownerInput: string, hint?: DelegationHint): Promise<ReadResult> {
+async function read(ctx: ReadContext, SOURCE: string, asset: string, ownerInput: string, hint?: DelegationHint): Promise<ReadResult> {
   const owner = normalizeAddress(ownerInput);
   const version = ctx.ledger.version;
   const errors: string[] = [];
@@ -73,9 +80,9 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: DelegationHint)
       const out: Position[] = [];
       const add = async (kind: 'inactive' | 'pending_inactive', raw: bigint) => {
         const locator = `${pool}/${kind}`;
-        const amount = [{ asset: APT, raw: raw.toString() }];
+        const amount = [{ asset, raw: raw.toString() }];
         let aged: Age;
-        try { aged = await age(ctx, owner, pool, kind, raw); }
+        try { aged = await age(ctx, SOURCE, owner, pool, kind, raw); }
         catch (err) { errors.push(`age ${locator}: ${String(err).slice(0, 200)}`); aged = { ageBasis: 'unknown' }; }
         out.push({
           ...positionIds(SOURCE, owner, locator, 'principal'), source: SOURCE, owner, locator, positionKind: 'principal',
@@ -99,19 +106,25 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: DelegationHint)
   return { positions: perPool.flat(), complete: failedPools === 0, errors, ledgerVersion: version };
 }
 
-export const delegation: SourceDef<DelegationHint> = {
-  id: SOURCE,
-  chain: 'aptos',
-  title: 'Unstaked APT never withdrawn',
-  summary: 'You unstaked APT from a delegation pool. The lockup ended and the APT is withdrawable, but it was never withdrawn.',
-  category: 'staking',
-  inclusionRule: 'R2 ended position: unlock completed (stake is inactive, or pending-inactive in a pool whose validator left the set).',
-  protocolStatus: { state: 'live', evidence: 'Aptos framework module 0x1::delegation_pool.', checkedAt: '2026-10-18' },
-  refresh: { nonZero: 'every_run', zero: 'monthly' },
-  headlineAgeBases: ['onchain_maturity'],
-  howTo: [
-    'Open the delegation pool in your wallet\'s staking view (Petra: Stake) and withdraw.',
-    'Or call 0x1::delegation_pool::withdraw(pool, amount) from the account that delegated.',
-  ],
-  read,
-};
+function nativeDelegation(chain: keyof typeof NATIVE, id: string): SourceDef<DelegationHint> {
+  const { asset, symbol, name } = NATIVE[chain];
+  return {
+    id,
+    chain,
+    title: `Unstaked ${symbol} never withdrawn`,
+    summary: `You unstaked ${symbol} from a ${name} delegation pool. The lockup ended and the ${symbol} is withdrawable, but it was never withdrawn.`,
+    category: 'staking',
+    inclusionRule: 'R2 ended position: unlock completed (stake is inactive, or pending-inactive in a pool whose validator left the set).',
+    protocolStatus: { state: 'live', evidence: `${name} framework module 0x1::delegation_pool.`, checkedAt: '2026-10-19' },
+    refresh: { nonZero: 'every_run', zero: 'monthly' },
+    headlineAgeBases: ['onchain_maturity'],
+    howTo: [
+      'Open the delegation pool in your wallet\'s staking view and withdraw.',
+      'Or call 0x1::delegation_pool::withdraw(pool, amount) from the account that delegated.',
+    ],
+    read: (ctx, owner, hint) => read(ctx, id, asset, owner, hint),
+  };
+}
+
+export const delegation = nativeDelegation('aptos', 'native-delegation');
+export const movementDelegation = nativeDelegation('movement', 'movement-native-delegation');

@@ -4,12 +4,12 @@
 // (address derived from owner + metadata), compared with expectedPayout. Gas-only failures are re-run with a
 // zero-address fee payer so "the contract pays" and "the owner can pay gas" are reported separately.
 //
-// Usage: node spikes/07-simulate-state.ts --state path --source id [--seed S] [--extra N]
+// Usage: node spikes/07-simulate-state.ts --state path --source id [--network aptos|movement] [--seed S] [--extra N]
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { AccountAddress, Aptos, AptosConfig, Network } from '@aptos-labs/ts-sdk';
-import { normalizeAddress } from '../src/shared/chain.ts';
+import { NETWORKS, normalizeAddress } from '../src/shared/chain.ts';
 import { APT } from '../src/shared/sources/delegation.ts';
 import type { Position } from '../src/shared/types.ts';
 
@@ -17,8 +17,11 @@ const args = process.argv.slice(2);
 const opt = (name: string, fallback?: string) => (args.includes(name) ? args[args.indexOf(name) + 1] : fallback);
 const STATE = opt('--state')!, SOURCE = opt('--source')!;
 const SEED = Number(opt('--seed', '20261018')), EXTRA = Number(opt('--extra', '7'));
-const KEY = readFileSync('.env', 'utf8').match(/^GEOMI_API_KEY=(.*)$/m)![1].trim();
-const aptos = new Aptos(new AptosConfig({ network: Network.MAINNET, clientConfig: { API_KEY: KEY } }));
+const NETWORK = opt('--network', 'aptos') as 'aptos' | 'movement';
+// The Geomi key goes to Aptos Labs only; Movement is simulated on its public fullnode.
+const aptos = NETWORK === 'movement'
+  ? new Aptos(new AptosConfig({ network: Network.CUSTOM, fullnode: NETWORKS.movement.fullnode }))
+  : new Aptos(new AptosConfig({ network: Network.MAINNET, clientConfig: { API_KEY: readFileSync('.env', 'utf8').match(/^GEOMI_API_KEY=(.*)$/m)![1].trim() } }));
 
 function rng(seed: number) {
   let s = seed >>> 0;
@@ -36,7 +39,8 @@ const raw = (p: Position) => BigInt(payout(p).raw);
 
 // FA metadata address for an asset id: itself for an FA, the paired metadata for a Coin type.
 const metadataCache = new Map<string, string>();
-async function metadataOf(asset: string): Promise<string> {
+async function metadataOf(assetId: string): Promise<string> {
+  const asset = assetId.replace(/^movement:/, '');
   if (!asset.includes('::')) return normalizeAddress(asset);
   if (!metadataCache.has(asset)) {
     const [m] = await aptos.view({ payload: { function: '0x1::coin::paired_metadata', typeArguments: [asset], functionArguments: [] } }) as any[];
@@ -71,7 +75,10 @@ async function simulate(p: Position, feePayer: boolean) {
   // Paid either into the owner's primary FA store, or (unmigrated Coin) into its CoinStore.
   const paid = r.events.filter((e: any) =>
       (e.type === '0x1::fungible_asset::Deposit' && normalizeAddress(e.data.store) === store) ||
-      (e.type === '0x1::coin::CoinDeposit' && normalizeAddress(e.data.account) === p.owner && e.data.coin_type === asset))
+      (e.type === '0x1::coin::CoinDeposit' && normalizeAddress(e.data.account) === p.owner && e.data.coin_type === asset.replace(/^movement:/, '')) ||
+      // Movement still emits legacy CoinStore handle events, identified by the owner's event handle only. Used for the
+      // native coin, the only coin these recovery calls pay.
+      (e.type === '0x1::coin::DepositEvent' && asset.startsWith('movement:') && normalizeAddress(e.guid.account_address) === p.owner))
     .reduce((s: bigint, e: any) => s + BigInt(e.data.amount), 0n);
   return { success: r.success, vmStatus: r.vm_status, paid };
 }

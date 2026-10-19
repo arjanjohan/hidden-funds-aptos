@@ -1,6 +1,6 @@
 // Keyed chain access for the pipeline. Never imported by src/web or src/shared.
 import { readFileSync } from 'node:fs';
-import { createReader } from '../shared/chain.ts';
+import { createReader, type Network } from '../shared/chain.ts';
 import type { ChainReader } from '../shared/types.ts';
 
 function apiKey(): string {
@@ -16,19 +16,29 @@ export class RequestCapReached extends Error {}
 
 export interface Usage { requests: number; byLabel: Record<string, number> }
 
-/** A keyed reader that counts requests and stops the run at `cap`. */
-export function keyedReader(cap: number): { chain: ChainReader; usage: Usage } {
+/** Readers for every network, sharing one request counter that stops the run at `cap`. The Geomi key is sent to
+ *  Aptos Labs hosts only; Movement's public endpoints get no credentials. */
+export function readers(cap: number): { chains: Record<Network, ChainReader>; usage: Usage } {
   const usage: Usage = { requests: 0, byLabel: {} };
-  const chain = createReader({
-    headers: { authorization: `Bearer ${apiKey()}` },
-    onRequest(label) {
-      if (usage.requests >= cap) throw new RequestCapReached(`Request cap ${cap} reached`);
-      usage.requests++;
-      const kind = label.split(' ')[0];
-      usage.byLabel[kind] = (usage.byLabel[kind] ?? 0) + 1;
+  const count = (network: Network) => (label: string) => {
+    if (usage.requests >= cap) throw new RequestCapReached(`Request cap ${cap} reached`);
+    usage.requests++;
+    const kind = `${network === 'aptos' ? '' : network + ' '}${label.split(' ')[0]}`;
+    usage.byLabel[kind] = (usage.byLabel[kind] ?? 0) + 1;
+  };
+  return {
+    chains: {
+      aptos: createReader({ network: 'aptos', headers: { authorization: `Bearer ${apiKey()}` }, onRequest: count('aptos') }),
+      movement: createReader({ network: 'movement', onRequest: count('movement') }),
     },
-  });
-  return { chain, usage };
+    usage,
+  };
+}
+
+/** The keyed Aptos reader alone (spikes and probes). */
+export function keyedReader(cap: number): { chain: ChainReader; usage: Usage } {
+  const { chains, usage } = readers(cap);
+  return { chain: chains.aptos, usage };
 }
 
 export async function processorWatermark(chain: ChainReader, processor: string) {

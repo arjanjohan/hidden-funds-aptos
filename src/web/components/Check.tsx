@@ -1,7 +1,7 @@
 // Live check: reads Aptos mainnet from the browser, anonymously. Nothing is sent to this site.
 import { useState } from 'react';
 import { usd as toUsd, type PriceBook } from '../../shared/accounting.ts';
-import { createReader, normalizeAddress } from '../../shared/chain.ts';
+import { createReader, NETWORKS, normalizeAddress } from '../../shared/chain.ts';
 import { ASSETS } from '../../shared/assets.ts';
 import { SOURCES } from '../../shared/sources/index.ts';
 import type { Memo, Position, ReadContext, ReadResult } from '../../shared/types.ts';
@@ -39,18 +39,21 @@ export default function Check({ prices }: { prices: PriceBook }) {
     if (!addresses.length) return setError('Paste at least one Aptos address.');
     if (addresses.length > MAX_ADDRESSES) return setError(`Check at most ${MAX_ADDRESSES} addresses at a time.`);
     try {
-      const chain = createReader({ retries: 3 });
-      const ledger = await chain.ledger();
-      const ctx: ReadContext = { chain, ledger, memo: memory(), scratch: new Map() };
+      // One anonymous reader and ledger pin per network; sources read on their own chain.
+      const contexts = new Map<string, ReadContext>();
+      for (const network of new Set(SOURCES.map(s => s.chain))) {
+        const chain = createReader({ network, retries: 3 });
+        contexts.set(network, { chain, ledger: await chain.ledger(), memo: memory(), scratch: new Map() });
+      }
       const out: Row[] = [];
       for (const [i, address] of addresses.entries()) {
         setBusy(`Checking ${i + 1} of ${addresses.length}…`);
-        const results = await Promise.all(SOURCES.map(async s => ({ sourceId: s.id, result: await s.read(ctx, address) })));
+        const results = await Promise.all(SOURCES.map(async s => ({ sourceId: s.id, result: await s.read(contexts.get(s.chain)!, address) })));
         out.push({ address, results });
         setRows([...out]);
       }
     } catch (err) {
-      setError(`Could not reach Aptos mainnet: ${String(err).slice(0, 200)}`);
+      setError(`Could not reach the chain: ${String(err).slice(0, 200)}`);
     } finally {
       setBusy('');
     }
@@ -92,7 +95,7 @@ function PositionRow({ p, prices }: { p: Position; prices: PriceBook }) {
   return (
     <div style={{ borderTop: '1px solid var(--line)', marginTop: 12, paddingTop: 12 }}>
       <div><b style={{ display: 'inline', fontSize: 16 }}>{amount}</b>{value !== null && <span className="muted"> ≈ {usd(value)}</span>} · {STATUS[p.status]}</div>
-      <div>{source.title}</div>
+      <div>{source.title} <span className="muted">· {NETWORKS[source.chain].name}</span></div>
       <div className="muted">
         {p.ageBasis === 'unknown' ? 'Claimable since: unknown' : `Claimable since ${date(p.claimableSince)}${p.ageBasis === 'position_interaction' ? ' (estimate)' : ''}`}
         {p.blockers.map(b => ` · ${b.detail}`)}

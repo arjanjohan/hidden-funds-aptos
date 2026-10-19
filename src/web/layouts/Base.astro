@@ -2,7 +2,7 @@
 import { snapshot, STALE_AFTER_MS } from '../lib/data.ts';
 
 interface Props { title: string; description?: string }
-const { title, description = 'Find APT you left behind on Aptos: unstaked but never withdrawn, unstake requests never claimed.' } = Astro.props;
+const { title, description = 'Find APT and MOVE you left behind: unstaked but never withdrawn, unstake requests never claimed, stake with validators that stopped.' } = Astro.props;
 ---
 <!doctype html>
 <html lang="en">
@@ -16,7 +16,7 @@ const { title, description = 'Find APT you left behind on Aptos: unstaked but ne
   </head>
   <body>
     <header class="wrap top">
-      <a href="/" class="brand">hidden funds <span>· Aptos</span></a>
+      <a href="/" class="brand">hidden funds <span>· Aptos + Movement</span></a>
       <nav><a href="/">Dashboard</a><a href="/check">Check wallets</a></nav>
     </header>
     <div id="stale" class="wrap banner" hidden data-generated={snapshot?.generatedAt} data-limit={STALE_AFTER_MS}>

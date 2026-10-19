@@ -57,7 +57,7 @@ export interface ProtocolStatus {
 
 export interface SourceDef<Hint = unknown> {
   id: string;
-  chain: 'aptos';
+  chain: 'aptos' | 'movement';
   title: string;
   summary: string;
   category: 'staking' | 'liquid_staking' | 'closed_app';

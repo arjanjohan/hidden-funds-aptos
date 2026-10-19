@@ -2,6 +2,7 @@
 import Base from '../layouts/Base.astro';
 import { snapshot } from '../lib/data.ts';
 import { count, date, usd } from '../lib/format.ts';
+import { NETWORKS, type Network } from '../../shared/chain.ts';
 
 const statuses = [
   ['recoverable', 'You can claim'],
@@ -12,7 +13,7 @@ const statuses = [
 <Base title="hidden funds · Aptos">
   {snapshot ? (
     <>
-      <h1>{usd(snapshot.global.headlineUsd)} left behind on Aptos</h1>
+      <h1>{usd(snapshot.global.headlineUsd)} left behind on Aptos and Movement</h1>
       <p class="muted">
         Withdrawable for 90 days or more and never withdrawn, across {count(snapshot.global.headlineOwners)} wallets
         ({count(snapshot.global.headlineOwnersMin10)} with $10 or more). Updated weekly; as of {date(snapshot.generatedAt)}.
@@ -38,7 +39,7 @@ const statuses = [
           <tbody>
             {snapshot.sources.map(s => (
               <tr>
-                <td><a href={`/source/${s.id}`}>{s.title}</a></td>
+                <td><a href={`/source/${s.id}`}>{s.title}</a><div class="muted">{NETWORKS[s.chain as Network]?.name ?? s.chain}</div></td>
                 <td class="num">{usd(s.totals.headline.usd)}</td>
                 <td class="num">{count(s.totals.headline.owners)}</td>
                 <td class="num">{usd(s.totals.byStatus.recoverable.usd)}</td>

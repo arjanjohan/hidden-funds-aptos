@@ -3,9 +3,8 @@
 import { iso, positionIds } from '../accounting.ts';
 import { mapLimit, normalizeAddress, once } from '../chain.ts';
 import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
-import { APT } from './delegation.ts';
+import { NATIVE } from './delegation.ts';
 
-const SOURCE = 'delegation-inactive-validator';
 const VALIDATOR_INACTIVE = 4;   // 0x1::stake::get_validator_state
 /** delegation_pool::MIN_COINS_ON_SHARES_POOL: unlock aborts if the delegator's resulting pending_inactive is below it. */
 const MIN_UNLOCK = 1_000_000_000n;
@@ -38,7 +37,7 @@ function poolInfo(ctx: ReadContext, pool: string) {
   });
 }
 
-async function read(ctx: ReadContext, ownerInput: string, hint?: InactiveHint): Promise<ReadResult> {
+async function read(ctx: ReadContext, SOURCE: string, asset: string, ownerInput: string, hint?: InactiveHint): Promise<ReadResult> {
   const owner = normalizeAddress(ownerInput);
   const version = ctx.ledger.version;
   const errors: string[] = [];
@@ -66,7 +65,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: InactiveHint): 
         }
       }
       const locator = `${pool}/active`;
-      const amount = [{ asset: APT, raw: active.toString() }];
+      const amount = [{ asset, raw: active.toString() }];
       return {
         ...positionIds(SOURCE, owner, locator, 'principal'), source: SOURCE, owner, locator, positionKind: 'principal',
         claimableSince, ageBasis: claimableSince ? 'protocol_closure' : 'unknown',
@@ -74,7 +73,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: InactiveHint): 
         grossClaim: amount, expectedPayout: amount, payoutBasis: 'view',
         status: belowMinimum ? 'blocked' : 'recoverable',
         blockers: belowMinimum ? [{ code: 'below_unlock_minimum',
-          detail: 'Unlocking needs at least 10 APT pending. Add stake to reach 10 APT, then unlock and withdraw everything.' }] : [],
+          detail: 'Unlocking needs at least 10 coins pending. Add stake to reach 10, then unlock and withdraw everything.' }] : [],
         confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
         steps: [
           { function: '0x1::delegation_pool::unlock', arguments: [pool, active.toString()], prerequisites: [], expectedOutputs: [] },
@@ -91,19 +90,25 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: InactiveHint): 
   return { positions: found.filter((p): p is Position => p !== null), complete: failedPools === 0, errors, ledgerVersion: version };
 }
 
-export const delegationInactiveValidator: SourceDef<InactiveHint> = {
-  id: SOURCE,
-  chain: 'aptos',
-  title: 'APT staked with a validator that stopped',
-  summary: 'Your APT is still staked in a delegation pool whose validator left the validator set. It earns nothing and can be unlocked and withdrawn right away.',
-  category: 'staking',
-  inclusionRule: 'R2 ended position: the pool\'s validator is inactive (stake::get_validator_state = 4), so staking stopped; unlock and withdraw are immediate.',
-  protocolStatus: { state: 'live', evidence: 'Aptos framework module 0x1::delegation_pool; per-pool validator state read each run.', checkedAt: '2026-10-18' },
-  refresh: { nonZero: 'every_run', zero: 'monthly' },
-  headlineAgeBases: ['protocol_closure'],
-  howTo: [
-    'In your wallet\'s staking view, unlock the stake from this validator, then withdraw it. With the validator out of the set, the withdrawal is available immediately.',
-    'Or call 0x1::delegation_pool::unlock(pool, amount), then 0x1::delegation_pool::withdraw(pool, amount).',
-  ],
-  read,
-};
+function inactiveValidator(chain: keyof typeof NATIVE, id: string): SourceDef<InactiveHint> {
+  const { asset, symbol, name } = NATIVE[chain];
+  return {
+    id,
+    chain,
+    title: `${symbol} staked with a validator that stopped`,
+    summary: `Your ${symbol} is still staked in a ${name} delegation pool whose validator left the validator set. It earns nothing and can be unlocked and withdrawn right away.`,
+    category: 'staking',
+    inclusionRule: 'R2 ended position: the pool\'s validator is inactive (stake::get_validator_state = 4), so staking stopped; unlock and withdraw are immediate.',
+    protocolStatus: { state: 'live', evidence: `${name} framework module 0x1::delegation_pool; per-pool validator state read each run.`, checkedAt: '2026-10-19' },
+    refresh: { nonZero: 'every_run', zero: 'monthly' },
+    headlineAgeBases: ['protocol_closure'],
+    howTo: [
+      'In your wallet\'s staking view, unlock the stake from this validator, then withdraw it. With the validator out of the set, the withdrawal is available immediately.',
+      'Or call 0x1::delegation_pool::unlock(pool, amount), then 0x1::delegation_pool::withdraw(pool, amount).',
+    ],
+    read: (ctx, owner, hint) => read(ctx, id, asset, owner, hint),
+  };
+}
+
+export const delegationInactiveValidator = inactiveValidator('aptos', 'delegation-inactive-validator');
+export const movementInactiveValidator = inactiveValidator('movement', 'movement-inactive-validator');

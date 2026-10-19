@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ownerKind } from '../src/shared/owners.ts';
-import { delegation } from '../src/shared/sources/delegation.ts';
+import { delegation, MOVE, movementDelegation } from '../src/shared/sources/delegation.ts';
 import { delegationInactiveValidator } from '../src/shared/sources/delegation-inactive.ts';
 import { kofiWithdrawals } from '../src/shared/sources/kofi-withdrawals.ts';
 import { thalaVestingMatured, thalaVethlExpired } from '../src/shared/sources/thala-thl.ts';
@@ -256,5 +256,18 @@ describe('trufin unlocks', () => {
   it('refuses a partial table instead of reporting no request', async () => {
     const r = await trufinUnlocks.read(context(chain({ size: 3 })), OWNER);
     expect(r.complete).toBe(false);
+  });
+});
+
+describe('movement delegation', () => {
+  it('reads the same framework module but prices MOVE apart from APT', async () => {
+    const chain = fakeChain({
+      view: fn => (fn === '0x1::delegation_pool::get_stake' ? ['0', '700', '0'] : [false]),
+      gql: query => query.includes('delegated_staking_activities') ? { delegated_staking_activities: [] } : {},
+    });
+    const r = await movementDelegation.read(context(chain), OWNER, { pools: [POOL] });
+    expect(movementDelegation.chain).toBe('movement');
+    expect(r.positions[0].expectedPayout[0].asset).toBe(MOVE);
+    expect(r.positions[0].id.startsWith('movement-native-delegation:')).toBe(true);
   });
 });

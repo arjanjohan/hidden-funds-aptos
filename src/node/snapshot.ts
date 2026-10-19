@@ -8,7 +8,7 @@ import { ownerKind } from '../shared/owners.ts';
 import { mapLimit } from '../shared/chain.ts';
 import { SOURCES } from '../shared/sources/index.ts';
 import type { ChainReader, Ledger, Position, ReadContext, SourceDef } from '../shared/types.ts';
-import { keyedReader, processorWatermark, RequestCapReached } from './client.ts';
+import { processorWatermark, readers, RequestCapReached } from './client.ts';
 import { ENUMERATORS, type Enumerator } from './enumerators.ts';
 import type { Snapshot, SnapshotSource, SourceRun } from '../shared/snapshot.ts';
 import { fetchPrices } from './prices.ts';
@@ -100,7 +100,7 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
 
 async function main() {
   const state = new State(STATE);
-  const { chain, usage } = keyedReader(CAP);
+  const { chains, usage } = readers(CAP);
   const previous: Snapshot | undefined = existsSync(OUT) ? JSON.parse(readFileSync(OUT, 'utf8')) : undefined;
   const capHit = { hit: false };
   const now = Math.floor(Date.now() / 1000);
@@ -117,16 +117,16 @@ async function main() {
       ? { run: { processor: en.processor, scope: en.scope, enumeration: { pages: 0, newCandidates: 0, candidates: state.candidateCount(def.id) },
           verification: { read: 0, incomplete: 0, notReread: state.positionsOf(def.id).length }, completeness: 'degraded' as const,
           degradedReasons: ['skipped: request cap reached earlier in the run'], errors: [] }, ledger: undefined }
-      : await runSource(def, en, state, chain, capHit);
+      : await runSource(def, en, state, chains[def.chain], capHit);
     const positions = state.positionsOf(def.id);
     if (en.sanity && ledger) {
-      try { run.sanity = await en.sanity(chain, ledger, positions); if (run.sanity.ok === false) run.degradedReasons.push('sanity check failed'); }
+      try { run.sanity = await en.sanity(chains[def.chain], ledger, positions); if (run.sanity.ok === false) run.degradedReasons.push('sanity check failed'); }
       catch (err) { run.sanity = { check: 'sanity', ok: null, detail: String(err).slice(0, 200) }; }
     }
     if (Object.keys(prices).length === 0) run.degradedReasons.push('no prices');
     run.completeness = run.degradedReasons.length ? 'degraded' : 'complete';
     sources.push({
-      id: def.id, title: def.title, summary: def.summary, category: def.category, inclusionRule: def.inclusionRule,
+      id: def.id, chain: def.chain, title: def.title, summary: def.summary, category: def.category, inclusionRule: def.inclusionRule,
       protocolStatus: def.protocolStatus, howTo: def.howTo, officialUrl: def.officialUrl, headlineAgeBases: def.headlineAgeBases,
       run, lastSuccessAt: run.completeness === 'complete' ? run.verification.end : prev?.lastSuccessAt,
       totals: sourceTotals(def, positions, prices, now), sizeBands: sizeBands(positions, prices),

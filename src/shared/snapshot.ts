@@ -18,7 +18,7 @@ export interface SourceRun {
 }
 
 export interface SnapshotSource {
-  id: string; title: string; summary: string; category: string; inclusionRule: string;
+  id: string; chain: string; title: string; summary: string; category: string; inclusionRule: string;
   protocolStatus: SourceDef['protocolStatus']; howTo: string[]; officialUrl?: string; headlineAgeBases: string[];
   run: SourceRun;
   lastSuccessAt?: string;

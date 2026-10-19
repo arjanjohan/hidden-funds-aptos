@@ -1,10 +1,10 @@
 // Identity-bound USD prices. A quote older than 7 days is not a price.
 import type { PriceBook } from '../shared/accounting.ts';
-import { APT } from '../shared/sources/delegation.ts';
+import { APT, MOVE } from '../shared/sources/delegation.ts';
 import { THL } from '../shared/sources/thala-thl.ts';
 
 const MAX_QUOTE_AGE_SECS = 7 * 86_400;
-const COINGECKO = [{ asset: APT, id: 'aptos', decimals: 8 }, { asset: THL, id: 'thala', decimals: 8 }];
+const COINGECKO = [{ asset: APT, id: 'aptos', decimals: 8 }, { asset: THL, id: 'thala', decimals: 8 }, { asset: MOVE, id: 'movement', decimals: 8 }];
 
 export async function fetchPrices(nowSecs: number): Promise<{ prices: PriceBook; errors: string[] }> {
   const prices: PriceBook = {};

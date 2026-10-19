@@ -18,6 +18,8 @@ Measurement runs use a fresh local state (`node src/node/snapshot.ts --source <i
 | `thala-vethl-expired` | entry-function senders (`vetoken scripts::lock`, `farming_vesting::convert_to_vethl`) | ended position (lock expired) | headline $13.7K, 4,852 owners (97 ≥ $10) | 10/10 ok, payout = expected |
 | `thala-vesting-matured` | entry-function senders (`farming_vesting::start_vesting`) | ended position (vesting reached end_sec) | headline $6.2K, 2,642 owners (16 ≥ $10) | 10/10 ok, payout = expected; 1 needs gas |
 | `trufin-unlocks` | one global table (`staker::Unlocks`) | ended position (request claimable); off-whitelist → team_gated | 1 request, $1.8K, 85 days old (not yet in headline) | 1/1 ok, payout = expected |
+| `movement-native-delegation` | indexer staking table (Movement indexer) | ended position (unlock done) | headline $2.2K, 57 owners (MOVE $0.0073) | 10/10 ok, payout = expected |
+| `movement-inactive-validator` | all pools → inactive validators (Movement) | ended position | none: no inactive Movement pool holds active stake | — |
 | `tortuga-tickets` | entry-function senders → per-user `TicketStore` | ended position (cooldown passed); reserve-queued tickets blocked | headline $12.2K, 818 owners; blocked $172 | recoverable 10/10 exact; blocked 4/4 abort `EFUND_NOT_AVAILABLE_YET` as predicted |
 
 Native delegation and Thala are documented in [phase0-report.md](phase0-report.md).
@@ -153,6 +155,18 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Result (2026-10-18):** 1 pending request, 2,411.4 APT ($1.8K), claimable since 2026-07-25, whitelisted. It enters the 90-day headline after 2026-10-23.
 - **Cost:** 49 requests on the first run, about 10 after that.
 - **Recovery:** `staker::withdraw(nonce)`. Simulation 1/1, exact payout.
+
+## Movement
+
+- The native delegation and inactive-validator sources are the same code as on Aptos, with chain-specific endpoints and asset ids.
+  - Movement reads use its public fullnode and indexer, with no credentials. The Geomi key goes to Aptos Labs hosts only.
+  - Movement's fullnode keeps full history (oldest version 0), so it also serves the historical reads used for aging.
+- **Asset identity:** native MOVE is FA `0xa` on Movement, the same address as APT on Aptos. It is stored as `movement:0x…0a` so prices and totals never mix. Priced via CoinGecko `movement`.
+- **movement-native-delegation (2026-10-19):** 121 candidates, 112 withdrawable positions, $2.4K now, **$2.2K aged ≥ 90 days**, 57 owners.
+  - 4 positions ($481) held by resource accounts are `unknown`.
+  - Sanity: 4 pools, 0 violations. First run: 572 requests.
+- **movement-inactive-validator:** no Movement pool with an inactive validator holds active stake. The source stays, so new cases are picked up.
+- **Simulation:** Movement credits the native coin through legacy `0x1::coin::DepositEvent` handle events, identified only by the owner's event handle; the simulator accepts those for the native coin. Recoverable 10/10 exact, plus 4/4 resource-account positions (which simulate, but cannot be signed).
 
 ## Sized and not added
 

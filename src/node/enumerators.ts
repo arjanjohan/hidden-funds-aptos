@@ -39,8 +39,8 @@ const DELEGATION_QUERY = `query($lo:String!,$hi:String!,$d:String!,$p:String!,$t
     order_by:[{delegator_address:asc},{pool_address:asc},{table_handle:asc}], limit:${PAGE}){
     delegator_address pool_address table_handle last_transaction_version } }`;
 
-export const delegationEnumerator: Enumerator = {
-  sourceId: 'native-delegation',
+const delegationEnumeratorFor = (sourceId: string): Enumerator => ({
+  sourceId,
   processor: 'stake_processor',
   scope: 'current_delegator_balances rows with pool_type=inactive_shares and shares>0 (stake_processor)',
   async run(chain) {
@@ -84,7 +84,9 @@ export const delegationEnumerator: Enumerator = {
     return { check: 'per pool: sum of delegator inactive stake <= stake::get_stake(pool).inactive', ok: violations.length === 0,
       detail: violations.length ? violations.slice(0, 10).join('; ') : `${perPool.size} pools, 0 violations` };
   },
-};
+});
+export const delegationEnumerator = delegationEnumeratorFor('native-delegation');
+export const movementDelegationEnumerator = delegationEnumeratorFor('movement-native-delegation');
 
 const SENDERS_QUERY = `query($c:String!,$m:String!,$f:String!,$after:bigint!){
   user_transactions(where:{entry_function_contract_address:{_eq:$c}, entry_function_module_name:{_eq:$m},
@@ -195,8 +197,8 @@ export const amnisWithdrawalsEnumerator = collectionOwners('amnis-withdrawals', 
   });
 
 // Every delegation pool, then the active-stake delegators of pools whose validator is inactive.
-export const inactiveValidatorEnumerator: Enumerator = {
-  sourceId: 'delegation-inactive-validator',
+const inactiveValidatorEnumeratorFor = (sourceId: string): Enumerator => ({
+  sourceId,
   processor: 'stake_processor',
   scope: 'active_shares rows (shares > 0) in delegation pools whose validator state is inactive (4) at enumeration time',
   async run(chain) {
@@ -248,7 +250,9 @@ export const inactiveValidatorEnumerator: Enumerator = {
     return { check: 'per pool: sum of delegator active stake <= stake::get_stake(pool).active', ok: violations.length === 0,
       detail: violations.length ? violations.slice(0, 10).join('; ') : `${perPool.size} pools, 0 violations` };
   },
-};
+});
+export const inactiveValidatorEnumerator = inactiveValidatorEnumeratorFor('delegation-inactive-validator');
+export const movementInactiveValidatorEnumerator = inactiveValidatorEnumeratorFor('movement-inactive-validator');
 
 // One global table holds every TruFin unlock request; its owners are the candidates.
 export const trufinUnlocksEnumerator: Enumerator = {
@@ -280,4 +284,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
-  trufinUnlocksEnumerator];
+  trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator];
