@@ -586,6 +586,20 @@ describe('pancake farm ended rewards', () => {
     expect((await pancakeFarmEndedRewards.read(context(chain({ amount: '111190', debt: '41917', apt: '1', end: NOW + 86_400 })), OWNER)).positions).toEqual([]);
   });
 
+  it('blocks both rewards when MasterChef cannot pay one of them, since one harvest pays both', async () => {
+    const c = fakeChain({
+      resource: (address, type) => {
+        if (type.endsWith('::masterchef::MasterChef')) return { end_timestamp: String(NOW - 200 * 86_400), lps: ['x', LP], pool_info: [{ acc_cake_per_share: '0' }, { acc_cake_per_share: '1086204168124' }] };
+        if (type.endsWith('::masterchef::PoolUserInfo') && address === OWNER) return { pids: ['1'], pid_to_user_info: { inner: { handle: '0xab' } } };
+        return null;
+      },
+      tableItem: () => ({ amount: '111190', reward_debt: '41917' }),
+      view: (fn, _args, types) => fn === '0x1::coin::balance' ? [types[0] === '0x1::aptos_coin::AptosCoin' ? '5' : '577073010581'] : ['33565'],
+    });
+    const r = await pancakeFarmEndedRewards.read(context(c), OWNER);
+    expect(r.positions.map(p => p.status)).toEqual(['blocked', 'blocked']);
+  });
+
   it('blocks a reward MasterChef cannot pay', async () => {
     const r = await pancakeFarmEndedRewards.read(context(chain({ amount: '111190', debt: '41917', apt: '0', cakeLeft: '10' })), OWNER);
     expect(r.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'reward_unfunded' }], expectedPayout: [] });

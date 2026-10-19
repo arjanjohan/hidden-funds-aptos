@@ -53,8 +53,9 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
       ];
       const outputs = rewards.map(r => ({ asset: r.asset, raw: r.raw }));
       const locator = `pool-${pid}`;
+      // One harvest pays both rewards; if MasterChef cannot pay either, the whole transaction aborts.
+      const funded = rewards.every(r => BigInt(r.raw) <= r.left);
       return rewards.map(r => {
-        const funded = BigInt(r.raw) <= r.left;
         const value = [{ asset: r.asset, raw: r.raw }];
         return {
           ...positionIds(SOURCE, owner, locator, 'reward', r.asset), source: SOURCE, owner, locator, positionKind: 'reward', asset: r.asset,
@@ -62,7 +63,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
           provenance: { reader: `${MASTERCHEF}::masterchef::PoolUserInfo`, ledgerVersion: version },
           grossClaim: value, expectedPayout: funded ? value : [], payoutBasis: r.basis === 'verified_view' ? 'view' : 'derived',
           status: funded ? 'recoverable' : 'blocked',
-          blockers: funded ? [] : [{ code: 'reward_unfunded', detail: 'MasterChef holds less of this reward than you are owed.' }],
+          blockers: funded ? [] : [{ code: 'reward_unfunded', detail: 'MasterChef holds less CAKE or APT than this harvest pays, so the harvest fails.' }],
           confidence: r.basis, observedAt: iso(ctx.ledger.timestampSecs),
           steps: [{ function: `${MASTERCHEF}::masterchef::withdraw<${lp}>`, arguments: ['0'],
             prerequisites: ['Withdrawing 0 harvests the rewards and leaves your LP staked.'], expectedOutputs: outputs }],

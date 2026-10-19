@@ -41,7 +41,23 @@ export function sizeBands(positions: Position[], prices: PriceBook) {
   return counts.map((positions, i) => ({ upTo: SIZE_BANDS[i] ?? null, positions }));
 }
 
-export async function runSource(def: SourceDef<any>, en: Enumerator, state: State, chain: ChainReader, capHit: { hit: boolean }, market?: MarketProvider): Promise<{ run: SourceRun; ledger?: Ledger }> {
+/** The reader as sources see it: a request that hits the cap flags the run at once, even when the source catches the
+ *  error and returns an incomplete read (sources treat any read error that way). */
+function capFlagging(chain: ChainReader, capHit: { hit: boolean }): ChainReader {
+  return new Proxy(chain, {
+    get(target, key) {
+      const value = (target as any)[key];
+      if (typeof value !== 'function') return value;
+      return async (...args: unknown[]) => {
+        try { return await value.apply(target, args); }
+        catch (err) { if (err instanceof RequestCapReached) capHit.hit = true; throw err; }
+      };
+    },
+  });
+}
+
+export async function runSource(def: SourceDef<any>, en: Enumerator, state: State, rawChain: ChainReader, capHit: { hit: boolean }, market?: MarketProvider): Promise<{ run: SourceRun; ledger?: Ledger }> {
+  const chain = capFlagging(rawChain, capHit);
   const run: SourceRun = { processor: en.processor, scope: en.scope, enumeration: { pages: 0, newCandidates: 0, candidates: 0 },
     verification: { read: 0, incomplete: 0, notReread: 0 }, completeness: 'complete', degradedReasons: [], errors: [] };
   const runStart = new Date().toISOString();
