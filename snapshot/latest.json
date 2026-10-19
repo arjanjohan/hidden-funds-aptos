@@ -1,23 +1,23 @@
 {
   "schema": 1,
-  "generatedAt": "2026-10-19T09:02:40.045Z",
+  "generatedAt": "2026-10-19T10:45:17.294Z",
   "prices": {
     "0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.785502,
+      "usd": 0.774225,
       "decimals": 8,
-      "at": "2026-10-19T08:56:56.000Z",
+      "at": "2026-10-19T10:45:01.000Z",
       "source": "coingecko simple/price"
     },
     "0x07fd500c11216f0fe3095d0c4b8aa4d64a4e2e04f83758462f2b127255643615::thl_coin::THL": {
-      "usd": 0.00998083,
+      "usd": 0.00989138,
       "decimals": 8,
-      "at": "2026-10-19T08:57:10.000Z",
+      "at": "2026-10-19T10:45:01.000Z",
       "source": "coingecko simple/price"
     },
     "movement:0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.00738139,
+      "usd": 0.00727862,
       "decimals": 8,
-      "at": "2026-10-19T08:57:10.000Z",
+      "at": "2026-10-19T10:45:01.000Z",
       "source": "coingecko simple/price"
     }
   },
@@ -2114,28 +2114,28 @@
           "pages": 1,
           "newCandidates": 0,
           "candidates": 0,
-          "start": "2026-10-19T09:02:39.323Z",
-          "end": "2026-10-19T09:02:39.779Z"
+          "start": "2026-10-19T10:45:14.024Z",
+          "end": "2026-10-19T10:45:17.003Z"
         },
         "verification": {
           "read": 0,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-19T09:02:39.869Z",
-          "ledgerFrom": "230133900",
-          "end": "2026-10-19T09:02:39.869Z",
-          "ledgerTo": "230133900"
+          "start": "2026-10-19T10:45:17.117Z",
+          "ledgerFrom": "230173635",
+          "end": "2026-10-19T10:45:17.117Z",
+          "ledgerTo": "230173637"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "230133892",
-          "timestamp": "2026-10-19T09:02:37.564438Z"
+          "version": "230173613",
+          "timestamp": "2026-10-19T10:45:12.398147Z"
         },
         "watermarkAfter": {
-          "version": "230133900",
-          "timestamp": "2026-10-19T09:02:38.881771Z"
+          "version": "230173631",
+          "timestamp": "2026-10-19T10:45:15.353261Z"
         },
         "sanity": {
           "check": "per pool: sum of delegator active stake <= stake::get_stake(pool).active",
@@ -2143,7 +2143,7 @@
           "detail": "0 pools, 0 violations"
         }
       },
-      "lastSuccessAt": "2026-10-19T09:02:39.869Z",
+      "lastSuccessAt": "2026-10-19T10:45:17.117Z",
       "totals": {
         "face": {
           "positions": 0,
@@ -2298,9 +2298,9 @@
   "global": {
     "headlineUsd": 9590267.169517873,
     "headlineOwners": 19925,
-    "headlineOwnersMin10": 3917,
+    "headlineOwnersMin10": 3681,
     "recoverableUsd": 15436109.778577155,
-    "requests": 29826,
+    "requests": 11,
     "requestCap": 100000
   }
 }
