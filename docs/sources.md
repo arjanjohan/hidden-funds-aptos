@@ -234,6 +234,9 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Aave on Aptos:** an Aave governance proposal (ARFC, filed 2026-07-29) winds down the Aptos deployment by freezing every reserve. On 2026-10-19 all 4 Aptos reserves (USDt, APT, sUSDe, USDC) are still unfrozen and active with borrowing enabled, so it is not closed on chain yet. It becomes a source once the reserves freeze; the freeze is the effective date.
 - **Ditto (stAPT), Celer cBridge tokens:** no closure evidence found.
 
+- **Merkle protocol rewards** (`protocol_reward::EpochReward<T>` tables, read through `current_table_items`): only 1,003 MKLP (USDC) units are unclaimed across 3 epochs (Jan–Feb 2026), paid in MKLP, which itself needs the team. Too small to add.
+- **Thala MOD** (CDP vaults and stability pool): no deprecation notice found.
+
 ## Waiting on a decision
 
 - **Kofi receipt market test:** with a Panora key, `kofi-receipts` positions with no usable market become `recoverable` and can reach the headline.
