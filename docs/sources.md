@@ -276,7 +276,8 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - The indexer keeps some claimed entries as live (2 of the top 20 BTC.b entries were already claimed on chain), so every counted entry is re-read on chain.
 - **Dust:** entries under ~$1 (`verifyMin` per coin) are not read on chain. They are listed as `indexer_only` and stay out of every total: $31.6K across ~213K entries.
 - **Age:** the time the bridge wrote the entry (`onchain_maturity`). Write times are fetched 100 versions per query. All verified entries were written 2022–2025.
-- **Result (2026-10-19; 252.7K of 254.9K receivers read before the Geomi credit ran out):**
+- **Published (CI run, 2026-10-19):** complete. **$263.7K** recoverable and left behind 90+ days, 41,461 receivers, 3,772 with ≥ $10. Top receiver: 0.8%. Not verified (dust): 215,187 entries, $31.8K. First run: 89,849 requests.
+- **Per coin (local run on the same day, 99% of receivers read):**
 
   | Coin | Positions | Value |
   |---|---|---|
@@ -287,7 +288,6 @@ Each source page also states the largest single wallet's share of its 90+ day to
   | CAKE | 199 | $4.5K (2,092 CAKE) |
   | lzUSDD | 4 | unpriced (320 USDD) |
 
-  - Total ~$261K recoverable, 41,019 receivers, 3,739 with ≥ $10. Top receiver: $2.2K (0.8%).
   - 1 position is held by a resource account (`unknown`).
 - **Simulation (anonymous fullnode, seed 20261018):** 48/48 recoverable samples succeed and pay exactly the expected amount, across all 6 coins. 28 need gas. The resource-account position aborts (no signer), as expected.
 - **Re-read schedule:** monthly, or when an entry changes (a claim always rewrites it).
@@ -316,7 +316,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - Collection bids: `collection_marketplace::Bids<APT>` (bid → coins, deadline, bidder); `cancel<APT>(bid id)`.
   - Token bids: `bid_any::CoinEscrow<APT>` (bid → coins), bidder and deadline in `bid_any::Bids`; `cancel_bid<APT>(bid id)`.
 - **Size (indexer, 2026-10-19):** 30,567 APT in 22,879 collection bids (17,880 bidders, 1,084 with ≥ 1 APT, top bidder 11,266 APT), plus 7,617 APT in 190,176 token-bid escrows (mostly dust). About $29K at $0.76/APT. 64/64 sampled bids match the chain.
-- **Simulation:** a collection bid with a 2058 deadline cancels and returns exactly its 33.33 APT. Expired token bids not simulated yet.
+- **Simulation:** 3/3 cancels succeed and return exactly the escrowed APT: two collection bids (33.33 and 0.5 APT) and a token bid that expired in 2022 (1 APT).
 - **Rule:** only expired bids count (R2: the order ended on its deadline). A bid whose deadline has not passed can still be filled by calling the contract directly, so it is an open order (R4) and is left out, even though Topaz is closed. Age: the deadline.
 - **Not enabled yet:** the measurement run stopped when the Geomi credit ran out (the anonymous limit, 40,000 compute units per 5 minutes, is about 73 indexer pages). Indexer `key: {_in: …}` lookups on these tables take 6–46 s (no key index), so the enumerator pages the bid tables themselves (~850K rows).
 
