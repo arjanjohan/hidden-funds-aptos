@@ -1,23 +1,23 @@
 {
   "schema": 1,
-  "generatedAt": "2026-10-19T10:45:17.294Z",
+  "generatedAt": "2026-10-19T11:05:34.143Z",
   "prices": {
     "0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.774225,
+      "usd": 0.773692,
       "decimals": 8,
-      "at": "2026-10-19T10:45:01.000Z",
+      "at": "2026-10-19T10:58:50.000Z",
       "source": "coingecko simple/price"
     },
     "0x07fd500c11216f0fe3095d0c4b8aa4d64a4e2e04f83758462f2b127255643615::thl_coin::THL": {
-      "usd": 0.00989138,
+      "usd": 0.00988046,
       "decimals": 8,
-      "at": "2026-10-19T10:45:01.000Z",
+      "at": "2026-10-19T10:59:01.000Z",
       "source": "coingecko simple/price"
     },
     "movement:0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.00727862,
+      "usd": 0.00728488,
       "decimals": 8,
-      "at": "2026-10-19T10:45:01.000Z",
+      "at": "2026-10-19T10:59:01.000Z",
       "source": "coingecko simple/price"
     }
   },
@@ -1883,6 +1883,214 @@
       ]
     },
     {
+      "id": "kofi-receipts",
+      "chain": "aptos",
+      "title": "kAPT / stkAPT still held after Kofi's wind-down",
+      "summary": "Kofi is winding down. kAPT and stkAPT can still be redeemed for APT through a withdrawal ticket. Counted only if no market pays close to redemption value.",
+      "category": "closed_app",
+      "inclusionRule": "Stranded receipt: protocol wound down and redemption needs an owner action; counted only when no usable market exists (not checked: no quote provider).",
+      "protocolStatus": {
+        "state": "wound_down",
+        "evidence": "config::is_winddown became true at version 6,429,705,721 (multisig transaction); deposits and staking paused.",
+        "checkedAt": "2026-10-19",
+        "effectiveAt": "2026-07-24T07:55:53Z"
+      },
+      "howTo": [
+        "In the Kofi app, redeem kAPT (or unstake stkAPT) for APT; after the 14-day withdrawal period, finalize the ticket.",
+        "Or call 0x2cc52445acc4c5e5817a0ac475976fbef966fedb6e30e7db792e10619c76181f::gateway::request_withdrawal_entry(amount) for kAPT / gateway::unstake_and_request_withdrawal_entry(amount) for stkAPT, then gateway::finalize_withdrawals_entry([ticket_id])."
+      ],
+      "officialUrl": "https://app.kofi.finance",
+      "headlineAgeBases": [
+        "protocol_closure"
+      ],
+      "run": {
+        "processor": "fungible_asset_processor",
+        "scope": "primary stores holding Kofi kAPT or stkAPT (current_fungible_asset_balances, amount > 0)",
+        "enumeration": {
+          "pages": 117,
+          "newCandidates": 8063,
+          "candidates": 8063,
+          "start": "2026-10-19T10:59:08.253Z",
+          "end": "2026-10-19T11:00:04.447Z"
+        },
+        "verification": {
+          "read": 8063,
+          "incomplete": 0,
+          "notReread": 0,
+          "start": "2026-10-19T11:00:05.017Z",
+          "ledgerFrom": "7678292810",
+          "end": "2026-10-19T11:05:32.364Z",
+          "ledgerTo": "7678348224"
+        },
+        "completeness": "complete",
+        "degradedReasons": [],
+        "errors": [],
+        "watermarkBefore": {
+          "version": "7678283864",
+          "timestamp": "2026-10-19T10:59:06.166753Z"
+        },
+        "watermarkAfter": {
+          "version": "7678292633",
+          "timestamp": "2026-10-19T11:00:03.884154Z"
+        },
+        "sanity": {
+          "check": "receipts found in user primary stores <= token supply",
+          "ok": true,
+          "detail": "kAPT 7409509757527 of 8315003801946 supply (89.11%); stkAPT 4786564275817 of 4797431239035 supply (99.77%)"
+        }
+      },
+      "lastSuccessAt": "2026-10-19T11:05:32.364Z",
+      "totals": {
+        "face": {
+          "positions": 11619,
+          "owners": 8063,
+          "usd": 0,
+          "unpriced": 11619,
+          "ownersMin10": 0
+        },
+        "byStatus": {
+          "recoverable": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "team_gated": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "blocked": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 11619,
+            "owners": 8063,
+            "usd": 97530.13878383728,
+            "unpriced": 0,
+            "ownersMin10": 78
+          }
+        },
+        "aged": {
+          "ge30": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "agedEstimated": {
+          "ge30": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "byAgeBasis": {
+          "onchain_maturity": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "protocol_closure": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "position_interaction": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "headline": {
+          "positions": 0,
+          "owners": 0,
+          "usd": 0,
+          "unpriced": 0,
+          "ownersMin10": 0
+        },
+        "headlineTopOwnerShare": 0
+      },
+      "sizeBands": [
+        {
+          "upTo": 1,
+          "positions": 0
+        },
+        {
+          "upTo": 10,
+          "positions": 0
+        },
+        {
+          "upTo": 100,
+          "positions": 0
+        },
+        {
+          "upTo": 1000,
+          "positions": 0
+        },
+        {
+          "upTo": 10000,
+          "positions": 0
+        },
+        {
+          "upTo": null,
+          "positions": 0
+        }
+      ]
+    },
+    {
       "id": "movement-native-delegation",
       "chain": "movement",
       "title": "Unstaked MOVE never withdrawn",
@@ -2298,9 +2506,9 @@
   "global": {
     "headlineUsd": 9590267.169517873,
     "headlineOwners": 19925,
-    "headlineOwnersMin10": 3681,
+    "headlineOwnersMin10": 3677,
     "recoverableUsd": 15436109.778577155,
-    "requests": 11,
+    "requests": 31068,
     "requestCap": 100000
   }
 }
