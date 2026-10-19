@@ -19,7 +19,7 @@ export interface Usage { requests: number; byLabel: Record<string, number> }
 
 /** Readers for every network. `cap` bounds the keyed (paid) Aptos requests of a run: past it, Aptos reads throw
  *  RequestCapReached. Movement's public endpoints are free, get no credentials and never count. */
-export function readers(cap: number): { chains: Record<Network, ChainReader>; usage: Usage } {
+export function readers(cap: number, { anonymous = false } = {}): { chains: Record<Network, ChainReader>; usage: Usage } {
   const usage: Usage = { requests: 0, byLabel: {} };
   const count = (network: Network) => (label: string) => {
     if (network === 'aptos') {
@@ -31,7 +31,11 @@ export function readers(cap: number): { chains: Record<Network, ChainReader>; us
   };
   return {
     chains: {
-      aptos: createReader({ network: 'aptos', headers: { authorization: `Bearer ${apiKey()}` }, onRequest: count('aptos') }),
+      // Anonymous (local runs without a key): Aptos Labs allows 40,000 compute units per 5 minutes per IP, so a
+      // rate-limited request keeps retrying long enough to outlast the window.
+      aptos: anonymous
+        ? createReader({ network: 'aptos', onRequest: count('aptos'), retries: 12 })
+        : createReader({ network: 'aptos', headers: { authorization: `Bearer ${apiKey()}` }, onRequest: count('aptos') }),
       movement: createReader({ network: 'movement', onRequest: count('movement') }),
     },
     usage,

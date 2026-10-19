@@ -1,6 +1,6 @@
 // Weekly snapshot: enumerate → revalidate → price → aggregate. Publishes aggregates only, never addresses.
 //
-// Usage: node src/node/snapshot.ts [--source id] [--limit N] [--cap N] [--state path] [--out path]
+// Usage: node src/node/snapshot.ts [--source id] [--limit N] [--cap N] [--state path] [--out path] [--anonymous]
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { ageDays, applyOwnerKind, HEADLINE_AGE_DAYS, headlineAge, sourceTotals, usd, type PriceBook } from '../shared/accounting.ts';
@@ -110,7 +110,7 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
 
 async function main() {
   const state = new State(STATE);
-  const { chains, usage } = readers(CAP);
+  const { chains, usage } = readers(CAP, { anonymous: args.includes('--anonymous') });
   const previous: Snapshot | undefined = existsSync(OUT) ? JSON.parse(readFileSync(OUT, 'utf8')) : undefined;
   const capHit = { hit: false };
   const now = Math.floor(Date.now() / 1000);
