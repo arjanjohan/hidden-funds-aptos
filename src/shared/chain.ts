@@ -56,11 +56,14 @@ export function createReader(options: ReaderOptions = {}): ChainReader {
         }
         throw err;
       }
-      if (allow404 && res.status === 404) return null;
       const text = await res.text();
-      const body = text ? JSON.parse(text) : null;
+      let body: any = null;
+      try { body = text ? JSON.parse(text) : null; } catch { /* non-JSON error page */ }
+      // A load-balanced node behind the pinned version answers 404 version_not_found: transient, never "absent".
+      const lagging = res.status === 404 && (body?.error_code === 'version_not_found' || body?.error_code === 'block_not_found');
+      if (allow404 && res.status === 404 && !lagging) return null;
       const code = body?.errors?.[0]?.extensions?.code;
-      const transient = res.status === 429 || res.status === 408 || res.status >= 500 || code === '429' || code === '408';
+      const transient = lagging || res.status === 429 || res.status === 408 || res.status >= 500 || code === '429' || code === '408';
       if (transient && attempt < retries) {
         const retryAfter = Number(res.headers.get('retry-after'));
         await sleep(retryAfter > 0 ? Math.min(retryAfter * 1000, 60_000) : Math.min(60_000, 2_000 * 2 ** attempt));
