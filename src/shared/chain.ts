@@ -26,6 +26,8 @@ export interface ReaderOptions {
   headers?: Record<string, string>;
   /** Called before every HTTP request; may throw to stop a run (request cap). */
   onRequest?: (label: string) => void;
+  /** Called before waiting to retry a transient failure (`status` 429 = rate limited; 0 = network error). */
+  onWait?: (label: string, ms: number, status: number) => void;
   retries?: number;
   timeoutMs?: number;
 }
@@ -39,7 +41,7 @@ export function normalizeAddress(address: string): string {
 }
 
 export function createReader(options: ReaderOptions = {}): ChainReader {
-  const { network = 'aptos', headers = {}, onRequest, retries = 5, timeoutMs = 60_000 } = options;
+  const { network = 'aptos', headers = {}, onRequest, onWait, retries = 5, timeoutMs = 60_000 } = options;
   const endpoints = NETWORKS[network];
 
   async function request(url: string, init: RequestInit, label: string, allow404 = false): Promise<any> {
@@ -51,7 +53,9 @@ export function createReader(options: ReaderOptions = {}): ChainReader {
       } catch (err: any) {
         // Timeouts and network failures ("fetch failed": reset, DNS, TLS) are transient.
         if ((err?.name === 'TimeoutError' || err instanceof TypeError) && attempt < retries) {
-          await sleep(Math.min(60_000, 2_000 * 2 ** attempt));
+          const ms = Math.min(60_000, 2_000 * 2 ** attempt);
+          onWait?.(label, ms, 0);
+          await sleep(ms);
           continue;
         }
         throw err;
@@ -66,7 +70,9 @@ export function createReader(options: ReaderOptions = {}): ChainReader {
       const transient = lagging || res.status === 429 || res.status === 408 || res.status >= 500 || code === '429' || code === '408';
       if (transient && attempt < retries) {
         const retryAfter = Number(res.headers.get('retry-after'));
-        await sleep(retryAfter > 0 ? Math.min(retryAfter * 1000, 60_000) : Math.min(60_000, 2_000 * 2 ** attempt));
+        const ms = retryAfter > 0 ? Math.min(retryAfter * 1000, 60_000) : Math.min(60_000, 2_000 * 2 ** attempt);
+        onWait?.(label, ms, code === '429' ? 429 : res.status);
+        await sleep(ms);
         continue;
       }
       if (!res.ok) throw new Error(`${label}: HTTP ${res.status} ${text.slice(0, 300)}`);

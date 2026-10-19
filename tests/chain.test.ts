@@ -22,6 +22,18 @@ describe('reader', () => {
     vi.useRealTimers();
   });
 
+  it('reports a rate-limit wait before retrying', async () => {
+    const replies = [respond(200, { errors: [{ message: 'Per anonymous IP rate limit exceeded', extensions: { code: '429' } }] }), respond(200, { data: { ok: true } })];
+    vi.stubGlobal('fetch', async () => replies.shift()!);
+    vi.useFakeTimers();
+    const waits: [number, number][] = [];
+    const pending = createReader({ retries: 2, onWait: (_l, ms, status) => waits.push([ms, status]) }).gql('{ x }');
+    await vi.runAllTimersAsync();
+    expect(await pending).toEqual({ ok: true });
+    expect(waits).toEqual([[2_000, 429]]);
+    vi.useRealTimers();
+  });
+
   it('fails rather than answering absent when the node stays behind', async () => {
     vi.stubGlobal('fetch', async () => respond(404, { error_code: 'version_not_found' }));
     await expect(createReader({ retries: 0 }).resource('0x1', '0x1::a::B', '5')).rejects.toThrow(/404/);
