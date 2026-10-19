@@ -231,6 +231,9 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Recovery:** `managed_staking::unlock(token)`. Sample simulation: 10/10, paying exactly the expected MKL (and esMKL); 2 owners need gas.
 - **Re-read schedule:** monthly, or when the collection's owner list changes. The first run took 6.8K requests.
 
+- **Aave on Aptos:** an Aave governance proposal (ARFC, filed 2026-07-29) winds down the Aptos deployment by freezing every reserve. On 2026-10-19 all 4 Aptos reserves (USDt, APT, sUSDe, USDC) are still unfrozen and active with borrowing enabled, so it is not closed on chain yet. It becomes a source once the reserves freeze; the freeze is the effective date.
+- **Ditto (stAPT), Celer cBridge tokens:** no closure evidence found.
+
 ## Waiting on a decision
 
 - **Kofi receipt market test:** with a Panora key, `kofi-receipts` positions with no usable market become `recoverable` and can reach the headline.
