@@ -254,7 +254,9 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Re-read schedule:** monthly, or when the collection's owner list changes. The first run took 6.8K requests.
 
 - **Aave on Aptos:** an Aave governance proposal (ARFC, filed 2026-07-29) winds down the Aptos deployment by freezing every reserve. On 2026-10-19 (checked twice) all 4 Aptos reserves (USDt, APT, sUSDe, USDC) are still unfrozen and active with borrowing enabled, so it is not closed on chain yet. It becomes a source once the reserves freeze; the freeze is the effective date.
-- **Ditto (stAPT), Celer cBridge tokens:** no closure evidence found.
+- **Ditto (stAPT):** no closure notice; last social activity in Dec 2023. stAPT is backed by 45.7K APT (`DittoPool.total_aptos`). The delayed-unstake queue is empty: 13 requests ever, `total_pending_claim` 0, 0.22 APT in `claim_pool`. Redemption still works through `delayed_unstake` plus permissionless `update_ditto_state`/`distribute_unstaked_coins`, so stAPT is not stranded under R2.
+- **Cellana (veCELL):** CELL is quoted at $0.00006 (stale), so expired locks are worth nothing. Skipped.
+- **Celer cBridge tokens:** no closure evidence found; the peg bridge still mints.
 
 - **Merkle protocol rewards** (`protocol_reward::EpochReward<T>` tables, read through `current_table_items`): only 1,003 MKLP (USDC) units are unclaimed across 3 epochs (Jan–Feb 2026), paid in MKLP, which itself needs the team. Too small to add.
 - **Thala MOD** (CDP vaults and stability pool): no deprecation notice found.
