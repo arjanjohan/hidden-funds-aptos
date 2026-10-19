@@ -1,5 +1,5 @@
 // Live check: reads Aptos mainnet from the browser, anonymously. Nothing is sent to this site.
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { usd as toUsd, type PriceBook } from '../../shared/accounting.ts';
 import { createReader, mapLimit, NETWORKS, normalizeAddress } from '../../shared/chain.ts';
 import { ASSETS } from '../../shared/assets.ts';
@@ -44,12 +44,17 @@ export default function Check({ prices, markets }: { prices: PriceBook; markets?
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const running = useRef(false);   // blocks a second click before the disabled button renders
   const { addresses, invalid } = parse(text);
 
   async function run() {
+    if (running.current) return;
     setError(''); setNotice(''); setRows([]);
     if (!addresses.length) return setError('Paste at least one Aptos address.');
     if (addresses.length > MAX_ADDRESSES) return setError(`Check at most ${MAX_ADDRESSES} addresses at a time.`);
+    // Busy before the first request: connecting can wait out a rate limit for minutes, and the button must stay off.
+    running.current = true;
+    setBusy('Connecting…');
     try {
       // One anonymous reader and ledger pin per network; sources read on their own chain.
       const contexts = new Map<string, ReadContext>();
@@ -75,6 +80,7 @@ export default function Check({ prices, markets }: { prices: PriceBook; markets?
     } catch (err) {
       setError(`Could not reach the chain: ${readable(String(err))}`);
     } finally {
+      running.current = false;
       setBusy(''); setNotice('');
     }
   }
