@@ -8,6 +8,7 @@ import { kofiWithdrawals } from '../src/shared/sources/kofi-withdrawals.ts';
 import { BTCB, layerzeroClaimable, LZ_COINS } from '../src/shared/sources/layerzero-claimable.ts';
 import { merkleMklp, MKLP } from '../src/shared/sources/merkle-mklp.ts';
 import { ESMKL, MKL, merkleVemkl, PREMKL } from '../src/shared/sources/merkle-vemkl.ts';
+import { pancakeSyrupEnded, SYRUP_POOLS } from '../src/shared/sources/pancake-syrup.ts';
 import { thalaVestingMatured, thalaVethlExpired } from '../src/shared/sources/thala-thl.ts';
 import { THALA_LSD, thalaUnstake } from '../src/shared/sources/thala-unstake.ts';
 import { topazBids, u64Key } from '../src/shared/sources/topaz-bids.ts';
@@ -500,6 +501,41 @@ describe('canopy ended rewards', () => {
     const c = chain([row(POOL_ENDED, '0')]);
     expect((await canopyEndedRewards.read(context(c), OWNER)).positions).toEqual([]);
     expect(c.calls).toHaveLength(1);
+  });
+});
+
+describe('pancake syrup ended', () => {
+  const pool = SYRUP_POOLS.find(p => p.uid === 'U2')!;
+  const chain = (rewardLeft: string) => fakeChain({
+    resource: (address, type) => {
+      if (type.includes('::PoolInfo<')) return type.includes('::U2>') ? { end_timestamp: String(NOW - 600 * 86_400), last_reward_timestamp: String(NOW - 600 * 86_400 + 5),
+        acc_token_per_share: '3000000000000', precision_factor: '1000000000000', total_reward_token: { value: rewardLeft }, total_staked_token: { value: '1' } } : null;
+      if (type.includes('::UserInfo<') && type.includes('::U2>')) return { amount: '1000', reward_debt: '1200' };
+      return null;
+    },
+  });
+
+  it('lists the stake and the final pending reward of an ended pool', async () => {
+    const r = await pancakeSyrupEnded.read(context(chain('999999')), OWNER);
+    expect(r.positions.map(p => [p.positionKind, p.expectedPayout[0]?.raw, p.status])).toEqual([['principal', '1000', 'recoverable'], ['reward', '1800', 'recoverable']]);
+    expect(r.positions[0]).toMatchObject({ asset: pool.stake, ageBasis: 'onchain_maturity', claimableSince: new Date((NOW - 600 * 86_400) * 1000).toISOString() });
+    expect(r.positions[0].steps[0]).toMatchObject({ function: `0xfd1d8a523f1be89277ac0787ae3469312667e3d0b3f75a5f01bfc95530a2dc91::smart_chef::withdraw<${pool.types}>`, arguments: ['1000'] });
+  });
+
+  it('falls back to emergency_withdraw when the pool cannot pay the reward', async () => {
+    const r = await pancakeSyrupEnded.read(context(chain('10')), OWNER);
+    expect(r.positions[0].steps[0].function).toContain('::smart_chef::emergency_withdraw<');
+    expect(r.positions[1]).toMatchObject({ status: 'blocked', blockers: [{ code: 'reward_unfunded' }], expectedPayout: [] });
+  });
+
+  it('reads only the pools a staker was found in after the first read', async () => {
+    const memo = memoryMemo();
+    const c = chain('999999');
+    await pancakeSyrupEnded.read(context(c, undefined, memo), OWNER);
+    const first = c.calls.filter(x => x.startsWith('resource ' + OWNER)).length;
+    await pancakeSyrupEnded.read(context(c, undefined, memo), OWNER);
+    expect(first).toBe(SYRUP_POOLS.length);
+    expect(c.calls.filter(x => x.startsWith('resource ' + OWNER)).length - first).toBe(1);
   });
 });
 

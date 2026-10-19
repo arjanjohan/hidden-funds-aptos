@@ -18,6 +18,7 @@ Sources (evidence for each in [docs/sources.md](docs/sources.md)):
 | `kofi-receipts` | Aptos | kAPT / stkAPT still held after Kofi's wind-down, counted only when no market buys them for ≥ 80% of redemption (Panora quote) |
 | `merkle-mklp` | Aptos | Merkle Trade LP left after the wind-down (needs the Merkle team) |
 | `merkle-vemkl` | Aptos | Merkle Trade staked MKL never unlocked (unlock works any time since the wind-down) |
+| `pancake-syrup-ended` | Aptos | CAKE (and GUI) still staked in PancakeSwap syrup pools that ended in 2023-2024 |
 | `layerzero-claimable` | Aptos | Tokens bridged in through LayerZero (lzUSDC, lzUSDT, lzWETH, lzWBTC, lzUSDD, CAKE, BTC.b) that arrived but were never claimed |
 | `movement-native-delegation` | Movement | Unstaked MOVE whose lockup ended, never withdrawn |
 | `movement-inactive-validator` | Movement | MOVE still staked with a validator that left the set |

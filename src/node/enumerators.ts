@@ -6,6 +6,7 @@ import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
 import { type ClaimableHint, claimableHandle, LZ_COINS } from '../shared/sources/layerzero-claimable.ts';
 import { MKLP } from '../shared/sources/merkle-mklp.ts';
+import { poolState, SMART_CHEF, SYRUP_POOLS } from '../shared/sources/pancake-syrup.ts';
 import { VEMKL_COLLECTION } from '../shared/sources/merkle-vemkl.ts';
 import { THALA_VE, THALA_VEST } from '../shared/sources/thala-thl.ts';
 import { THALA_LSD } from '../shared/sources/thala-unstake.ts';
@@ -534,6 +535,21 @@ export const canopyEndedRewardsEnumerator: Enumerator = {
   sanity: async () => ({ check: 'none', ok: null, detail: 'no contract total: earned rewards are computed per staker' }),
 };
 
+// Senders of smart_chef::deposit: everyone who ever staked in a PancakeSwap (Aptos) syrup pool.
+export const pancakeSyrupEnumerator = entrySenders('pancake-syrup-ended', [{ contract: SMART_CHEF, module: 'smart_chef', name: 'deposit' }],
+  async (chain, ledger, positions) => {
+    const parts: string[] = [];
+    let ok = true;
+    const ctx = { chain, ledger, memo: { get: async () => undefined, set: async () => {} }, scratch: new Map() };
+    for (const pool of SYRUP_POOLS) {
+      const { staked } = await poolState(ctx, pool);
+      const found = sumGross(positions.filter(p => p.locator === `pool-${pool.uid}` && p.positionKind === 'principal'));
+      ok &&= found <= staked;
+      if (staked > 0n) parts.push(`${pool.uid} ${pct(found, staked)}`);
+    }
+    return { check: 'stake found per pool <= pool total_staked_token', ok, detail: parts.join('; ') };
+  });
+
 const noContractTotal: Enumerator['sanity'] = async () =>
   ({ check: 'none', ok: null, detail: 'no contract total available: balances are stored per account' });
 
@@ -548,4 +564,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator];
