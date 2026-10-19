@@ -102,6 +102,21 @@ describe('state', () => {
     expect(due).not.toContain(addr(2));  // zero, read just now
     expect(due).toContain(addr(3));      // never read
   });
+
+  it('spreads monthly re-reads over four weekly runs and reads everyone within 35 days', () => {
+    const state = new State(':memory:');
+    const def = { ...source(async () => { throw new Error(); }), refresh: { nonZero: 'monthly', zero: 'monthly' } } as SourceDef;
+    const owners = Array.from({ length: 64 }, (_, i) => addr((0xb00 + i).toString(16)));
+    const readAt = Date.parse('2026-10-05T03:00:00Z');
+    state.upsertCandidates('t', owners.map(owner => ({ owner })), new Date(readAt).toISOString());
+    for (const o of owners) state.recordRead('t', o, [position(o)], true, new Date(readAt).toISOString());
+    const dueAt = (days: number) => state.due(def, readAt + days * 86_400_000, new Set()).map(d => d.owner);
+    expect(dueAt(14)).toEqual([]);
+    const weeks = [21, 28, 35].map(d => dueAt(d).length);
+    expect(weeks[0]).toBeGreaterThan(0);
+    expect(weeks[0]).toBeLessThan(owners.length);
+    expect(dueAt(35).length).toBe(owners.length);
+  });
 });
 
 describe('state changes', () => {

@@ -6,7 +6,14 @@ import { DatabaseSync } from 'node:sqlite';
 import type { Memo, Position, SourceDef } from '../shared/types.ts';
 
 const DAY_MS = 86_400_000;
-export const AGE_LIMIT_MS = { every_run: 0, weekly: 7 * DAY_MS, monthly: 30 * DAY_MS } as const;
+/** Longest time a known position goes without a re-read. Monthly owners are normally re-read every 28 days (see
+ *  `spread`); 35 days is the hard limit while they settle into their week. */
+export const AGE_LIMIT_MS = { every_run: 0, weekly: 7 * DAY_MS, monthly: 35 * DAY_MS } as const;
+
+/** Monthly re-reads are spread over 4 weekly runs: from day 21, an owner is due in the week matching a bucket taken
+ *  from its address, so each run carries about a quarter of them instead of all at once. */
+const SPREAD_FROM_MS = 21 * DAY_MS;
+const spreadDue = (owner: string, nowMs: number) => parseInt(owner.slice(-4), 16) % 4 === Math.floor(nowMs / (7 * DAY_MS)) % 4;
 
 export class State {
   private db: DatabaseSync;
@@ -70,7 +77,8 @@ export class State {
       const age = r.dirty || !r.last_read_at ? Infinity : nowMs - Date.parse(r.last_read_at);
       const limit = r.last_nonzero || r.last_complete === 0 ? AGE_LIMIT_MS[source.refresh.nonZero] : AGE_LIMIT_MS[source.refresh.zero];
       // Reads slightly early so a weekly cadence never skips a run because of schedule jitter.
-      if (age < limit - DAY_MS / 2) continue;
+      const spread = limit === AGE_LIMIT_MS.monthly && age >= SPREAD_FROM_MS && spreadDue(r.owner, nowMs);
+      if (age < limit - DAY_MS / 2 && !spread) continue;
       // A full scan refreshes every hint, so only this run's hints apply; an incremental scan only returns changed
       // owners, so for the rest the stored hint is the latest knowledge.
       const hint = r.hint && (storedHints || enumerated.has(r.owner)) ? JSON.parse(r.hint) : undefined;
