@@ -1,6 +1,22 @@
-# hidden funds · Aptos
+# hidden funds · Aptos + Movement
 
-Finds APT people left behind on Aptos: stake that finished unlocking but was never withdrawn, and unstake requests that matured but were never claimed. Read-only: the site never connects a wallet or asks for a signature.
+Finds funds people left behind on Aptos and Movement. Read-only: the site never connects a wallet or asks for a signature.
+
+Sources (evidence for each in [docs/sources.md](docs/sources.md)):
+
+| Source | Chain | What is left behind |
+|---|---|---|
+| `native-delegation` | Aptos | Unstaked APT whose lockup ended, never withdrawn |
+| `delegation-inactive-validator` | Aptos | APT still staked with a validator that left the set (earns nothing, withdrawable now) |
+| `amnis-withdrawals` | Aptos | Amnis withdrawal NFTs past their lockup, never redeemed |
+| `thala-unstake` | Aptos | Thala APT unstake requests matured, never completed |
+| `kofi-withdrawals` | Aptos | Kofi withdrawal tickets unlocked, never finalized (Kofi is winding down) |
+| `tortuga-tickets` | Aptos | Tortuga unstake tickets past cooldown, never claimed |
+| `thala-vethl-expired` | Aptos | Expired veTHL locks never unlocked |
+| `thala-vesting-matured` | Aptos | Vested THL farm rewards never claimed |
+| `trufin-unlocks` | Aptos | TruFin unlock requests claimable, never withdrawn |
+| `movement-native-delegation` | Movement | Unstaked MOVE whose lockup ended, never withdrawn |
+| `movement-inactive-validator` | Movement | MOVE still staked with a validator that left the set |
 
 - **Dashboard:** weekly aggregate snapshot per source. Only totals are published, never addresses.
 - **Check:** paste addresses. Your browser reads Aptos mainnet directly; the addresses are not sent to this site.
