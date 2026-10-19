@@ -1,23 +1,23 @@
 {
   "schema": 1,
-  "generatedAt": "2026-10-19T11:34:42.447Z",
+  "generatedAt": "2026-10-19T11:37:57.001Z",
   "prices": {
     "0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.768905,
+      "usd": 0.765011,
       "decimals": 8,
-      "at": "2026-10-19T11:28:00.000Z",
+      "at": "2026-10-19T11:36:42.000Z",
       "source": "coingecko simple/price"
     },
     "0x07fd500c11216f0fe3095d0c4b8aa4d64a4e2e04f83758462f2b127255643615::thl_coin::THL": {
-      "usd": 0.00990032,
+      "usd": 0.00984707,
       "decimals": 8,
-      "at": "2026-10-19T11:28:21.000Z",
+      "at": "2026-10-19T11:37:02.000Z",
       "source": "coingecko simple/price"
     },
     "movement:0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.00724771,
+      "usd": 0.00723243,
       "decimals": 8,
-      "at": "2026-10-19T11:28:21.000Z",
+      "at": "2026-10-19T11:37:02.000Z",
       "source": "coingecko simple/price"
     }
   },
@@ -2299,6 +2299,214 @@
       ]
     },
     {
+      "id": "merkle-vemkl",
+      "chain": "aptos",
+      "title": "Merkle Trade staked MKL (veMKL) never unlocked",
+      "summary": "Merkle Trade wound down in February 2026. Locked MKL can be unlocked at any time since then, but these locks were never unlocked.",
+      "category": "closed_app",
+      "inclusionRule": "Protocol wound down (2026-02); veMKL unlock works regardless of unlock_time since the wind-down.",
+      "protocolStatus": {
+        "state": "wound_down",
+        "evidence": "Wind-down announced 2026-02-03 (final distribution 02-12, \"staked MKL can be redeemed after that\"); unlock of a lock due 2026-12-03 simulated successfully on 2026-10-19.",
+        "checkedAt": "2026-10-19",
+        "effectiveAt": "2026-02-12T00:00:00Z"
+      },
+      "howTo": [
+        "Open Merkle Trade staking if it is still online and unlock your veMKL.",
+        "Or call 0x5ae6789dd2fec1a9ec9cccfb3acaf12e93d432f0a3a42c92fe1a9d490b7bbc06::managed_staking::unlock(veMKL token address) from the holding account."
+      ],
+      "officialUrl": "https://app.merkle.trade",
+      "headlineAgeBases": [
+        "protocol_closure"
+      ],
+      "run": {
+        "processor": "token_v2_processor",
+        "scope": "current owners of tokens in collection 0xe101e80f4edf81e21bad1f03974736f360bec063f230677be6b7d43c0e483216 (current_token_ownerships_v2, amount > 0)",
+        "enumeration": {
+          "pages": 14,
+          "newCandidates": 1366,
+          "candidates": 1366,
+          "start": "2026-10-19T11:37:09.966Z",
+          "end": "2026-10-19T11:37:14.222Z"
+        },
+        "verification": {
+          "read": 1366,
+          "incomplete": 0,
+          "notReread": 0,
+          "start": "2026-10-19T11:37:14.733Z",
+          "ledgerFrom": "7678641265",
+          "end": "2026-10-19T11:37:56.318Z",
+          "ledgerTo": "7678647887"
+        },
+        "completeness": "complete",
+        "degradedReasons": [],
+        "errors": [],
+        "watermarkBefore": {
+          "version": "7678640460",
+          "timestamp": "2026-10-19T11:37:07.252544Z"
+        },
+        "watermarkAfter": {
+          "version": "7678641097",
+          "timestamp": "2026-10-19T11:37:13.290771Z"
+        },
+        "sanity": {
+          "check": "none",
+          "ok": null,
+          "detail": "no contract total available: each lock holds its own stores"
+        }
+      },
+      "lastSuccessAt": "2026-10-19T11:37:56.318Z",
+      "totals": {
+        "face": {
+          "positions": 1366,
+          "owners": 1366,
+          "usd": 0,
+          "unpriced": 1366,
+          "ownersMin10": 0
+        },
+        "byStatus": {
+          "recoverable": {
+            "positions": 1340,
+            "owners": 1340,
+            "usd": 0,
+            "unpriced": 1340,
+            "ownersMin10": 0
+          },
+          "team_gated": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "blocked": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 26,
+            "owners": 26,
+            "usd": 0,
+            "unpriced": 26,
+            "ownersMin10": 0
+          }
+        },
+        "aged": {
+          "ge30": {
+            "positions": 1340,
+            "owners": 1340,
+            "usd": 0,
+            "unpriced": 1340,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 1340,
+            "owners": 1340,
+            "usd": 0,
+            "unpriced": 1340,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 1340,
+            "owners": 1340,
+            "usd": 0,
+            "unpriced": 1340,
+            "ownersMin10": 0
+          }
+        },
+        "agedEstimated": {
+          "ge30": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "byAgeBasis": {
+          "onchain_maturity": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "protocol_closure": {
+            "positions": 1340,
+            "owners": 1340,
+            "usd": 0,
+            "unpriced": 1340,
+            "ownersMin10": 0
+          },
+          "position_interaction": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "headline": {
+          "positions": 1340,
+          "owners": 1340,
+          "usd": 0,
+          "unpriced": 1340,
+          "ownersMin10": 0
+        },
+        "headlineTopOwnerShare": 0
+      },
+      "sizeBands": [
+        {
+          "upTo": 1,
+          "positions": 0
+        },
+        {
+          "upTo": 10,
+          "positions": 0
+        },
+        {
+          "upTo": 100,
+          "positions": 0
+        },
+        {
+          "upTo": 1000,
+          "positions": 0
+        },
+        {
+          "upTo": 10000,
+          "positions": 0
+        },
+        {
+          "upTo": null,
+          "positions": 0
+        }
+      ]
+    },
+    {
       "id": "movement-native-delegation",
       "chain": "movement",
       "title": "Unstaked MOVE never withdrawn",
@@ -2713,10 +2921,10 @@
   ],
   "global": {
     "headlineUsd": 9590267.169517873,
-    "headlineOwners": 19927,
-    "headlineOwnersMin10": 3600,
+    "headlineOwners": 21087,
+    "headlineOwnersMin10": 3553,
     "recoverableUsd": 15436109.778577155,
-    "requests": 27382,
+    "requests": 6075,
     "requestCap": 100000
   }
 }
