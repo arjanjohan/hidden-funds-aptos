@@ -192,7 +192,7 @@ So about 5–20 reads per address across these sources. That fits in a browser o
   - Delegation ages are memoized per (owner, pool, amount), so only new or changed positions cost aging reads.
 - **Sources in Phase 1:** native delegation and Thala. Aries is left out until the real Geomi cost per request is known, since it would be ~95% of requests.
 - **Check page:** calls Aptos anonymously from the visitor's browser. CORS is verified on the fullnode, archive and indexer. Our key never ships to the browser.
-- **API cost guard:** a per-run request cap (default 100,000; `REQUEST_CAP` env or `--cap`). Hitting it marks the remaining sources degraded instead of overspending.
+- **API cost guard:** a per-run cap on keyed (paid) Aptos requests (default 100,000; `REQUEST_CAP` env or `--cap`). Hitting it marks the remaining Aptos sources degraded instead of overspending. Movement's public endpoints are free and not counted, so Movement sources still run.
 - **Deviations from the plan:**
   - The layer boundary is enforced by `tests/boundary.test.ts` (source imports plus the built `dist/`) instead of ESLint and TS project references. Same guarantee, no extra tooling.
   - `@aptos-labs/ts-sdk` is a dev dependency used only by the spikes. Shared and browser code use plain `fetch`.
