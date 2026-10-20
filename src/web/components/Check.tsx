@@ -1,15 +1,20 @@
 // Live check: reads Aptos mainnet from the browser, anonymously. Nothing is sent to this site.
-import { useState } from 'react';
-import { usd as toUsd, type PriceBook } from '../../shared/accounting.ts';
-import { createReader, NETWORKS, normalizeAddress } from '../../shared/chain.ts';
+import { useRef, useState } from 'react';
+import { freshPrices, usd as toUsd, type PriceBook } from '../../shared/accounting.ts';
+import { createReader, mapLimit, NETWORKS, normalizeAddress } from '../../shared/chain.ts';
 import { ASSETS } from '../../shared/assets.ts';
 import { tableProvider, type MarketTable } from '../../shared/market.ts';
+import { readClassified } from '../../shared/owners.ts';
 import { APT } from '../../shared/sources/delegation.ts';
 import { SOURCES } from '../../shared/sources/index.ts';
 import type { Memo, Position, ReadContext, ReadResult } from '../../shared/types.ts';
 import { date, short, units, usd } from '../lib/format.ts';
 
 const MAX_ADDRESSES = 20;
+/** Sources read at once per address: keeps each burst small against the public per-IP limit. */
+const SOURCE_CONCURRENCY = 4;
+/** Enough retries to outlast the public API's 5-minute rate-limit window (2+4+…+60 s ≈ 5 min). */
+const RETRIES = 9;
 const STATUS: Record<Position['status'], string> = {
   recoverable: 'You can claim', team_gated: 'Needs the team', blocked: 'May not work', unknown: 'Unknown',
 };
@@ -24,41 +29,72 @@ function parse(text: string): { addresses: string[]; invalid: string[] } {
   return { addresses: [...addresses], invalid };
 }
 
+/** A short reason for an error: rate limits by name, anything else truncated. */
+function readable(error: string): string {
+  return /429|rate limit/i.test(error) ? 'the public API rate limit was reached' : error.slice(0, 120);
+}
+
 function memory(): Memo {
   const data = new Map<string, string>();
   return { get: async k => data.get(k), set: async (k, v) => { data.set(k, v); } };
 }
 
-export default function Check({ prices, markets }: { prices: PriceBook; markets?: MarketTable }) {
+export default function Check({ prices: published, markets }: { prices: PriceBook; markets?: MarketTable }) {
+  // The snapshot's prices may be old when its weekly run failed; stale quotes are dropped, never shown as values.
+  const prices = freshPrices(published, Date.now() / 1000);
+  const stalePrices = Object.keys(published).length - Object.keys(prices).length;
   const [text, setText] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const running = useRef(false);   // blocks a second click before the disabled button renders
   const { addresses, invalid } = parse(text);
 
   async function run() {
-    setError(''); setRows([]);
+    if (running.current) return;
+    setError(''); setNotice(''); setRows([]);
     if (!addresses.length) return setError('Paste at least one Aptos address.');
     if (addresses.length > MAX_ADDRESSES) return setError(`Check at most ${MAX_ADDRESSES} addresses at a time.`);
+    // Busy before the first request: connecting can wait out a rate limit for minutes, and the button must stay off.
+    running.current = true;
+    setBusy('Connecting…');
     try {
-      // One anonymous reader and ledger pin per network; sources read on their own chain.
-      const contexts = new Map<string, ReadContext>();
+      // One anonymous reader and ledger pin per network; sources read on their own chain. A network that cannot be
+      // reached only fails its own sources.
+      const contexts = new Map<string, ReadContext>(), unreachable = new Map<string, string>();
       for (const network of new Set(SOURCES.map(s => s.chain))) {
-        const chain = createReader({ network, retries: 3 });
-        contexts.set(network, { chain, ledger: await chain.ledger(), memo: memory(), scratch: new Map(),
-          market: tableProvider(markets, prices[APT]?.usd ?? null) });
+        const chain = createReader({ network, retries: RETRIES, onWait: (_label, ms, status) => {
+          if (status === 429) setNotice(`The public ${NETWORKS[network].name} API is rate-limiting this browser; continuing in ${Math.ceil(ms / 1000)} s…`);
+        } });
+        try {
+          contexts.set(network, { chain, ledger: await chain.ledger(), memo: memory(), scratch: new Map(),
+            market: tableProvider(markets, prices[APT]?.usd ?? null) });
+        } catch (err) {
+          unreachable.set(network, `could not reach ${NETWORKS[network].name}: ${readable(String(err))}`);
+        }
       }
+      if (!contexts.size) throw new Error([...unreachable.values()].join('; '));
       const out: Row[] = [];
       for (const [i, address] of addresses.entries()) {
         setBusy(`Checking ${i + 1} of ${addresses.length}…`);
-        const results = await Promise.all(SOURCES.map(async s => ({ sourceId: s.id, result: await s.read(contexts.get(s.chain)!, address) })));
+        // A source that fails is reported on its own; the others still answer.
+        const results = await mapLimit(SOURCES, SOURCE_CONCURRENCY, async s => {
+          const ctx = contexts.get(s.chain);
+          if (!ctx) return { sourceId: s.id, result: { positions: [], complete: false, errors: [unreachable.get(s.chain)!], ledgerVersion: '0' } };
+          // Same read and owner classification as the pipeline: a resource account or object cannot sign a claim.
+          try { return { sourceId: s.id, result: await readClassified(s, ctx, address) }; }
+          catch (err) { return { sourceId: s.id, result: { positions: [], complete: false, errors: [String(err)], ledgerVersion: ctx.ledger.version } }; }
+        });
         out.push({ address, results });
         setRows([...out]);
+        setNotice('');
       }
     } catch (err) {
-      setError(`Could not reach the chain: ${String(err).slice(0, 200)}`);
+      setError(`Could not reach the chain: ${readable(String(err))}`);
     } finally {
-      setBusy('');
+      running.current = false;
+      setBusy(''); setNotice('');
     }
   }
 
@@ -68,7 +104,9 @@ export default function Check({ prices, markets }: { prices: PriceBook; markets?
         style={{ width: '100%', font: '14px ui-monospace, monospace', padding: 10, borderRadius: 8, border: '1px solid var(--line)', background: 'var(--card)', color: 'var(--fg)' }} />
       {invalid.length > 0 && <p className="muted">Not an Aptos address: {invalid.slice(0, 3).join(', ')}{invalid.length > 3 ? '…' : ''}</p>}
       <p><button className="button" onClick={run} disabled={!!busy}>{busy || `Check ${addresses.length || ''} wallet${addresses.length === 1 ? '' : 's'}`}</button></p>
+      {notice && <p className="muted" role="status">{notice}</p>}
       {error && <p style={{ color: 'var(--bad)' }}>{error}</p>}
+      {rows.length > 0 && stalePrices > 0 && <p className="muted">{stalePrices} price{stalePrices === 1 ? ' is' : 's are'} older than 7 days and not shown; amounts are still exact.</p>}
       {rows.map(row => <AddressResult key={row.address} row={row} prices={prices} />)}
     </div>
   );
@@ -84,7 +122,7 @@ function AddressResult({ row, prices }: { row: Row; prices: PriceBook }) {
       {positions.map(p => <PositionRow key={p.id} p={p} prices={prices} />)}
       {incomplete.map(r => (
         <p key={r.sourceId} style={{ color: 'var(--bad)' }}>
-          {SOURCES.find(s => s.id === r.sourceId)?.title}: could not be read completely ({r.result.errors[0]?.slice(0, 120)}). Try again later.
+          {SOURCES.find(s => s.id === r.sourceId)?.title}: could not be read completely ({readable(r.result.errors[0] ?? '')}). Try again later.
         </p>
       ))}
     </section>

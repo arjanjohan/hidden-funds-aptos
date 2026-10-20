@@ -1,10 +1,9 @@
 // Identity-bound USD prices. A quote older than 7 days is not a price.
-import type { PriceBook } from '../shared/accounting.ts';
+import { PRICE_MAX_AGE_SECS, type PriceBook } from '../shared/accounting.ts';
 import { APT, MOVE } from '../shared/sources/delegation.ts';
 import { BTCB, CAKE, LZ_BRIDGE } from '../shared/sources/layerzero-claimable.ts';
 import { THL } from '../shared/sources/thala-thl.ts';
 
-const MAX_QUOTE_AGE_SECS = 7 * 86_400;
 const COINGECKO = [
   { asset: APT, id: 'aptos', decimals: 8 },
   { asset: THL, id: 'thala', decimals: 8 },
@@ -31,7 +30,7 @@ export async function fetchPrices(nowSecs: number): Promise<{ prices: PriceBook;
     for (const c of COINGECKO) {
       const q = body[c.id];
       if (!q?.usd || q.usd <= 0) { errors.push(`no quote for ${c.id}`); continue; }
-      if (nowSecs - q.last_updated_at > MAX_QUOTE_AGE_SECS) { errors.push(`quote for ${c.id} older than 7 days`); continue; }
+      if (nowSecs - q.last_updated_at > PRICE_MAX_AGE_SECS) { errors.push(`quote for ${c.id} older than 7 days`); continue; }
       prices[c.asset] = { usd: q.usd, decimals: c.decimals, at: new Date(q.last_updated_at * 1000).toISOString(), source: 'coingecko simple/price' };
     }
   } catch (err) {
