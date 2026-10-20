@@ -193,7 +193,10 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Argo, Laminar Markets:** no closure notice found (Laminar was merged into Econia in 2023).
 - **Hyperion fridge** (delayed LP withdrawals): `fridge::asset_unclaimed_all()` reports 4.70 APT in total across all users, about $3.50. Too small to maintain.
 - **Superposition** (Aptos lending): not left behind. Its markets are unpaused and still used (last deposit 2026-10-14). Operator-signed packets are its normal app flow, not closure evidence.
-- **Validator-owned stake pools** (not delegation pools): 43.6K APT of withdrawable inactive stake in 13 pools, plus 13.4K APT active in pools whose validator stopped. Owners are `staking_contract` or vesting resource accounts, which the owner rule makes `unknown`.
+- **Validator-owned stake pools** (not delegation pools; re-sized 2026-10-20, 378 pools):
+  - Two resource-account pools outside the validator set hold **14.4M and 4.1M APT** of active stake, with lockups ending 2026-10-31 and 10-22. They look like institutional `staking_contract`/vesting pools between validator setups, not abandoned funds, and would roughly double the headline. Not counted without evidence of abandonment.
+  - Active validators hold small withdrawable inactive stakes (334–3,410 APT each): normal operator flow.
+  - About 30 small pools outside the set hold 1.5–855 APT each, with lockups that ended in 2023–2026. Owners are `staking_contract` or vesting resource accounts (the owner rule makes them `unknown`); tracing each to its staker or shareholders is not worth it at this size.
 - **Moar farming rewards:** paid in Moar's own token, which has no CoinGecko price, so the value would be unpriced. Skipped.
 - **Amnis "$AMI Claim" NFTs:** a marker with an `is_claimed` flag; the tokens were paid through an off-chain claim portal. No on-chain claim exists.
 - **"Amnis Reward Voucher" NFTs:** phishing. They point to `pamnis.com`, and the creator account has no contract.
