@@ -226,8 +226,8 @@ describe('state changes', () => {
 describe('prices', () => {
   afterEach(() => vi.unstubAllGlobals());
   // stAPT: 1.2171 amAPT each; sthAPT: 1.25 thAPT each, less a 0.15% unstake fee.
-  const rates = (fail = false) => fakeChain({ view: (fn) => {
-    if (fail) throw new Error('view: HTTP 500');
+  const rates = (fail: false | 'all' | 'thala' = false) => fakeChain({ view: (fn) => {
+    if (fail === 'all' || (fail === 'thala' && fn.includes('::staking::'))) throw new Error('view: HTTP 500');
     if (fn.endsWith('::stapt_price')) return ['121710000'];
     if (fn.endsWith('::thAPT_sthAPT_exchange_rate')) return ['125', '100'];
     if (fn.endsWith('::unstake_APT_fee_bps')) return ['15'];
@@ -255,10 +255,15 @@ describe('prices', () => {
     expect(prices[STAPT]).toMatchObject({ decimals: 8, at, source: expect.stringMatching(/^derived/) });
     expect(prices[STAPT].usd).toBeCloseTo(2 * 1.2171);
     expect(prices[STHAPT].usd).toBeCloseTo(2 * 1.25 * 0.9985);
-    // A failed rate read leaves them unpriced, with an error; no APT quote means nothing to derive from.
-    const failed = await fetchPrices(1_800_000_000, rates(true));
+    // A failed rate read leaves that receipt unpriced, with an error, and the other priced; no APT quote means nothing
+    // to derive from.
+    const failed = await fetchPrices(1_800_000_000, rates('all'));
     expect(failed.prices[STAPT]).toBeUndefined();
-    expect(failed.errors).toContainEqual(expect.stringMatching(/redemption rates/));
+    expect(failed.errors).toContainEqual(expect.stringMatching(/stAPT redemption rate/));
+    const thala = await fetchPrices(1_800_000_000, rates('thala'));
+    expect(thala.prices[STHAPT]).toBeUndefined();
+    expect(thala.prices[STAPT].usd).toBeCloseTo(2 * 1.2171);
+    expect(thala.errors.filter(e => /redemption/.test(e))).toEqual([expect.stringMatching(/^sthAPT redemption rate/)]);
     vi.stubGlobal('fetch', async () => new Response(JSON.stringify({})));
     expect((await fetchPrices(1_800_000_000, rates())).prices).toEqual({});
   });

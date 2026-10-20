@@ -62,16 +62,23 @@ export async function fetchPrices(nowSecs: number, aptos: ChainReader): Promise<
  *    less unstake_APT_fee_bps. */
 async function redemptionPrices(prices: PriceBook, errors: string[], aptos: ChainReader) {
   const apt = prices[APT];
-  try {
-    const [[stApt], [thApt, sthApt], [feeBps]] = await Promise.all([
-      aptos.view(`${AMNIS}::stapt_token::stapt_price`, []),
-      aptos.view(`${THALA_LSD}::staking::thAPT_sthAPT_exchange_rate`, []),
-      aptos.view(`${THALA_LSD}::staking::unstake_APT_fee_bps`, []),
-    ]);
-    prices[STAPT] = { usd: apt.usd * Number(stApt) / 1e8, decimals: 8, at: apt.at, source: 'derived: Amnis stapt_price x APT (coingecko)' };
-    prices[STHAPT] = { usd: apt.usd * Number(thApt) / Number(sthApt) * (1 - Number(feeBps) / 10_000), decimals: 8, at: apt.at,
-      source: 'derived: Thala thAPT_sthAPT_exchange_rate less unstake_APT_fee_bps x APT (coingecko)' };
-  } catch (err) {
-    errors.push(`staked-APT redemption rates: ${String(err).slice(0, 200)}`);
-  }
+  // Each protocol's rate is read on its own, so one failing view leaves only that receipt unpriced.
+  const derive = async (asset: string, name: string, source: string, rate: () => Promise<number>) => {
+    try {
+      prices[asset] = { usd: apt.usd * await rate(), decimals: 8, at: apt.at, source };
+    } catch (err) {
+      errors.push(`${name} redemption rate: ${String(err).slice(0, 200)}`);
+    }
+  };
+  await Promise.all([
+    derive(STAPT, 'stAPT', 'derived: Amnis stapt_price x APT (coingecko)', async () =>
+      Number((await aptos.view(`${AMNIS}::stapt_token::stapt_price`, []))[0]) / 1e8),
+    derive(STHAPT, 'sthAPT', 'derived: Thala thAPT_sthAPT_exchange_rate less unstake_APT_fee_bps x APT (coingecko)', async () => {
+      const [[thApt, sthApt], [feeBps]] = await Promise.all([
+        aptos.view(`${THALA_LSD}::staking::thAPT_sthAPT_exchange_rate`, []),
+        aptos.view(`${THALA_LSD}::staking::unstake_APT_fee_bps`, []),
+      ]);
+      return Number(thApt) / Number(sthApt) * (1 - Number(feeBps) / 10_000);
+    }),
+  ]);
 }
