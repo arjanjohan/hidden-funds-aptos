@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RequestCapReached } from '../src/node/client.ts';
 import type { Enumerator } from '../src/node/enumerators.ts';
 import { fetchPrices } from '../src/node/prices.ts';
-import { runSource } from '../src/node/snapshot.ts';
+import { keepPrevious, runSource } from '../src/node/snapshot.ts';
 import { State } from '../src/node/state.ts';
 import { positionIds } from '../src/shared/accounting.ts';
 import type { ChainReader, Position, ReadResult, SourceDef } from '../src/shared/types.ts';
@@ -88,6 +88,17 @@ describe('runSource', () => {
 });
 
 describe('market evidence', () => {
+  it('re-runs a market-dependent source in a single-source run once its quotes have expired', () => {
+    const now = Date.parse('2026-10-20T00:00:00Z') / 1000;
+    const kofi = { ...source(async () => { throw new Error(); }), id: 'k', usesMarketQuotes: true } as SourceDef;
+    const plain = { ...source(async () => { throw new Error(); }), id: 'p' } as SourceDef;
+    const prev = (end: string) => ({ run: { verification: { end } } }) as any;
+    expect(keepPrevious(plain, prev('2026-09-01T00:00:00Z'), 'x', now)).toBe(true);
+    expect(keepPrevious(kofi, prev('2026-10-18T00:00:00Z'), 'x', now)).toBe(true);
+    expect(keepPrevious(kofi, prev('2026-10-01T00:00:00Z'), 'x', now)).toBe(false);
+    expect(keepPrevious(kofi, undefined, 'x', now)).toBe(false);
+  });
+
   it('reports a run whose receipt positions have no market quote as degraded', async () => {
     const blocked: Position = { ...position(addr(1)), status: 'unknown', blockers: [{ code: 'market_check_unavailable', detail: '' }] };
     const { run } = await runSource(source(async () => ({ positions: [blocked], complete: true, errors: [], ledgerVersion: '1' })),
