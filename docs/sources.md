@@ -310,15 +310,21 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Sample (the earliest 400 depositors):** 40 still hold CAKE (10%), 1,720 CAKE in total, median 1.5 CAKE, 13 of 40 with ≥ $10. That suggests ~1,500 stakers across all depositors; the sample leans to the early pools.
 - **Published (CI run, 2026-10-19):** complete. **$130.3K** of CAKE, 3,781 stakers, 377 with ≥ $10; the largest holds 28%. 7,675 positions: 3,844 stakes plus 3,831 pending rewards in unpriced tokens. Sanity: stake found per pool = 99.98–100% of each pool's `total_staked_token`. First run: ~93.8K requests (330 indexer pages, 14,589 depositors).
 
-## topaz-bids (built, not enabled)
+## topaz-bids
 
-- **What:** APT escrowed in Topaz NFT bids. Topaz ceased operations on 2024-08-21 (homepage notice; aptos.dev lists it as deprecated). The bid's APT stays in Topaz's tables until the bidder cancels.
-  - Collection bids: `collection_marketplace::Bids<APT>` (bid → coins, deadline, bidder); `cancel<APT>(bid id)`.
-  - Token bids: `bid_any::CoinEscrow<APT>` (bid → coins), bidder and deadline in `bid_any::Bids`; `cancel_bid<APT>(bid id)`.
-- **Size (indexer, 2026-10-19):** 30,567 APT in 22,879 collection bids (17,880 bidders, 1,084 with ≥ 1 APT, top bidder 11,266 APT), plus 7,617 APT in 190,176 token-bid escrows (mostly dust). About $29K at $0.76/APT. 64/64 sampled bids match the chain.
-- **Simulation:** 3/3 cancels succeed and return exactly the escrowed APT: two collection bids (33.33 and 0.5 APT) and a token bid that expired in 2022 (1 APT).
-- **Rule:** only expired bids count (R2: the order ended on its deadline). A bid whose deadline has not passed can still be filled by calling the contract directly, so it is an open order (R4) and is left out, even though Topaz is closed. Age: the deadline.
-- **Not enabled yet:** the measurement run stopped when the Geomi credit ran out (the anonymous limit, 40,000 compute units per 5 minutes, is about 73 indexer pages). Indexer `key: {_in: …}` lookups on these tables take 6–46 s (no key index), so the enumerator pages the bid tables themselves (~850K rows).
+- **What:** APT escrowed in expired Topaz NFT bids. Topaz ceased operations on 2024-08-21 (homepage notice; aptos.dev lists it as deprecated). A bid's APT stays in Topaz's tables, also after its deadline, until the bidder cancels.
+  - Collection bids: `collection_marketplace::Bids<APT>` (bid → coins, deadline, buyer); `cancel<APT>(bid id)`.
+  - Token bids: `bid_any::CoinEscrow<APT>` (bid → coins), with buyer and deadline in `bid_any::Bids`; `cancel_bid<APT>(bid id)`.
+- **Rule:** only expired bids count (R2: the order ended on its deadline; age = the deadline). A bid whose deadline has not passed can still be filled by calling the contract directly, so it is an open order (R4) and is left out, even though Topaz is closed. A deadline of 0 means none was set: also an open order.
+- **Enumeration:** the three bid tables themselves (~850K rows, 16 key ranges in parallel; 8,576 indexer pages). Rows are never deleted (a cancel or fill empties the coins), so later runs only fetch changed rows.
+  - Indexer `key: {_in: …}` lookups on these tables take 6–46 s (no key index), so they are used only for the few token bids an incremental run cannot join.
+- **Read:** with the enumeration hint, only the bids it lists as funded and expired are read on chain (one table read each).
+  - Without a hint (the check page), the bidder's ids come from Topaz's per-bidder `Index`. That index lists some ids under the wrong bidder (ids 1, 4 and 9 appear under several), so a bid counts only when its own record names the owner as buyer. Walking the index without that check counted 32 bids twice.
+- **Dust:** a bidder whose expired bids total under 0.25 APT (~$0.20) is not read on chain: `indexer_only`, out of totals.
+- **Result (2026-10-19, local run with the pipeline code):** complete. **5,120 APT (~$3.9K) in 4,155 expired bids, 1,736 bidders**, 71 with ≥ $10; the largest holds 138 APT. Dust: 203,617 bids, 1,002 APT. Most of the 30.5K APT in collection bids sits in bids whose deadlines are years away (R4).
+- **Cost:** first run 8.6K indexer pages + ~6.6K table reads. The first version walked every bidder's index and used 176K requests; reading only hinted expired bids gives the same result (minus the 32 double counts) for 6.7K.
+- **Simulation (anonymous fullnode, seed 20261018):** 18/18 sampled cancels succeed and return exactly the escrowed APT, across both bid kinds; 9 need gas.
+- **Re-read schedule:** monthly (spread over four weekly runs), or when a bid row changes.
 
 ## Other bridges and NFT marketplaces checked
 

@@ -11,8 +11,9 @@ import { merkleVemkl } from './merkle-vemkl.ts';
 import { pancakeSyrupEnded } from './pancake-syrup.ts';
 import { thalaVestingMatured, thalaVethlExpired } from './thala-thl.ts';
 import { thalaUnstake } from './thala-unstake.ts';
+import { topazBids } from './topaz-bids.ts';
 import { tortugaTickets } from './tortuga-tickets.ts';
 import { trufinUnlocks } from './trufin-unlocks.ts';
 
-export const SOURCES: SourceDef<any>[] = [delegation, delegationInactiveValidator, thalaUnstake, kofiWithdrawals, tortugaTickets, amnisWithdrawals, thalaVethlExpired, thalaVestingMatured, trufinUnlocks, kofiReceipts, merkleMklp, merkleVemkl, layerzeroClaimable, pancakeSyrupEnded,
+export const SOURCES: SourceDef<any>[] = [delegation, delegationInactiveValidator, thalaUnstake, kofiWithdrawals, tortugaTickets, amnisWithdrawals, thalaVethlExpired, thalaVestingMatured, trufinUnlocks, kofiReceipts, merkleMklp, merkleVemkl, layerzeroClaimable, pancakeSyrupEnded, topazBids,
   movementDelegation, movementInactiveValidator, canopyEndedRewards];

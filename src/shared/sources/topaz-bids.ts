@@ -45,7 +45,8 @@ export function topazTables(ctx: ReadContext): Promise<Record<TopazKind, { index
 export const u64Key = (id: string | bigint) => '0x' + BigInt(id).toString(16).padStart(16, '0').match(/../g)!.reverse().join('');
 
 /** Expired: the deadline has passed, so the bid can no longer be filled. */
-const expired = (ctx: ReadContext, deadline: number | undefined) => deadline !== undefined && deadline <= ctx.ledger.timestampSecs;
+const expired = (ctx: ReadContext, deadline: number | undefined) =>
+  deadline !== undefined && deadline > 0 && deadline <= ctx.ledger.timestampSecs;   // 0: no deadline set, an open order
 
 /** An expired bid's position; it ended on its deadline. */
 function position(ctx: ReadContext, owner: string, kind: TopazKind, id: string, raw: string, deadline: number, confidence: Position['confidence']): Position {
@@ -81,17 +82,25 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: TopazHint): Pro
     const tables = await topazTables(ctx);
     for (const kind of kinds) {
       const k = TOPAZ_KINDS[kind];
-      const indexed: string[] = (await ctx.chain.tableItem(tables[kind].index, 'address', 'vector<u64>', owner, version)) ?? [];
-      const known = new Map(Object.entries(hint?.[kind] ?? {}));
-      const ids = [...new Set([...indexed.map(String), ...known.keys()])];
-      const found = await mapLimit(ids, 3, async (id): Promise<Position | null> => {
+      // With the enumeration hint, only the bids it lists as funded and expired are read (a deadline never changes,
+      // and escrow only shrinks). Without one (the check page), the bidder's ids come from Topaz's own index.
+      const candidates: { id: string; deadline?: number }[] = hint
+        ? Object.entries(hint[kind] ?? {}).filter(([, b]) => BigInt(b.raw) > 0n && (b.deadline === undefined || expired(ctx, b.deadline))).map(([id, b]) => ({ id, deadline: b.deadline }))
+        : ((await ctx.chain.tableItem(tables[kind].index, 'address', 'vector<u64>', owner, version)) ?? []).map((id: unknown) => ({ id: String(id) }));
+      const found = await mapLimit(candidates, 3, async ({ id, deadline: known }): Promise<Position | null> => {
         try {
           const v = await ctx.chain.tableItem(tables[kind].store, 'u64', k.value, id, version);
           const raw = BigInt(kind === 'c' ? v?.coins?.value ?? 0 : v?.value ?? 0);
           if (raw === 0n) return null;
-          // The deadline is read on chain: an indexed deadline only saves the read for token bids.
-          const bid = kind === 'c' ? v : await ctx.chain.tableItem(tables.anyBids, 'u64', `${TOPAZ}::bid_any::Bid`, id, version);
-          const deadline = bid?.deadline !== undefined ? Math.floor(Number(bid.deadline) / 1e6) : undefined;
+          let deadline = known, buyer: string | undefined = kind === 'c' ? v?.buyer : undefined;
+          if (deadline === undefined) {
+            const bid = kind === 'c' ? v : await ctx.chain.tableItem(tables.anyBids, 'u64', `${TOPAZ}::bid_any::Bid`, id, version);
+            deadline = bid?.deadline !== undefined ? Math.floor(Number(bid.deadline) / 1e6) : undefined;
+            buyer = bid?.buyer;
+          }
+          // Topaz's per-bidder index lists some ids under the wrong bidder (ids 1, 4 and 9 under several), so a bid
+          // counts only when its own record names this owner. Hinted token bids carry their buyer from enumeration.
+          if (buyer !== undefined ? normalizeAddress(buyer) !== owner : !hint) return null;
           if (!expired(ctx, deadline)) return null;   // an open order (R4), or no deadline to tell
           return position(ctx, owner, kind, id, raw.toString(), deadline!, 'verified_view');
         } catch (err) {
