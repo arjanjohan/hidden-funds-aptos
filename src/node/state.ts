@@ -114,6 +114,16 @@ export class State {
     this.db.prepare('update candidates set changed_at = ?, dirty = 1 where source = ?').run(now, source);
   }
 
+  /** After a full scan: an owner with positions that the scan no longer returns has changed (it exited, claimed or
+   *  moved its holding), so it is due now rather than at its next monthly re-read. */
+  markGone(source: string, enumerated: Set<string>, now: string) {
+    const rows = this.db.prepare('select owner from candidates where source = ? and last_nonzero = 1').all(source) as { owner: string }[];
+    const mark = this.db.prepare('update candidates set changed_at = ?, dirty = 1 where source = ? and owner = ?');
+    this.db.exec('begin');
+    for (const r of rows) if (!enumerated.has(r.owner)) mark.run(now, source, r.owner);
+    this.db.exec('commit');
+  }
+
   /** Positions last read before `cutoff`: older than the source's own refresh window for non-zero owners. */
   staleCount(source: string, cutoff: string): number {
     return (this.db.prepare('select count(*) n from positions where source = ? and read_at < ?').get(source, cutoff) as any).n;

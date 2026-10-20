@@ -523,25 +523,42 @@ export const topazBidsEnumerator: Enumerator = {
   sanity: async () => ({ check: 'none', ok: null, detail: 'no contract total: each bid holds its own coins' }),
 };
 
+const CANOPY_CLAIMS: EntryFunction[] = [
+  { contract: CANOPY_REWARDS, module: 'multi_rewards', name: 'claim_reward' },
+  { contract: CANOPY_REWARDS, module: 'multi_rewards', name: 'unsubscribe' },
+  { contract: CANOPY_REWARDS, module: 'router', name: 'claim_rewards' },
+];
+
 // Canopy stakers on Movement: every key of multi_rewards' user_staked_balances table (staker → staked tokens). The
 // table key is not decoded by the indexer; it is the staker's address. Incremental by version: a stake or withdraw
 // rewrites the staker's row. Claims do not, so stakers are also re-read monthly.
 export const canopyEndedRewardsEnumerator: Enumerator = {
   sourceId: 'canopy-ended-rewards',
   processor: 'default_processor',
-  scope: `stakers in ${CANOPY_REWARDS}::multi_rewards (MultiRewardsModule.user_staked_balances, current_table_items)`,
+  scope: `stakers in ${CANOPY_REWARDS}::multi_rewards (MultiRewardsModule.user_staked_balances, current_table_items), plus senders of its claim and unsubscribe calls`,
   async run(chain, cursor) {
+    let cursors: { t?: string; s?: string } = {};
+    try { cursors = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: full rescan */ }
+    if (typeof cursors !== 'object' || cursors === null) cursors = {};
     const state = await chain.resource(CANOPY_REWARDS_STATE, `${CANOPY_REWARDS}::multi_rewards::MultiRewardsModule`);
     if (!state) throw new Error('Canopy MultiRewardsModule missing');
-    const table = await tableRows(chain, normalizeAddress(state.user_staked_balances.handle), cursor || undefined);
-    return { candidates: [...new Set(table.rows.map(r => normalizeAddress(r.key)))].map(owner => ({ owner })), cursor: table.cursor, pages: table.pages, incremental: true };
+    const table = await tableRows(chain, normalizeAddress(state.user_staked_balances.handle), cursors.t);
+    // Claims and unsubscribes change what a staker is owed without touching the staking table.
+    const claims = await senders(chain, CANOPY_CLAIMS, cursors.s);
+    const owners = new Set([...table.rows.map(r => normalizeAddress(r.key)), ...claims.candidates.map(c => c.owner)]);
+    return { candidates: [...owners].map(owner => ({ owner })), cursor: JSON.stringify({ t: table.cursor, s: claims.cursor }),
+      pages: table.pages + claims.pages, incremental: true };
   },
   sanity: async () => ({ check: 'none', ok: null, detail: 'no contract total: earned rewards are computed per staker' }),
 };
 
 // Senders of smart_chef::deposit: everyone who staked in a PancakeSwap (Aptos) CAKE syrup pool.
 // Deposits after the last CAKE pool ended (version ~444.55M, 2024-02-09 14:05 UTC) only went to the Gui Inu pools.
-export const pancakeSyrupEnumerator = entrySenders('pancake-syrup-ended', [{ contract: SMART_CHEF, module: 'smart_chef', name: 'deposit', untilVersion: 444_552_000 }],
+// Withdrawals (any time) mark a staker changed, so an exit drops out in the next run instead of at a monthly re-read.
+export const pancakeSyrupEnumerator = entrySenders('pancake-syrup-ended', [
+  { contract: SMART_CHEF, module: 'smart_chef', name: 'deposit', untilVersion: 444_552_000 },
+  { contract: SMART_CHEF, module: 'smart_chef', name: 'withdraw' },
+  { contract: SMART_CHEF, module: 'smart_chef', name: 'emergency_withdraw' }],
   async (chain, ledger, positions) => {
     const parts: string[] = [];
     let ok = true;
@@ -557,8 +574,11 @@ export const pancakeSyrupEnumerator = entrySenders('pancake-syrup-ended', [{ con
 
 // Senders of masterchef::deposit up to the end of emissions; a later deposit harvests, so later depositors have
 // nothing pending.
-export const pancakeFarmEnumerator = entrySenders('pancake-farm-ended-rewards',
-  [{ contract: MASTERCHEF, module: 'masterchef', name: 'deposit', untilVersion: MASTERCHEF_END_VERSION }],
+export const pancakeFarmEnumerator = entrySenders('pancake-farm-ended-rewards', [
+  { contract: MASTERCHEF, module: 'masterchef', name: 'deposit', untilVersion: MASTERCHEF_END_VERSION },
+  // A harvest is withdraw(0): later withdrawals mark the farmer changed.
+  { contract: MASTERCHEF, module: 'masterchef', name: 'withdraw' },
+  { contract: MASTERCHEF, module: 'masterchef', name: 'emergency_withdraw' }],
   async (chain, ledger, positions) => {
     const ctx = { chain, ledger, memo: { get: async () => undefined, set: async () => {} }, scratch: new Map() };
     const { cakeLeft } = await chefState(ctx);

@@ -75,7 +75,7 @@ Per source, record:
 The output is presented as per-source "as of" times, never as one snapshot moment.
 
 Revalidation rules:
-- Every known non-zero position is re-read on **every run**.
+- Every known non-zero position is re-read on **every run**. (Changed 2026-10-20: re-read when the record changes and at least monthly; see docs/left-behind.md.)
 - New candidates are read immediately.
 - Zero and unknown candidates are re-read on a slower cadence (weekly).
 - Recent activity only sets the read order. It never decides correctness, because time unlocks, admin and reserve changes, oracle expiry and object-level activity all change positions without owner activity.

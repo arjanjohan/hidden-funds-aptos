@@ -189,6 +189,7 @@ So about 5–20 reads per address across these sources. That fits in a browser o
   - A Thursday job restores the cache so it is not evicted under the 7-day rule.
 - **Cadence:** weekly snapshot.
   - Every known non-zero position is re-read each run. Zero owners are re-read weekly, which under a weekly cadence is also every run.
+  - Superseded 2026-10-20: newer sources re-read non-zero owners when their record changes and at least monthly (docs/left-behind.md, Snapshots).
   - Delegation ages are memoized per (owner, pool, amount), so only new or changed positions cost aging reads.
 - **Sources in Phase 1:** native delegation and Thala. Aries is left out until the real Geomi cost per request is known, since it would be ~95% of requests.
 - **Check page:** calls Aptos anonymously from the visitor's browser. CORS is verified on the fullnode, archive and indexer. Our key never ships to the browser.

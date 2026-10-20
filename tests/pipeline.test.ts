@@ -87,6 +87,15 @@ describe('runSource', () => {
   });
 });
 
+describe('market evidence', () => {
+  it('reports a run whose receipt positions have no market quote as degraded', async () => {
+    const blocked: Position = { ...position(addr(1)), status: 'unknown', blockers: [{ code: 'market_check_unavailable', detail: '' }] };
+    const { run } = await runSource(source(async () => ({ positions: [blocked], complete: true, errors: [], ledgerVersion: '1' })),
+      enumerator([addr(1)]), new State(':memory:'), chain(), { hit: false });
+    expect(run.degradedReasons.join()).toMatch(/without market evidence/);
+  });
+});
+
 describe('owner rule', () => {
   it('keeps positions held by a resource account visible but unknown', async () => {
     const state = new State(':memory:');
@@ -147,6 +156,17 @@ describe('state', () => {
 
 describe('state changes', () => {
   const def = () => source(async () => { throw new Error(); });
+
+  it('makes an owner with positions due when a full scan no longer returns it', async () => {
+    const state = new State(':memory:');
+    const monthly = { ...def(), refresh: { nonZero: 'monthly', zero: 'monthly' } } as SourceDef;
+    state.upsertCandidates('t', [{ owner: addr(1) }, { owner: addr(2) }], '2026-10-01T00:00:00Z');
+    state.recordRead('t', addr(1), [position(addr(1))], true, '2026-10-01T00:00:01Z');
+    state.recordRead('t', addr(2), [position(addr(2))], true, '2026-10-01T00:00:01Z');
+    expect(state.due(monthly, Date.parse('2026-10-02T00:00:00Z'), new Set())).toEqual([]);
+    state.markGone('t', new Set([addr(1)]), '2026-10-02T00:00:00Z');
+    expect(state.due(monthly, Date.parse('2026-10-02T00:00:00Z'), new Set()).map(d => d.owner)).toEqual([addr(2)]);
+  });
 
   it('makes a zero owner due again when an activity scan returns it', () => {
     const state = new State(':memory:');

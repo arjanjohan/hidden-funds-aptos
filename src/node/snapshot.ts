@@ -13,7 +13,7 @@ import { ENUMERATORS, type Enumerator } from './enumerators.ts';
 import type { Snapshot, SnapshotSource, SourceRun } from '../shared/snapshot.ts';
 import { fetchPrices } from './prices.ts';
 import { panoraProvider } from './panora.ts';
-import type { MarketProvider } from '../shared/market.ts';
+import { freshMarkets, type MarketProvider } from '../shared/market.ts';
 import { APT } from '../shared/sources/delegation.ts';
 import { AGE_LIMIT_MS, State } from './state.ts';
 
@@ -68,6 +68,7 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
     const before = state.candidateCount(def.id);
     const result = await en.run(chain, state.cursor(def.id));
     state.upsertCandidates(def.id, result.candidates, runStart, result.incremental);
+    if (!result.incremental) state.markGone(def.id, new Set(result.candidates.map(c => c.owner)), runStart);
     if (result.cursor) state.setCursor(def.id, result.cursor);
     Object.assign(run.enumeration, { end: new Date().toISOString(), pages: result.pages, cursor: result.cursor,
       candidates: state.candidateCount(def.id), newCandidates: state.candidateCount(def.id) - before });
@@ -119,6 +120,9 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
   }
   run.verification.notReread = state.staleCount(def.id, new Date(Date.parse(runStart) - AGE_LIMIT_MS[def.refresh.nonZero]).toISOString());
   if (run.verification.incomplete) run.degradedReasons.push(`${run.verification.incomplete} owners read incompletely; their previous positions are kept`);
+  // A receipt counts only without a usable market; without a quote that cannot be decided, which is not "complete".
+  const noMarket = state.positionsOf(def.id).filter(p => p.blockers.some(b => b.code === 'market_check_unavailable')).length;
+  if (noMarket) run.degradedReasons.push(`${noMarket} positions without market evidence (no fresh Panora quote)`);
   if (run.verification.notReread) run.degradedReasons.push(`${run.verification.notReread} positions not re-read this run`);
   run.errors = [...new Set(run.errors)].slice(0, 20);
   return { run, ledger };
@@ -171,7 +175,7 @@ async function main() {
     headlineOwners.set(p.owner, (headlineOwners.get(p.owner) ?? 0) + (usd(p.expectedPayout, prices) ?? 0));
   }
   const snapshot: Snapshot = {
-    schema: 1, generatedAt: new Date().toISOString(), prices, priceErrors, markets: { ...previous?.markets, ...panora?.table }, sources,
+    schema: 1, generatedAt: new Date().toISOString(), prices, priceErrors, markets: freshMarkets({ ...previous?.markets, ...panora?.table }, now), sources,
     global: {
       headlineUsd: sources.reduce((s, x) => s + x.totals.headline.usd, 0),
       headlineOwners: headlineOwners.size,
