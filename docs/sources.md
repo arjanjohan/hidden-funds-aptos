@@ -212,7 +212,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - Of 5,022 pools, most are meme-token launch pools.
   - The main stable and APT pools hold under $20 (USDt/USDC ~$4; APT/USDC ~10 APT + 8 USDC).
   - A full sizing needs ~5,000 single-pool reads, because the paginated view hits the read limit, and could only ever add to `blocked`. Skipped.
-- **Econia:** no public closure notice found (2026-10-18). The idle market accounts (~$31K, mostly lzUSDC) stay excluded under R2.
+- **Econia:** now a source (`econia-idle-accounts`), after new closure evidence on 2026-10-20.
 
 - **Echo lending:** reports describe Echo moving BTC-bridge liquidity off Aptos, but no closure or withdrawal deadline was found. Not R2.
 - **Kana perps** (`blocked`, payout $0): every market is deprecated and the collateral stores hold no USDt, so recorded balances are face value only. There are 13,408 depositors (senders of `perpetual_scripts::deposit*`), and sizing them needs ~3 reads each (~40K requests) for value that never reaches a total besides "may not work". Skipped; Aptin is treated the same way.
@@ -372,6 +372,21 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Prices:** CoinGecko `tether`, `usd-coin`, `ethena-staked-usde`, each listed with this exact Aptos address; APT as APT.
 - **Rehearsal (2026-10-20, all reserves treated as frozen):** 921 holders, 385 requests to enumerate (95 also owe). Every tenth holder read: 93/93 complete, 94 positions. The 4 largest simulated withdrawals succeed and pay the full balance.
 - **Cost once frozen:** ~400 requests per run to enumerate, plus ~2 per changed holder.
+
+## econia-idle-accounts
+
+- **What:** coins left idle in Econia market accounts. Econia is an on-chain order book on Aptos.
+- **Status (checked 2026-10-20):** deprecated, counted from the archive date (decided 2026-10-20). Until then the docs listed it as "no public closure notice". The new evidence:
+  - Econia Labs archived the repository: "This repository was archived by the owner on Sep 8, 2025" (github.com/econia-labs/econia; emojicoin's repo is archived too). PitchBook lists the company as out of business.
+  - On chain: last limit order 2025-07-25, last market order 2025-09-01, last deposit 2025-07-24. Since then the only activity is users withdrawing (latest 2026-09-24) and one swap.
+- **Age:** from 2025-09-08 23:59:59 UTC. The banner gives only the date, so the end of that day is used and the age is never overstated.
+- **Rules:** only accounts the owner controls (custodian 0) and without open orders count. Custodian accounts (Fliq, Kana) need their custodian to withdraw; open orders are live use (R4). A market with a generic (non-coin) base counts only its quote.
+- **Read:** `user::get_market_accounts(owner)` (one view per owner), plus `registry::get_market_info` once per market for the coin types. Payout = each side's available amount. The APT coin is recorded as APT (0xa).
+- **Recovery:** `user::withdraw_to_coinstore<coin type>(market id, amount)`, per coin and market.
+- **Enumeration:** senders of `user::register_market_account` and `register_market_account_generic_base` (Phase 0: 52,040 calls, 48,776 senders, 522 pages). Deposits, withdrawals and order calls are change events, scanned from version 7,696,900,000 (2026-10-20): every owner's first read comes after that.
+- **Size (Phase 0, 2026-10-18):** 25,354 idle owner-controlled accounts. Market 7 (APT/lzUSDC) holds nearly all of it: 25,012 accounts, 3,329 APT and 29,076 lzUSDC (~$31.6K, ~$1.25 per account; it looks like campaign farming). The other 9 markets hold a few dollars each, plus Echo's unpriced EchoCoin002.
+- **Rehearsal (2026-10-20):** 104 owners (the 3 largest plus every 250th): 104/104 reads complete, 128 positions. 12 of 12 withdrawals simulated with the generated steps succeed and pay exactly the counted amount. Before building, 19 of 19 direct simulations across 10 markets also succeeded.
+- **Cost:** first run ~522 indexer pages + ~48.8K views + an owner-kind lookup per owner with value (~25K): ~75K requests. Later runs read only owners with new calls.
 
 ## topaz-bids
 

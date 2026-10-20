@@ -22,6 +22,7 @@ Sources (evidence for each in [docs/sources.md](docs/sources.md)):
 | `pancake-farm-ended-rewards` | Aptos | CAKE and APT that PancakeSwap farms paid until emissions ended in March 2025, never harvested |
 | `echelon-frozen-markets` | Aptos | Supply left in the 21 Echelon lending markets that Echelon froze (May 2025 to October 2026), by suppliers without Echelon debt |
 | `aave-frozen-reserves` | Aptos | Supply left in Aave's Aptos reserves once Aave freezes them under its wind-down; counts nothing until then |
+| `econia-idle-accounts` | Aptos | Coins left idle in Econia market accounts after Econia Labs archived the order book (September 2025) |
 | `topaz-bids` | Aptos | APT still escrowed in expired bids on Topaz, an NFT marketplace that closed in August 2024 |
 | `layerzero-claimable` | Aptos | Tokens bridged in through LayerZero (lzUSDC, lzUSDT, lzWETH, lzWBTC, lzUSDD, CAKE, BTC.b) that arrived but were never claimed |
 | `movement-native-delegation` | Movement | Unstaked MOVE whose lockup ended, never withdrawn |
