@@ -1,53 +1,53 @@
 {
   "schema": 1,
-  "generatedAt": "2026-10-19T19:04:35.686Z",
+  "generatedAt": "2026-10-20T06:09:45.825Z",
   "prices": {
     "0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.763331,
+      "usd": 0.769006,
       "decimals": 8,
-      "at": "2026-10-19T18:54:20.000Z",
+      "at": "2026-10-20T05:40:11.000Z",
       "source": "coingecko simple/price"
     },
     "0x07fd500c11216f0fe3095d0c4b8aa4d64a4e2e04f83758462f2b127255643615::thl_coin::THL": {
-      "usd": 0.0099489,
+      "usd": 0.00990548,
       "decimals": 8,
-      "at": "2026-10-19T18:54:20.000Z",
+      "at": "2026-10-20T05:40:31.000Z",
       "source": "coingecko simple/price"
     },
     "movement:0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.00723633,
+      "usd": 0.00726396,
       "decimals": 8,
-      "at": "2026-10-19T18:54:20.000Z",
+      "at": "2026-10-20T05:40:31.000Z",
       "source": "coingecko simple/price"
     },
     "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC": {
-      "usd": 0.999914,
+      "usd": 0.999929,
       "decimals": 6,
-      "at": "2026-10-19T18:54:20.000Z",
+      "at": "2026-10-20T05:40:31.000Z",
       "source": "coingecko simple/price"
     },
     "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDT": {
-      "usd": 0.999275,
+      "usd": 0.999235,
       "decimals": 6,
-      "at": "2026-10-19T18:54:20.000Z",
+      "at": "2026-10-20T05:40:31.000Z",
       "source": "coingecko simple/price"
     },
     "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::WETH": {
-      "usd": 2401.28,
+      "usd": 2398.48,
       "decimals": 6,
-      "at": "2026-10-19T18:54:20.000Z",
+      "at": "2026-10-20T05:40:31.000Z",
       "source": "coingecko simple/price"
     },
     "0x159df6b7689437016108a019fd5bef736bac692b6d4a1f10c941f6fbb9a74ca6::oft::CakeOFT": {
       "usd": 2.17,
       "decimals": 8,
-      "at": "2026-10-19T18:54:20.000Z",
+      "at": "2026-10-20T05:40:31.000Z",
       "source": "coingecko simple/price"
     },
     "0x8b107b816356295ea62750020edea701bfc6d11575953d0e146c20d7b9409300::oft::BTCbOFT": {
-      "usd": 81926,
+      "usd": 81805,
       "decimals": 8,
-      "at": "2026-10-19T18:54:20.000Z",
+      "at": "2026-10-20T05:40:31.000Z",
       "source": "coingecko simple/price"
     }
   },
@@ -2970,6 +2970,223 @@
       ]
     },
     {
+      "id": "topaz-bids",
+      "chain": "aptos",
+      "title": "Expired Topaz NFT bid never cancelled",
+      "summary": "Topaz, an Aptos NFT marketplace, shut down in August 2024. APT you put into a bid stays in Topaz's contract after the bid expires, until you cancel it.",
+      "category": "closed_app",
+      "inclusionRule": "R2 ended position: the bid's deadline passed (and Topaz ceased operations on 2024-08-21). Bids not yet expired are open orders (R4) and are not counted.",
+      "protocolStatus": {
+        "state": "closed",
+        "evidence": "Topaz announced it ceased operations on 2024-08-21 (homepage notice; aptos.dev lists Topaz as deprecated). The contract still accepts cancels.",
+        "checkedAt": "2026-10-19",
+        "effectiveAt": "2024-08-21T00:00:00Z"
+      },
+      "howTo": [
+        "Topaz's site no longer works, so cancel from the bidding account directly:",
+        "collection bids: call 0x2c7bccf7b31baf770fdbcc768d9e9cb3d87805e255355df5db32ac9a669010a2::collection_marketplace::cancel<0x1::aptos_coin::AptosCoin>(bid id);",
+        "token bids: call 0x2c7bccf7b31baf770fdbcc768d9e9cb3d87805e255355df5db32ac9a669010a2::bid_any::cancel_bid<0x1::aptos_coin::AptosCoin>(bid id)."
+      ],
+      "officialUrl": "https://www.topaz.so",
+      "headlineAgeBases": [
+        "onchain_maturity"
+      ],
+      "run": {
+        "processor": "default_processor",
+        "scope": "bids in 0x2c7bccf7b31baf770fdbcc768d9e9cb3d87805e255355df5db32ac9a669010a2::collection_marketplace::Bids<APT> and ::bid_any::CoinEscrow<APT> (current_table_items)",
+        "enumeration": {
+          "pages": 8576,
+          "newCandidates": 67290,
+          "candidates": 67290,
+          "start": "2026-10-20T05:40:37.106Z",
+          "end": "2026-10-20T06:08:07.215Z",
+          "cursor": "{\"c\":\"6198900992\",\"a\":\"4947284225\",\"b\":\"1645629583\"}"
+        },
+        "verification": {
+          "read": 67290,
+          "incomplete": 0,
+          "notReread": 0,
+          "start": "2026-10-20T06:08:08.514Z",
+          "ledgerFrom": "7689534874",
+          "end": "2026-10-20T06:09:38.702Z",
+          "ledgerTo": "7689548720"
+        },
+        "completeness": "complete",
+        "degradedReasons": [],
+        "errors": [],
+        "watermarkBefore": {
+          "version": "7689262710",
+          "timestamp": "2026-10-20T05:40:35.019684Z"
+        },
+        "watermarkAfter": {
+          "version": "7689534487",
+          "timestamp": "2026-10-20T06:08:05.465432Z"
+        },
+        "sanity": {
+          "check": "none",
+          "ok": null,
+          "detail": "no contract total: each bid holds its own coins"
+        }
+      },
+      "lastSuccessAt": "2026-10-20T06:09:38.702Z",
+      "totals": {
+        "face": {
+          "positions": 4155,
+          "owners": 1736,
+          "usd": 3936.96997011939,
+          "unpriced": 0,
+          "ownersMin10": 71
+        },
+        "byStatus": {
+          "recoverable": {
+            "positions": 4155,
+            "owners": 1736,
+            "usd": 3936.96997011939,
+            "unpriced": 0,
+            "ownersMin10": 71
+          },
+          "team_gated": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "blocked": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "aged": {
+          "ge30": {
+            "positions": 4155,
+            "owners": 1736,
+            "usd": 3936.96997011939,
+            "unpriced": 0,
+            "ownersMin10": 71
+          },
+          "ge90": {
+            "positions": 4155,
+            "owners": 1736,
+            "usd": 3936.96997011939,
+            "unpriced": 0,
+            "ownersMin10": 71
+          },
+          "ge180": {
+            "positions": 4155,
+            "owners": 1736,
+            "usd": 3936.96997011939,
+            "unpriced": 0,
+            "ownersMin10": 71
+          }
+        },
+        "agedEstimated": {
+          "ge30": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "byAgeBasis": {
+          "onchain_maturity": {
+            "positions": 4155,
+            "owners": 1736,
+            "usd": 3936.96997011939,
+            "unpriced": 0,
+            "ownersMin10": 71
+          },
+          "protocol_closure": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "position_interaction": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "headline": {
+          "positions": 4155,
+          "owners": 1736,
+          "usd": 3936.96997011939,
+          "unpriced": 0,
+          "ownersMin10": 71
+        },
+        "headlineTopOwnerShare": 0.026955457828088045,
+        "unverified": {
+          "positions": 203617,
+          "owners": 63930,
+          "usd": 770.67396049384,
+          "unpriced": 0,
+          "ownersMin10": 0
+        }
+      },
+      "sizeBands": [
+        {
+          "upTo": 1,
+          "positions": 207255
+        },
+        {
+          "upTo": 10,
+          "positions": 439
+        },
+        {
+          "upTo": 100,
+          "positions": 78
+        },
+        {
+          "upTo": 1000,
+          "positions": 0
+        },
+        {
+          "upTo": 10000,
+          "positions": 0
+        },
+        {
+          "upTo": null,
+          "positions": 0
+        }
+      ]
+    },
+    {
       "id": "movement-native-delegation",
       "chain": "movement",
       "title": "Unstaked MOVE never withdrawn",
@@ -3598,11 +3815,11 @@
     }
   ],
   "global": {
-    "headlineUsd": 9989107.095038509,
-    "headlineOwners": 70916,
-    "headlineOwnersMin10": 7709,
-    "recoverableUsd": 15834949.70409779,
-    "requests": 93811,
+    "headlineUsd": 9993044.06500863,
+    "headlineOwners": 72479,
+    "headlineOwnersMin10": 7853,
+    "recoverableUsd": 15838886.67406791,
+    "requests": 16771,
     "requestCap": 100000
   }
 }
