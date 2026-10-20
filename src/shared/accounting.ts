@@ -24,6 +24,15 @@ export function headlineAge(source: Pick<SourceDef, 'headlineAgeBases'>, positio
 /** Price per whole unit of an asset, with the quote time. Unpriced assets are absent. */
 export type PriceBook = Record<string, { usd: number; decimals: number; at: string; source: string }>;
 
+/** A quote older than this is not a price. */
+export const PRICE_MAX_AGE_SECS = 7 * 86_400;
+
+/** The prices still fresh at `nowSecs`; older quotes are dropped, so their assets read as unpriced. A published snapshot
+ *  can be read long after it was made (a failed weekly run), so readers apply the age rule again. */
+export function freshPrices(prices: PriceBook, nowSecs: number): PriceBook {
+  return Object.fromEntries(Object.entries(prices).filter(([, p]) => nowSecs - Date.parse(p.at) / 1000 <= PRICE_MAX_AGE_SECS));
+}
+
 export function usd(amounts: Amount[], prices: PriceBook): number | null {
   let total = 0;
   for (const a of amounts) {
