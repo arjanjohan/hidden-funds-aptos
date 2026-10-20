@@ -10,9 +10,6 @@ import { APT } from './delegation.ts';
 import { CAKE } from './layerzero-claimable.ts';
 
 export const MASTERCHEF = '0x7968a225eba6c99f5f1070aeec1b405757dee939eabcfda43ba91588bf5fccf3';
-/** Ledger version at MasterChef's end_timestamp (2025-03-16 19:03 UTC): a deposit after it harvests, so later
- *  depositors have nothing pending. */
-export const MASTERCHEF_END_VERSION = 2_484_045_000;
 const ACC_PRECISION = 10n ** 12n;
 const SOURCE = 'pancake-farm-ended-rewards';
 

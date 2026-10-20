@@ -6,7 +6,7 @@ import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
 import { CAKE, type ClaimableHint, claimableHandle, LZ_COINS } from '../shared/sources/layerzero-claimable.ts';
 import { MKLP } from '../shared/sources/merkle-mklp.ts';
-import { chefState, MASTERCHEF, MASTERCHEF_END_VERSION } from '../shared/sources/pancake-farm.ts';
+import { chefState, MASTERCHEF } from '../shared/sources/pancake-farm.ts';
 import { poolState, SMART_CHEF, SYRUP_POOLS } from '../shared/sources/pancake-syrup.ts';
 import { VEMKL_COLLECTION } from '../shared/sources/merkle-vemkl.ts';
 import { THALA_VE, THALA_VEST } from '../shared/sources/thala-thl.ts';
@@ -572,11 +572,10 @@ export const pancakeSyrupEnumerator = entrySenders('pancake-syrup-ended', [
     return { check: 'stake found per pool <= pool total_staked_token', ok, detail: parts.join('; ') };
   });
 
-// Senders of masterchef::deposit up to the end of emissions; a later deposit harvests, so later depositors have
-// nothing pending.
+// Deposits at any time: before the end they make a farmer; after it they harvest, so the farmer changed. A depositor
+// with nothing pending is read once and never again (zero: 'never'). A harvest is also withdraw(0).
 export const pancakeFarmEnumerator = entrySenders('pancake-farm-ended-rewards', [
-  { contract: MASTERCHEF, module: 'masterchef', name: 'deposit', untilVersion: MASTERCHEF_END_VERSION },
-  // A harvest is withdraw(0): later withdrawals mark the farmer changed.
+  { contract: MASTERCHEF, module: 'masterchef', name: 'deposit' },
   { contract: MASTERCHEF, module: 'masterchef', name: 'withdraw' },
   { contract: MASTERCHEF, module: 'masterchef', name: 'emergency_withdraw' }],
   async (chain, ledger, positions) => {

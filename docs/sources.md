@@ -323,10 +323,10 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - the APT incentive from the `get_pending_apt<LP>` view.
   - A reward MasterChef cannot pay (more than its CAKE or APT balance) is `blocked` (`reward_unfunded`).
 - **Recovery:** `masterchef::withdraw<LP>(0)` harvests and leaves the LP staked. Simulated: it paid exactly the computed 78,858 raw CAKE and the 33,565 raw APT from `get_pending_apt`.
-- **Enumeration:** senders of `masterchef::deposit` up to version 2,484,045,000 (the end of emissions; a later deposit harvests), plus senders of `withdraw` (a harvest is `withdraw(0)`) and `emergency_withdraw` at any time, so a harvest drops out in the next run.
+- **Enumeration:** senders of `masterchef::deposit`, `withdraw` and `emergency_withdraw` at any time. A deposit or withdrawal after the end harvests (a harvest is `withdraw(0)`), so the farmer is re-read in the next run. A depositor with nothing pending is read once and never again.
 - **Size:** bounded by what MasterChef holds: 5,771 CAKE (~$12.5K) and 12,988 APT (~$9.9K).
   - Sample (394 depositors across its history, 2026-10-19): 57 (14%) have rewards, 57.5 CAKE + 111.3 APT. Scaled to an estimated ~25K depositors, that's roughly 3,600 CAKE and 7,000 APT (~$13K).
-- **Cost:** ~3.9 requests per depositor, so the first run is ~100K requests and needs its own run. Nothing accrues after the end, so an owner with nothing pending is never re-read (`zero: 'never'`); owners with rewards are re-read monthly.
+- **Cost:** ~3.9 requests per depositor for those with LP staked (fewer for the rest), so the first run is ~100K+ requests and needs its own run. Nothing accrues after the end, so an owner with nothing pending is never re-read (`zero: 'never'`); owners with rewards are re-read monthly.
 
 ## topaz-bids
 
