@@ -12,6 +12,8 @@ import { THL } from './thala-thl.ts';
 export const ECHELON = '0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba';
 export const WH_USDC = '0x5e156f1207d0ebfa19a9eeff00d62a282278fb8719f4fab3a586a0a2c0fffbea::coin::T';
 export const MOD = '0x6f986d146e4a90b828d8c12c14b6f4e003fdff11a8eecceceb63744363eaac01::mod_coin::MOD';
+export const STAPT = '0x111ae3e5bc816a5e63c2da97d0aa3886519e0cd5e4b046659fa35796bd11542a::stapt_token::StakedApt';
+export const STHAPT = '0xfaf4e633ae9eb31366c9ca24214231760926576c7b625313b3688b5e900731f6::staking::StakedThalaAPT';
 /** The paired fungible asset of Amnis' amAPT coin (0x1::coin::paired_metadata), the same asset as the coin. */
 export const AMAPT_FA = '0xa259be733b6a759909f92815927fa213904df6540519568692caf0b068fe8e62';
 const SOURCE = 'echelon-frozen-markets';
@@ -25,11 +27,11 @@ export const FROZEN_MARKETS = [
   { label: 'lzUSDC', market: '0xa9c51ca3bcd93978d0c4aada7c4cf47c0791caced3cdc4e15f2c8e0797d1f93c', asset: '0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC', coin: true, decimals: 6, frozenAt: '2025-05-03T04:56:05Z' },
   { label: 'MOD', market: '0xef2ae89796725d0eb363326ecb7df159feb949f6d1f400f76deeeebccbac00f1', asset: MOD, coin: true, decimals: 8, frozenAt: '2025-09-03T04:44:52Z' },
   { label: 'THL', market: '0x127ea5b4c450be695e488da1c3bc013e2e93d8cf00270ef90385189844bc9755', asset: THL, coin: true, decimals: 8, frozenAt: '2025-09-26T16:44:00Z' },
-  { label: 'sthAPT', market: '0xed6bf9fe7e3f42c6831ffac91824a545c4b8bfcb40a59b3f4ccfe203cafb7f42', asset: '0xfaf4e633ae9eb31366c9ca24214231760926576c7b625313b3688b5e900731f6::staking::StakedThalaAPT', coin: true, decimals: 8, frozenAt: '2026-04-09T17:25:06Z' },
+  { label: 'sthAPT', market: '0xed6bf9fe7e3f42c6831ffac91824a545c4b8bfcb40a59b3f4ccfe203cafb7f42', asset: STHAPT, coin: true, decimals: 8, frozenAt: '2026-04-09T17:25:06Z' },
   { label: 'whUSDC', market: '0xa76ebfb432982c864783fdb33cdf5a9edb18ac1b950deb8037f5cf8c984da3d2', asset: WH_USDC, coin: true, decimals: 6, frozenAt: '2025-05-03T04:56:16Z' },
   { label: 'whWETH', market: '0x114ee519ffa1e8697784bd1a350822cb37601a1476289051b8295165597a4538', asset: '0xcc8a89c8dce9693d354449f1f73e60e14e347417854f029db5bc8e7454008abb::coin::T', coin: true, decimals: 8, frozenAt: '2025-05-17T03:22:06Z' },
   { label: 'CAKE', market: '0x41b039e5518b1a3786ee798d895e0ddf3141fbbc20009284323fa51ea279c819', asset: '0x159df6b7689437016108a019fd5bef736bac692b6d4a1f10c941f6fbb9a74ca6::oft::CakeOFT', coin: true, decimals: 8, frozenAt: '2025-09-26T16:43:54Z' },
-  { label: 'stAPT', market: '0xc3c9cc885a52004e0490f6a8291b3bc5854f0e42d931fb124736bd189c9f0f45', asset: '0x111ae3e5bc816a5e63c2da97d0aa3886519e0cd5e4b046659fa35796bd11542a::stapt_token::StakedApt', coin: true, decimals: 8, frozenAt: '2025-11-21T05:11:42Z' },
+  { label: 'stAPT', market: '0xc3c9cc885a52004e0490f6a8291b3bc5854f0e42d931fb124736bd189c9f0f45', asset: STAPT, coin: true, decimals: 8, frozenAt: '2025-11-21T05:11:42Z' },
   { label: 'aBTC', market: '0xacb7262b33a147b47b950a3a26d7699e1a58bcaa475ef636cb0fea53fa0eb872', asset: '0x4e1854f6d332c9525e258fb6e66f84b6af8aba687bbcb832a24768c4e175feec::abtc::ABTC', coin: true, decimals: 10, frozenAt: '2025-10-15T21:40:44Z' },
   { label: 'STONE', market: '0x75c39f18c7bc00ac0f81a0f9ab7e319e23790d7d8c3df968d84a23699584bd9', asset: '0x543c5660aa4d496687e2068c11765f04607c4f4b639a83233a9333604fb8ce59::stakestone_ether::StakeStoneEther', coin: true, decimals: 8, frozenAt: '2025-05-17T03:23:08Z' },
   { label: 'truAPT', market: '0x7bd5be03df0fb3841fed337b8e7a353818b917cce6db28b807b691002a122d73', asset: '0xaef6a8c3182e076db72d64324617114cacf9a52f28325edc10b483f7f05da0e7', coin: false, decimals: 8, frozenAt: '2025-11-10T04:02:53Z' },
