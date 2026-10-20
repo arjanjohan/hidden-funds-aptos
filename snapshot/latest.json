@@ -1,53 +1,53 @@
 {
   "schema": 1,
-  "generatedAt": "2026-10-20T06:09:45.825Z",
+  "generatedAt": "2026-10-20T06:21:32.664Z",
   "prices": {
     "0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.769006,
+      "usd": 0.76677,
       "decimals": 8,
-      "at": "2026-10-20T05:40:11.000Z",
+      "at": "2026-10-20T06:12:11.000Z",
       "source": "coingecko simple/price"
     },
     "0x07fd500c11216f0fe3095d0c4b8aa4d64a4e2e04f83758462f2b127255643615::thl_coin::THL": {
-      "usd": 0.00990548,
+      "usd": 0.00987704,
       "decimals": 8,
-      "at": "2026-10-20T05:40:31.000Z",
+      "at": "2026-10-20T06:12:22.000Z",
       "source": "coingecko simple/price"
     },
     "movement:0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.00726396,
+      "usd": 0.00724061,
       "decimals": 8,
-      "at": "2026-10-20T05:40:31.000Z",
+      "at": "2026-10-20T06:12:22.000Z",
       "source": "coingecko simple/price"
     },
     "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC": {
-      "usd": 0.999929,
+      "usd": 0.999982,
       "decimals": 6,
-      "at": "2026-10-20T05:40:31.000Z",
+      "at": "2026-10-20T06:12:22.000Z",
       "source": "coingecko simple/price"
     },
     "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDT": {
-      "usd": 0.999235,
+      "usd": 0.999314,
       "decimals": 6,
-      "at": "2026-10-20T05:40:31.000Z",
+      "at": "2026-10-20T06:12:22.000Z",
       "source": "coingecko simple/price"
     },
     "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::WETH": {
-      "usd": 2398.48,
+      "usd": 2393.39,
       "decimals": 6,
-      "at": "2026-10-20T05:40:31.000Z",
+      "at": "2026-10-20T06:12:22.000Z",
       "source": "coingecko simple/price"
     },
     "0x159df6b7689437016108a019fd5bef736bac692b6d4a1f10c941f6fbb9a74ca6::oft::CakeOFT": {
-      "usd": 2.17,
+      "usd": 2.16,
       "decimals": 8,
-      "at": "2026-10-20T05:40:31.000Z",
+      "at": "2026-10-20T06:12:11.000Z",
       "source": "coingecko simple/price"
     },
     "0x8b107b816356295ea62750020edea701bfc6d11575953d0e146c20d7b9409300::oft::BTCbOFT": {
-      "usd": 81805,
+      "usd": 81627,
       "decimals": 8,
-      "at": "2026-10-20T05:40:31.000Z",
+      "at": "2026-10-20T06:12:22.000Z",
       "source": "coingecko simple/price"
     }
   },
@@ -2970,6 +2970,221 @@
       ]
     },
     {
+      "id": "pancake-farm-ended-rewards",
+      "chain": "aptos",
+      "title": "PancakeSwap farm rewards never harvested",
+      "summary": "PancakeSwap on Aptos stopped farm rewards on 2025-03-16. The CAKE (and APT incentive) your staked LP earned until then is still in the farm until you harvest.",
+      "category": "staking",
+      "inclusionRule": "R2 ended position: farm emissions ended (MasterChef end_timestamp 2025-03-16). Only the rewards count; the staked LP is live liquidity.",
+      "protocolStatus": {
+        "state": "live",
+        "evidence": "MasterChef end_timestamp 2025-03-16 and every alloc point 0 (read 2026-10-19); harvest still works (simulated).",
+        "checkedAt": "2026-10-19"
+      },
+      "howTo": [
+        "Harvest in the PancakeSwap app (Aptos, Farms, show finished farms), or",
+        "call 0x7968a225eba6c99f5f1070aeec1b405757dee939eabcfda43ba91588bf5fccf3::masterchef::withdraw<LP type>(0) from the farming account: it pays the rewards and leaves the LP staked."
+      ],
+      "officialUrl": "https://aptos.pancakeswap.finance/farms",
+      "headlineAgeBases": [
+        "onchain_maturity"
+      ],
+      "run": {
+        "processor": "user_transaction_processor",
+        "scope": "senders of 0x7968a225eba6c99f5f1070aeec1b405757dee939eabcfda43ba91588bf5fccf3::masterchef::deposit up to version 2484045000 entry calls (calls made by other contracts excluded)",
+        "enumeration": {
+          "pages": 1090,
+          "newCandidates": 14219,
+          "candidates": 14219,
+          "start": "2026-10-20T06:12:29.366Z",
+          "end": "2026-10-20T06:17:09.515Z",
+          "cursor": "{\"0x7968a225eba6c99f5f1070aeec1b405757dee939eabcfda43ba91588bf5fccf3::masterchef::deposit\":\"2483915006\"}"
+        },
+        "verification": {
+          "read": 14219,
+          "incomplete": 0,
+          "notReread": 0,
+          "start": "2026-10-20T06:17:10.142Z",
+          "ledgerFrom": "7689619459",
+          "end": "2026-10-20T06:21:27.914Z",
+          "ledgerTo": "7689661985"
+        },
+        "completeness": "complete",
+        "degradedReasons": [],
+        "errors": [],
+        "watermarkBefore": {
+          "version": "7689574963",
+          "timestamp": "2026-10-20T06:12:27.026168Z"
+        },
+        "watermarkAfter": {
+          "version": "7689619131",
+          "timestamp": "2026-10-20T06:17:07.927623Z"
+        },
+        "sanity": {
+          "check": "pending CAKE found <= CAKE held by MasterChef",
+          "ok": true,
+          "detail": "552640239840 of 577073010581 (95.76%)"
+        }
+      },
+      "lastSuccessAt": "2026-10-20T06:21:27.914Z",
+      "totals": {
+        "face": {
+          "positions": 13126,
+          "owners": 5581,
+          "usd": 16097.736595771143,
+          "unpriced": 0,
+          "ownersMin10": 165
+        },
+        "byStatus": {
+          "recoverable": {
+            "positions": 13126,
+            "owners": 5581,
+            "usd": 16097.736595771143,
+            "unpriced": 0,
+            "ownersMin10": 165
+          },
+          "team_gated": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "blocked": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "aged": {
+          "ge30": {
+            "positions": 13126,
+            "owners": 5581,
+            "usd": 16097.736595771143,
+            "unpriced": 0,
+            "ownersMin10": 165
+          },
+          "ge90": {
+            "positions": 13126,
+            "owners": 5581,
+            "usd": 16097.736595771143,
+            "unpriced": 0,
+            "ownersMin10": 165
+          },
+          "ge180": {
+            "positions": 13126,
+            "owners": 5581,
+            "usd": 16097.736595771143,
+            "unpriced": 0,
+            "ownersMin10": 165
+          }
+        },
+        "agedEstimated": {
+          "ge30": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "byAgeBasis": {
+          "onchain_maturity": {
+            "positions": 13126,
+            "owners": 5581,
+            "usd": 16097.736595771143,
+            "unpriced": 0,
+            "ownersMin10": 165
+          },
+          "protocol_closure": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "position_interaction": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "headline": {
+          "positions": 13126,
+          "owners": 5581,
+          "usd": 16097.736595771143,
+          "unpriced": 0,
+          "ownersMin10": 165
+        },
+        "headlineTopOwnerShare": 0.0576129409646863,
+        "unverified": {
+          "positions": 0,
+          "owners": 0,
+          "usd": 0,
+          "unpriced": 0,
+          "ownersMin10": 0
+        }
+      },
+      "sizeBands": [
+        {
+          "upTo": 1,
+          "positions": 12192
+        },
+        {
+          "upTo": 10,
+          "positions": 731
+        },
+        {
+          "upTo": 100,
+          "positions": 178
+        },
+        {
+          "upTo": 1000,
+          "positions": 25
+        },
+        {
+          "upTo": 10000,
+          "positions": 0
+        },
+        {
+          "upTo": null,
+          "positions": 0
+        }
+      ]
+    },
+    {
       "id": "topaz-bids",
       "chain": "aptos",
       "title": "Expired Topaz NFT bid never cancelled",
@@ -3815,11 +4030,11 @@
     }
   ],
   "global": {
-    "headlineUsd": 9993044.06500863,
-    "headlineOwners": 72479,
-    "headlineOwnersMin10": 7853,
-    "recoverableUsd": 15838886.67406791,
-    "requests": 16771,
+    "headlineUsd": 10009141.8016044,
+    "headlineOwners": 76352,
+    "headlineOwnersMin10": 7979,
+    "recoverableUsd": 15854984.410663681,
+    "requests": 45809,
     "requestCap": 100000
   }
 }
