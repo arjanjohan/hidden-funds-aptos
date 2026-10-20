@@ -2,6 +2,7 @@
 import { mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
+import { ECHELON, FROZEN_MARKETS } from '../shared/sources/echelon-frozen.ts';
 import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
 import { CAKE, type ClaimableHint, claimableHandle, LZ_COINS } from '../shared/sources/layerzero-claimable.ts';
@@ -101,8 +102,9 @@ const SENDERS_QUERY = `query($c:String!,$m:String!,$f:String!,$after:bigint!,$un
     entry_function_function_name:{_eq:$f}, version:{_gt:$after, _lte:$until}}, order_by:{version:asc}, limit:${PAGE}){ version sender } }`;
 
 /** An entry function whose senders are candidates. `untilVersion` ends the scan where later calls cannot matter
- *  (for example deposits into pools that had already ended). */
-type EntryFunction = { contract: string; module: string; name: string; untilVersion?: number };
+ *  (for example deposits into pools that had already ended); `fromVersion` starts it where earlier calls cannot (calls
+ *  that only mark an owner changed, when every owner is read after that version anyway). */
+type EntryFunction = { contract: string; module: string; name: string; untilVersion?: number; fromVersion?: number };
 const NO_LIMIT = '9223372036854775807';
 
 /** New senders of entry functions since per-function version cursors (stored as one JSON object). Only the
@@ -115,7 +117,7 @@ async function senders(chain: ChainReader, fns: EntryFunction[], cursor: string 
   let pages = 0;
   for (const fn of fns) {
     const key = `${fn.contract}::${fn.module}::${fn.name}`;
-    let after = cursors[key] ?? '0';
+    let after = cursors[key] ?? String(fn.fromVersion ?? 0);
     for (;;) {
       const page = (await chain.gql(SENDERS_QUERY, { c: fn.contract, m: fn.module, f: fn.name, after, until: String(fn.untilVersion ?? NO_LIMIT) })).user_transactions;
       pages++;
@@ -132,7 +134,7 @@ function entrySenders(sourceId: string, fns: EntryFunction[], sanity: Enumerator
   return {
     sourceId,
     processor: 'user_transaction_processor',
-    scope: `senders of ${fns.map(f => `${f.contract}::${f.module}::${f.name}${f.untilVersion ? ` up to version ${f.untilVersion}` : ''}`).join(', ')} entry calls (calls made by other contracts excluded)`,
+    scope: `senders of ${fns.map(f => `${f.contract}::${f.module}::${f.name}${f.fromVersion ? ` from version ${f.fromVersion}` : ''}${f.untilVersion ? ` up to version ${f.untilVersion}` : ''}`).join(', ')} entry calls (calls made by other contracts excluded)`,
     run: (chain, cursor) => senders(chain, fns, cursor),
     sanity,
   };
@@ -585,6 +587,33 @@ export const pancakeFarmEnumerator = entrySenders('pancake-farm-ended-rewards', 
     return { check: 'pending CAKE found <= CAKE held by MasterChef', ok: found <= cakeLeft, detail: `${found} of ${cakeLeft} (${pct(found, cakeLeft)})` };
   });
 
+// Echelon suppliers at any time, Coin and fungible-asset markets: a frozen market still accepts supply, so a late
+// supplier counts too. Withdrawals mark a supplier changed; so do borrows and repayments (a supplier counts only
+// without debt). Those only matter after an owner's first read, which comes after this source was added (2026-10-20),
+// so their scan starts there. Suppliers with nothing counted are read once (zero: 'never').
+const ECHELON_DEBT_FROM = 7_694_000_000;
+export const echelonFrozenEnumerator = entrySenders('echelon-frozen-markets', [
+  ...['supply', 'withdraw', 'withdraw_all', 'supply_fa', 'withdraw_fa', 'withdraw_all_fa'].map(name => ({ contract: ECHELON, module: 'scripts', name })),
+  ...['borrow', 'borrow_fa', 'repay', 'repay_all', 'repay_fa', 'repay_all_fa'].map(name => ({ contract: ECHELON, module: 'scripts', name, fromVersion: ECHELON_DEBT_FROM })),
+],
+  async (chain, ledger, positions) => {
+    const parts: string[] = [];
+    let ok = true;
+    for (const m of FROZEN_MARKETS) {
+      const [[shares], [num, den]] = await Promise.all([
+        chain.view(`${ECHELON}::lending::market_total_shares`, [m.market], [], ledger.version),
+        chain.view(`${ECHELON}::lending::exchange_rate`, [m.market], [], ledger.version),
+      ]);
+      const supplied = BigInt(shares) * BigInt(num) / BigInt(den);
+      const found = sumGross(positions.filter(p => p.locator === m.label));
+      ok &&= found <= supplied;
+      parts.push(`${m.label} ${pct(found, supplied)} of supply found`);
+    }
+    // Coverage stays below 100%: suppliers in debt are left out, and so is supply held by contracts that never call
+    // scripts::supply* themselves (vaults, strategies).
+    return { check: 'supply found per market <= market supply (shares x exchange rate); coverage shown', ok, detail: parts.join('; ') };
+  });
+
 const noContractTotal: Enumerator['sanity'] = async () =>
   ({ check: 'none', ok: null, detail: 'no contract total available: balances are stored per account' });
 
@@ -599,4 +628,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator];

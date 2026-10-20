@@ -1,5 +1,6 @@
 // Display identity for assets that sources pay out. Identity is the exact id, never a ticker.
 import { APT, MOVE } from './sources/delegation.ts';
+import { FROZEN_MARKETS } from './sources/echelon-frozen.ts';
 import { KAPT, STKAPT } from './sources/kofi-receipts.ts';
 import { LZ_COINS } from './sources/layerzero-claimable.ts';
 import { MKLP } from './sources/merkle-mklp.ts';
@@ -7,6 +8,7 @@ import { ESMKL, MKL, PREMKL } from './sources/merkle-vemkl.ts';
 import { THL } from './sources/thala-thl.ts';
 
 export const ASSETS: Record<string, { symbol: string; decimals: number }> = {
+  ...Object.fromEntries(FROZEN_MARKETS.map(m => [m.asset, { symbol: m.label, decimals: m.decimals }])),
   ...Object.fromEntries(LZ_COINS.map(c => [c.coin, { symbol: c.display, decimals: c.decimals }])),
   [APT]: { symbol: 'APT', decimals: 8 },
   [THL]: { symbol: 'THL', decimals: 8 },

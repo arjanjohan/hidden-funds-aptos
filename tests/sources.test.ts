@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ownerKind } from '../src/shared/owners.ts';
 import { canopyEndedRewards } from '../src/shared/sources/canopy-rewards.ts';
 import { delegation, MOVE, movementDelegation } from '../src/shared/sources/delegation.ts';
+import { echelonFrozenMarkets, FROZEN_MARKETS } from '../src/shared/sources/echelon-frozen.ts';
 import { delegationInactiveValidator } from '../src/shared/sources/delegation-inactive.ts';
 import { KAPT, kofiReceipts, STKAPT } from '../src/shared/sources/kofi-receipts.ts';
 import { MARKET_MAX_AGE_SECS } from '../src/shared/market.ts';
@@ -612,6 +613,89 @@ describe('market-dependent refresh', () => {
   it('re-reads receipt holders within the lifetime of the market quotes their positions rest on', () => {
     expect(AGE_LIMIT_MS[kofiReceipts.refresh.nonZero]).toBeLessThanOrEqual(MARKET_MAX_AGE_SECS * 1000);
     expect(AGE_LIMIT_MS[kofiReceipts.refresh.zero]).toBeLessThanOrEqual(MARKET_MAX_AGE_SECS * 1000);
+  });
+});
+
+describe('echelon frozen markets', () => {
+  const market = (label: string) => FROZEN_MARKETS.find(m => m.label === label)!;
+  const LZUSDC = market('lzUSDC'), KAPT_MARKET = market('kAPT'), THL_MARKET = market('THL'), WHWETH = market('whWETH'), OTHER = addr('c3');
+  type Opts = { coins: string; frozen?: boolean; cash?: string; held?: string[]; unpriced?: string[]; debt?: { principal: string; interest_accumulated: string } };
+  const chain = (opts: Opts) => fakeChain({
+    resource: (address, type) => {
+      if (type.endsWith('::lending::Vault') && address === OWNER) return {
+        collaterals: { data: [...(opts.held ?? [LZUSDC.market]).map(m => ({ key: { inner: m }, value: '3000000' })), { key: { inner: OTHER }, value: '9' }] },
+        liabilities: { data: opts.debt ? [{ key: { inner: OTHER }, value: opts.debt }] : [] } };
+      if (type.endsWith('::lending::Market')) return { collateral_factor_bps: opts.frozen === false ? '7000' : '0', borrow_cap: '0',
+        total_cash: opts.cash ?? '99999999999', total_liability: opts.cash === undefined ? '0' : '3000000', total_reserve: '0' };
+      return null;
+    },
+    view: (fn, args) => {
+      if (fn.endsWith('::account_coins')) return [opts.coins];
+      if (fn.endsWith('::asset_price')) {
+        if ((opts.unpriced ?? []).includes(args[0] as string)) throw new Error('view: HTTP 400 {"message":"Move abort in 0x92e9::tiered_oracle: ERR_ORACLE_INVALID_PRICE(0x6b): "}');
+        return [{ v: '18446744073709551616' }];
+      }
+      throw new Error(fn);
+    },
+  });
+  const read = (opts: Opts) => echelonFrozenMarkets.read(context(chain(opts)), OWNER);
+
+  it('lists supply in a frozen market, aged from the freeze, and ignores other markets', async () => {
+    const r = await read({ coins: '1500000' });
+    expect(r.positions).toHaveLength(1);
+    expect(r.positions[0]).toMatchObject({ locator: 'lzUSDC', asset: LZUSDC.asset, status: 'recoverable', ageBasis: 'protocol_closure',
+      claimableSince: LZUSDC.frozenAt, expectedPayout: [{ asset: LZUSDC.asset, raw: '1500000' }] });
+    expect(r.positions[0].steps).toEqual([{ function: expect.stringContaining(`::scripts::withdraw_all<${LZUSDC.asset}>`), arguments: [LZUSDC.market],
+      prerequisites: [], expectedOutputs: [{ asset: LZUSDC.asset, raw: '1500000' }] }]);
+  });
+
+  it('withdraws from a fungible-asset market with withdraw_all_fa', async () => {
+    const r = await read({ coins: '7', held: [KAPT_MARKET.market] });
+    expect(r.positions[0]).toMatchObject({ locator: 'kAPT', asset: KAPT_MARKET.asset, claimableSince: KAPT_MARKET.frozenAt });
+    expect(r.positions[0].steps[0]).toMatchObject({ function: expect.stringMatching(/::scripts::withdraw_all_fa$/), arguments: [KAPT_MARKET.market] });
+  });
+
+  it('leaves out every position of a supplier with any Echelon debt, even dust or interest only', async () => {
+    for (const debt of [{ principal: '300000', interest_accumulated: '0' }, { principal: '0', interest_accumulated: '1' }]) {
+      expect(await read({ coins: '1500000', debt })).toMatchObject({ positions: [], complete: true });
+    }
+    // A repaid liability entry (all zero) is no debt.
+    expect((await read({ coins: '1500000', debt: { principal: '0', interest_accumulated: '0' } })).positions).toHaveLength(1);
+  });
+
+  it('counts a lender\'s pro-rata share of a short market\'s cash, withdrawn as shares, and blocks when there is none', async () => {
+    // Cash 1M of 4M supply (3M borrowed): a lender owed 1.5M is counted for 1.5M x 1/4 = 375K, so all lenders together
+    // never exceed the 1M cash. withdraw_all would take all 1.5M and abort, so the step withdraws 375K worth of shares
+    // (3M shares for 1.5M coins: 750K shares).
+    const partial = await read({ coins: '1500000', cash: '1000000' });
+    expect(partial.positions[0]).toMatchObject({ status: 'recoverable', grossClaim: [{ raw: '1500000' }], expectedPayout: [{ raw: '375000' }] });
+    expect(partial.positions[0].steps[0]).toMatchObject({ function: expect.stringContaining(`::scripts::withdraw<${LZUSDC.asset}>`), arguments: [LZUSDC.market, '750000'] });
+    const none = await read({ coins: '1500000', cash: '0' });
+    expect(none.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'insufficient_cash' }], expectedPayout: [] });
+    // 3 raw units x 1/4 rounds to nothing while the market has cash: no position.
+    expect((await read({ coins: '3', cash: '1000000' })).positions).toEqual([]);
+  });
+
+  it('asks to withdraw the one held market without a price first, and blocks everything with two', async () => {
+    const one = await read({ coins: '1500000', held: [THL_MARKET.market, LZUSDC.market], unpriced: [THL_MARKET.market] });
+    const by = Object.fromEntries(one.positions.map(p => [p.locator, p]));
+    expect(by.THL).toMatchObject({ status: 'recoverable', steps: [{ prerequisites: [] }] });
+    expect(by.lzUSDC).toMatchObject({ status: 'recoverable', steps: [{ prerequisites: [expect.stringContaining('Withdraw your THL first')] }] });
+    const two = await read({ coins: '1500000', held: [THL_MARKET.market, WHWETH.market, LZUSDC.market], unpriced: [THL_MARKET.market, WHWETH.market] });
+    expect(two.positions).toHaveLength(3);
+    for (const p of two.positions) expect(p).toMatchObject({ status: 'blocked', blockers: [{ code: 'stale_oracle' }], expectedPayout: [{ raw: '1500000' }] });
+    // Short of cash, the unpriced market itself only allows a partial withdrawal, which leaves it in the vault: blocked.
+    const short = await read({ coins: '1500000', cash: '1000000', held: [THL_MARKET.market], unpriced: [THL_MARKET.market] });
+    expect(short.positions[0]).toMatchObject({ locator: 'THL', status: 'blocked', blockers: [{ code: 'stale_oracle' }], expectedPayout: [{ raw: '375000' }] });
+  });
+
+  it('does not count a market Echelon reopened', async () => {
+    expect((await read({ coins: '1500000', frozen: false })).positions).toEqual([]);
+  });
+
+  it('lists every market and asset at a full-length address (price lookups are exact), once', () => {
+    expect(new Set(FROZEN_MARKETS.map(m => m.market)).size).toBe(FROZEN_MARKETS.length);
+    expect(FROZEN_MARKETS.filter(m => !/^0x[0-9a-f]{64}$/.test(m.market) || !/^0x[0-9a-f]{64}(::|$)/.test(m.asset))).toEqual([]);
   });
 });
 
