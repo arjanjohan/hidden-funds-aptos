@@ -1,0 +1,210 @@
+// Every Aptos and Movement protocol we know of, with what we did about it. Seeded from DefiLlama's protocol list
+// (2026-10-20: 91 on Aptos, 8 on Movement) plus protocols DefiLlama does not list. Evidence for implemented sources and
+// sized candidates lives in docs/sources.md; this is the index. `not_checked` means nobody has looked yet.
+
+export type ProtocolStatus =
+  | 'implemented'     // has sources (listed)
+  | 'dormant'         // a source exists but counts nothing until a trigger
+  | 'needs_decision'  // waiting on a rule decision (issue)
+  | 'blocked'         // funds may be left behind, but cannot be read or recovered usefully
+  | 'too_small'       // sized; below what is worth a source
+  | 'not_left_behind' // checked; nothing qualifies (live protocol, nothing ended, or nothing held for users)
+  | 'out_of_scope'    // not a protocol that holds users' on-chain positions (custodial exchanges)
+  | 'not_checked';
+
+export interface ProtocolEntry {
+  id: string;
+  name: string;
+  chains: ('aptos' | 'movement')[];
+  category: string;
+  status: ProtocolStatus;
+  /** One sentence: why this status. */
+  reason: string;
+  /** When the status was last checked (absent while not checked). */
+  checkedAt?: string;
+  sources?: string[];
+  issue?: number;
+  /** DefiLlama slug, for its page. */
+  defillama?: string;
+  /** DefiLlama marks the protocol dead (with its date when it gives one). */
+  dead?: string;
+}
+
+const A = ['aptos'] as const, M = ['movement'] as const;
+const cex = (id: string, name: string): ProtocolEntry => ({ id, name, chains: [...A], category: 'CEX', status: 'out_of_scope',
+  reason: 'Custodial exchange: balances are held by the exchange, not in an on-chain position.', checkedAt: '2026-10-20', defillama: id });
+
+export const PROTOCOLS: ProtocolEntry[] = [
+  // Implemented
+  { id: 'aptos-native-staking', name: 'Aptos native staking', chains: [...A], category: 'Staking', status: 'implemented', checkedAt: '2026-10-20',
+    reason: 'Unstaked APT whose lockup ended, and stake left with validators that left the set.', sources: ['native-delegation', 'delegation-inactive-validator'] },
+  { id: 'thala-lsd', name: 'Thala LSD', chains: [...A], category: 'Liquid Staking', status: 'implemented', checkedAt: '2026-10-20',
+    reason: 'Matured unstake requests never claimed.', sources: ['thala-unstake'], defillama: 'thala-lsd' },
+  { id: 'thala-vethl', name: 'Thala veTHL', chains: [...A], category: 'Liquid Staking', status: 'implemented', checkedAt: '2026-10-20',
+    reason: 'Expired veTHL locks never unlocked.', sources: ['thala-vethl-expired'], defillama: 'thala-vethl' },
+  { id: 'thalaswap', name: 'ThalaSwap', chains: [...A], category: 'Dexs', status: 'implemented', checkedAt: '2026-10-20',
+    reason: 'Vested farm rewards never claimed. v1 LP itself still trades (live liquidity).', sources: ['thala-vesting-matured'], defillama: 'thalaswap' },
+  { id: 'kofi-finance', name: 'Kofi Finance', chains: [...A], category: 'Liquid Staking', status: 'implemented', checkedAt: '2026-10-20',
+    reason: 'Wound down: matured withdrawal tickets, and kAPT/stkAPT still held without a market.', sources: ['kofi-withdrawals', 'kofi-receipts'], defillama: 'kofi-finance' },
+  { id: 'tortuga', name: 'Tortuga', chains: [...A], category: 'Liquid Staking', status: 'implemented', checkedAt: '2026-10-20',
+    reason: 'Unstake tickets never claimed.', sources: ['tortuga-tickets'], defillama: 'tortuga', dead: 'yes' },
+  { id: 'amnis-finance', name: 'Amnis Finance', chains: [...A], category: 'Liquid Staking', status: 'implemented', checkedAt: '2026-10-20',
+    reason: 'Withdrawal NFTs whose lockup ended, never redeemed.', sources: ['amnis-withdrawals'], defillama: 'amnis-finance' },
+  { id: 'trustake', name: 'TruStake (TruFin)', chains: [...A], category: 'Liquid Staking', status: 'implemented', checkedAt: '2026-10-20',
+    reason: 'Unlock requests claimable, never withdrawn.', sources: ['trufin-unlocks'], defillama: 'trustake' },
+  { id: 'merkle-trade', name: 'Merkle Trade', chains: [...A], category: 'Derivatives', status: 'implemented', checkedAt: '2026-10-20',
+    reason: 'Wound down in February 2026: LP left behind, and staked MKL never unlocked.', sources: ['merkle-mklp', 'merkle-vemkl'], defillama: 'merkle-trade', dead: '2026-02-03' },
+  { id: 'layerzero-aptos-bridge', name: 'LayerZero Aptos Bridge', chains: [...A], category: 'Bridge', status: 'implemented', checkedAt: '2026-10-20',
+    reason: 'Tokens bridged in that arrived but were never claimed.', sources: ['layerzero-claimable'] },
+  { id: 'pancakeswap-amm', name: 'PancakeSwap', chains: [...A], category: 'Dexs', status: 'implemented', checkedAt: '2026-10-20',
+    reason: 'CAKE left in syrup pools that ended in 2023-2024, and farm rewards never harvested after emissions ended.', sources: ['pancake-syrup-ended', 'pancake-farm-ended-rewards'], defillama: 'pancakeswap-amm' },
+  { id: 'topaz', name: 'Topaz', chains: [...A], category: 'NFT Marketplace', status: 'implemented', checkedAt: '2026-10-20',
+    reason: 'Closed in August 2024: APT escrowed in expired bids.', sources: ['topaz-bids'] },
+  { id: 'echelon-market', name: 'Echelon', chains: [...A, ...M], category: 'Lending', status: 'implemented', checkedAt: '2026-10-20',
+    reason: 'Supply left in the 21 frozen Aptos markets (suppliers without debt). The 3 frozen Movement markets hold ~$40.', sources: ['echelon-frozen-markets'], defillama: 'echelon-market' },
+  { id: 'econia', name: 'Econia', chains: [...A], category: 'Dexs', status: 'implemented', checkedAt: '2026-10-20',
+    reason: 'Repository archived 2025-09-08 and no trading since: coins left idle in market accounts.', sources: ['econia-idle-accounts'], defillama: 'econia', dead: '2025-09-08' },
+  { id: 'movement-native-staking', name: 'Movement native staking', chains: [...M], category: 'Staking', status: 'implemented', checkedAt: '2026-10-20',
+    reason: 'Unstaked MOVE whose lockup ended, and stake left with validators that left the set.', sources: ['movement-native-delegation', 'movement-inactive-validator'] },
+  { id: 'canopy', name: 'Canopy', chains: [...M], category: 'Yield Aggregator', status: 'implemented', checkedAt: '2026-10-20',
+    reason: 'Staking rewards from reward periods that ended, never claimed.', sources: ['canopy-ended-rewards'], defillama: 'canopy' },
+
+  // Dormant
+  { id: 'aave-aptos', name: 'Aave (Aptos)', chains: [...A], category: 'Lending', status: 'dormant', checkedAt: '2026-10-20',
+    reason: 'Aave is winding down Aptos by freezing every reserve; the source counts supply once a reserve freezes. None is frozen yet.', sources: ['aave-frozen-reserves'], defillama: 'aave-aptos' },
+
+  // Waiting on a decision
+  { id: 'aries-markets', name: 'Aries Markets', chains: [...A], category: 'Lending', status: 'needs_decision', checkedAt: '2026-10-19', issue: 3,
+    reason: 'Reserves were moved out in 2026; deposits can only show as "may not work", at ~285K reads a week.', defillama: 'aries-markets' },
+  { id: 'portal', name: 'Wormhole (Portal)', chains: [...A], category: 'Bridge', status: 'needs_decision', checkedAt: '2026-10-19', issue: 1,
+    reason: 'Transfers to Aptos never redeemed: a check-page lookup via the Wormhole API, or a pipeline source?', defillama: 'portal' },
+  { id: 'layerzero-v2', name: 'LayerZero v2 OFTs and Stargate', chains: [...A, ...M], category: 'Bridge', status: 'needs_decision', checkedAt: '2026-10-19', issue: 2,
+    reason: 'Messages that failed delivery: a check-page lookup via LayerZero Scan, or a pipeline source?' },
+
+  // Blocked
+  { id: 'aptin-finance', name: 'Aptin Finance', chains: [...A], category: 'Lending', status: 'blocked', checkedAt: '2026-10-07',
+    reason: 'Every withdrawal aborts on stale prices (operator prices not updated since 2026-07-25); value could only show as "may not work".', defillama: 'aptin-finance-v2' },
+  { id: 'kana-perps', name: 'Kana perps', chains: [...A], category: 'Derivatives', status: 'blocked', checkedAt: '2026-10-19',
+    reason: 'Every market is deprecated and the collateral stores hold no USDt: recorded balances are face value only.' },
+  { id: 'tapp-exchange', name: 'Tapp Exchange', chains: [...A], category: 'Dexs', status: 'blocked', checkedAt: '2026-10-19',
+    reason: 'Wound down 2026-05-31; every router hook is paused, so liquidity cannot be removed.', defillama: 'tapp-exchange', dead: '2026-05-31' },
+  { id: 'gui-lottery', name: 'GUI lottery', chains: [...A], category: 'Yield Lottery', status: 'blocked', checkedAt: '2026-10-07',
+    reason: 'A claim needs a voucher signed by the operator.' },
+
+  // Too small
+  { id: 'fliq', name: 'Fliq', chains: [...A], category: 'Prediction market', status: 'too_small', checkedAt: '2026-10-20',
+    reason: 'Unredeemed winnings would count, but all Fliq collateral is 4,200 USDt.' },
+  { id: 'mirage-protocol', name: 'Mirage Protocol', chains: [...A, ...M], category: 'Derivatives', status: 'too_small', checkedAt: '2026-10-19',
+    reason: 'Reportedly closed; ~$714 of TVL left.', defillama: 'mirage-protocol' },
+  { id: 'aux-exchange', name: 'AUX Exchange', chains: [...A], category: 'Dexs', status: 'too_small', checkedAt: '2026-10-19',
+    reason: 'Development ceased 2023-03-17; about $5K left in its pools.', defillama: 'aux-exchange' },
+  { id: 'hyperion', name: 'Hyperion', chains: [...A], category: 'Dexs', status: 'too_small', checkedAt: '2026-10-19',
+    reason: 'Live DEX; its delayed LP withdrawals (fridge) hold 4.70 APT unclaimed in total.', defillama: 'hyperion' },
+  { id: 'cellana-finance', name: 'Cellana Finance', chains: [...A], category: 'Dexs', status: 'too_small', checkedAt: '2026-10-19',
+    reason: 'CELL is quoted at $0.00006 (stale): expired veCELL locks are worth nothing.', defillama: 'cellana-finance', dead: 'yes' },
+  { id: 'moar-market', name: 'Moar Market', chains: [...A], category: 'Leveraged Farming', status: 'too_small', checkedAt: '2026-10-20',
+    reason: 'About $0 TVL; farming rewards are paid in a token without a price.', defillama: 'moar-market' },
+  { id: 'yuzu-finance', name: 'Yuzu Finance', chains: [...M], category: 'Dexs', status: 'too_small', checkedAt: '2026-10-19',
+    reason: 'Rewards are MOVE only, worth too little to track; LP is live liquidity.', defillama: 'yuzu-finance' },
+  { id: 'echelon-farming', name: 'Echelon farming rewards', chains: [...A, ...M], category: 'Lending', status: 'too_small', checkedAt: '2026-10-19',
+    reason: 'Ended reward programs; Echelon holds only ~$3.6K (Aptos) and ~$2.1K of MOVE (Movement) to pay them.' },
+
+  // Not left behind
+  { id: 'superposition', name: 'Superposition', chains: [...A], category: 'Lending', status: 'not_left_behind', checkedAt: '2026-10-19',
+    reason: 'Markets unpaused and still used; withdrawals take a packet its service still signs.', defillama: 'superposition' },
+  { id: 'moveposition', name: 'MovePosition', chains: [...M], category: 'Lending', status: 'not_left_behind', checkedAt: '2026-10-20',
+    reason: 'Live: its service still signs withdrawal packets.', defillama: 'moveposition' },
+  { id: 'joule-finance', name: 'Joule Finance', chains: [...A], category: 'Lending', status: 'not_left_behind', checkedAt: '2026-10-20',
+    reason: 'Live; withdrawals need paid Pyth price updates, a cost of using it, not a closure.', defillama: 'joule-finance' },
+  { id: 'ditto', name: 'Ditto', chains: [...A], category: 'Liquid Staking', status: 'not_left_behind', checkedAt: '2026-10-19',
+    reason: 'Unstake queue empty and redemption still works, so stAPT is not stranded.', defillama: 'ditto', dead: 'yes' },
+  { id: 'thalaswap-v2', name: 'ThalaSwap V2', chains: [...A], category: 'Dexs', status: 'not_left_behind', checkedAt: '2026-10-19',
+    reason: 'Live DEX: LP is live liquidity.', defillama: 'thalaswap-v2' },
+  { id: 'thalaswap-v3', name: 'ThalaSwap V3', chains: [...A], category: 'Dexs', status: 'not_left_behind', checkedAt: '2026-10-19',
+    reason: 'Live DEX: LP is live liquidity.', defillama: 'thalaswap-v3' },
+  { id: 'meridian-amm', name: 'Meridian', chains: [...M], category: 'Dexs', status: 'not_left_behind', checkedAt: '2026-10-19',
+    reason: 'Live DEX; staked LP is live principal and extra rewards are MOVE.', defillama: 'meridian-amm' },
+  { id: 'near-intents', name: 'NEAR Intents', chains: [...A], category: 'Bridge', status: 'not_left_behind', checkedAt: '2026-10-19',
+    reason: 'Swaps settled by solvers: nothing is held for the user on Aptos.', defillama: 'near-intents' },
+  { id: 'bridges-settled', name: 'Meson, Gas.zip, ChangeNOW, Swapspace, Panora, CashmereLabs', chains: [...A], category: 'Bridge', status: 'not_left_behind', checkedAt: '2026-10-19',
+    reason: 'Swaps settled by liquidity providers: nothing is held for the user on Aptos.' },
+  { id: 'movement-framework-bridges', name: 'Movement framework bridges', chains: [...M], category: 'Bridge', status: 'not_left_behind', checkedAt: '2026-10-19',
+    reason: 'atomic_bridge and native_bridge were never used on mainnet: event counters 0, transfer tables empty.' },
+  { id: 'tradeport', name: 'TradePort', chains: [...A], category: 'NFT Marketplace', status: 'not_left_behind', checkedAt: '2026-10-19',
+    reason: 'Left Aptos; every bid is gone.' },
+  { id: 'validator-owned-pools', name: 'Validator-owned stake pools', chains: [...A], category: 'Staking', status: 'not_left_behind', checkedAt: '2026-10-20',
+    reason: 'The large pools (14.4M and 4.1M APT) look institutional, between validator setups; no evidence of abandonment.' },
+  { id: 'amnis-ami', name: 'Amnis AMI vesting and claims', chains: [...A], category: 'Liquid Staking', status: 'not_left_behind', checkedAt: '2026-10-19',
+    reason: 'Vesting buckets belong to the team and investors; "AMI Claim" NFTs were paid off chain.' },
+
+  // No closure evidence found (checked, nothing ended)
+  { id: 'thala-cdp', name: 'Thala CDP (MOD)', chains: [...A], category: 'CDP', status: 'not_left_behind', checkedAt: '2026-10-19',
+    reason: 'No closure notice found.', defillama: 'thala-cdp' },
+  { id: 'auro-finance', name: 'Auro Finance', chains: [...A], category: 'CDP', status: 'not_left_behind', checkedAt: '2026-10-20',
+    reason: 'No closure notice found; principal withdrawals work (reward claims abort on a stale price).', defillama: 'auro-finance' },
+  { id: 'echo', name: 'Echo (lending, liquid staking, strategy)', chains: [...A], category: 'Lending', status: 'not_left_behind', checkedAt: '2026-10-19',
+    reason: 'No closure or withdrawal notice found.', defillama: 'echo-lending' },
+  { id: 'souffl3', name: 'Souffl3', chains: [...A], category: 'NFT Marketplace', status: 'not_left_behind', checkedAt: '2026-10-19',
+    reason: 'No closure evidence found.' },
+  { id: 'celer-cbridge', name: 'Celer cBridge', chains: [...A], category: 'Bridge', status: 'not_left_behind', checkedAt: '2026-10-19',
+    reason: 'No closure evidence; the peg bridge still mints.' },
+  { id: 'argo', name: 'Argo', chains: [...A], category: 'CDP', status: 'not_left_behind', checkedAt: '2026-10-19',
+    reason: 'No closure notice found.', defillama: 'argo', dead: 'yes' },
+  { id: 'goblin', name: 'Goblin', chains: [...A], category: 'Yield Aggregator', status: 'not_left_behind', checkedAt: '2026-10-20',
+    reason: 'No closure notice found (vaults run on Hyperion).', defillama: 'goblin' },
+  { id: 'animeswap', name: 'AnimeSwap', chains: [...A], category: 'Dexs', status: 'not_checked',
+    reason: 'No closure notice found (2026-10-20), but DefiLlama marks it dead; on-chain activity not checked yet.', defillama: 'animeswap', dead: 'yes' },
+  { id: 'abel-finance', name: 'ABEL Finance', chains: [...A], category: 'Lending', status: 'not_checked',
+    reason: 'No closure notice found (2026-10-20), but DefiLlama marks it dead with ~$206K TVL; on-chain activity and withdrawals not checked yet.', defillama: 'abel-finance', dead: 'yes' },
+  { id: 'meso-finance', name: 'Meso Finance', chains: [...A], category: 'Lending', status: 'not_checked',
+    reason: 'No closure notice found (2026-10-20), but DefiLlama marks it dead with ~$40K TVL; on-chain activity not checked yet.', defillama: 'meso-finance', dead: 'yes' },
+
+  // Not checked yet (DefiLlama, 2026-10-20)
+  ...([
+    ['yield-ai', 'Yield AI', A, 'AI Agents'],
+    ['poly-network', 'Poly Network', A, 'Bridge', '2024-09-30'],
+    ['arche-protocol', 'Arche Protocol', M, 'CDP', 'yes'],
+    ['decibel', 'Decibel', A, 'Derivatives'],
+    ['tsunamix', 'TsunamiX (Tsunami Finance)', A, 'Derivatives', 'yes'],
+    ['thetis-perps', 'Thetis Perps', A, 'Derivatives', 'yes'],
+    ['agdex', 'AGDEX', A, 'Derivatives'],
+    ['liquidswap', 'LiquidSwap', A, 'Dexs'],
+    ['cetus-clmm', 'Cetus CLMM', A, 'Dexs'],
+    ['aptoswap', 'Aptoswap', A, 'Dexs', 'yes'],
+    ['houstonswap', 'HoustonSwap', A, 'Dexs', 'yes'],
+    ['baptswap', 'BaptSwap (V1, V2, V2.1)', A, 'Dexs', 'yes'],
+    ['sushi-aptos', 'Sushi (Aptos)', A, 'Dexs'],
+    ['mosaic-amm', 'Mosaic', M, 'Dexs'],
+    ['obric', 'Obric', A, 'Dexs'],
+    ['bridgers', 'Bridgers', A, 'Dexs'],
+    ['interest-protocol', 'Interest Protocol (Curve, DEX)', M, 'Dexs'],
+    ['jujube-finance', 'Jujube Finance', A, 'Dexs', 'yes'],
+    ['atodex', 'AtoDEX', A, 'Dexs', 'yes'],
+    ['earnium', 'Earnium', A, 'Dexs', '2026-10-10'],
+    ['emojicoin.fun', 'Emojicoin.fun', A, 'Launchpad', 'yes'],
+    ['movefast', 'MoveFast', A, 'Launchpad'],
+    ['aptoslaunch', 'AptosLaunch', A, 'Launchpad', 'yes'],
+    ['movepump', 'MovePump', A, 'Launchpad', 'yes'],
+    ['movegpt', 'MoveGPT', A, 'Launchpad', '2026-03-05'],
+    ['goapt', 'GoAPT', A, 'Liquid Staking'],
+    ['bluemove-staking', 'BlueMove Staking', A, 'NFT Marketplace', 'yes'],
+    ['streamflow', 'Streamflow', A, 'Payments'],
+    ['moveflow', 'MoveFlow', A, 'Payments'],
+    ['collex', 'Collex', A, 'Physical TCG', 'yes'],
+    ['kaio', 'KAIO', A, 'RWA'],
+    ['propbase', 'Propbase', A, 'RWA'],
+    ['newrlrwa', 'NewrlRWA', A, 'RWA'],
+    ['mole', 'Mole', A, 'Yield'],
+    ['eternal-finance', 'Eternal Finance', A, 'Yield'],
+    ['mosquitos-finance', 'Mosquitos Finance', A, 'Yield', '2023-03-09'],
+    ['moneyfi-v1', 'MoneyFi', A, 'Yield Aggregator'],
+    ['lotto-run', 'Lotto Run', A, 'Yield Lottery', 'yes'],
+  ] as [string, string, readonly ('aptos' | 'movement')[], string, string?][]).map(([id, name, chains, category, dead]): ProtocolEntry => ({
+    id, name, chains: [...chains], category, status: 'not_checked', reason: 'Not checked yet.', defillama: id === 'baptswap' ? 'baptswap-v2.1' : id === 'interest-protocol' ? 'interest-curve' : id, ...(dead ? { dead } : {}),
+  })),
+
+  // Out of scope: custodial exchanges DefiLlama lists with Aptos reserves
+  ...([['binance-cex', 'Binance'], ['bybit', 'Bybit'], ['okx', 'OKX'], ['gate', 'Gate'], ['mexc', 'MEXC'], ['kucoin', 'KuCoin'],
+    ['hashkey-exchange', 'HashKey Exchange'], ['flipster', 'Flipster'], ['backpack', 'Backpack'], ['weex', 'WEEX'], ['bitfinex', 'Bitfinex'],
+    ['blofin', 'BloFin'], ['bitkub', 'Bitkub'], ['gate-us', 'Gate US'], ['fastex', 'Fastex'], ['bitlo', 'Bitlo']] as const).map(([id, name]) => cex(id, name)),
+];
