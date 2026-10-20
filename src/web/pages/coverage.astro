@@ -16,6 +16,12 @@ const groups: [ProtocolStatus, string, string][] = [
   ['out_of_scope', 'Out of scope', 'Custodial exchanges: balances there are not on-chain positions.'],
 ];
 const published = new Set((snapshot?.sources ?? []).map(s => s.id));
+/** Entries per status for each chain filter, so the cards and sections follow the toggle. */
+const counts = (status: ProtocolStatus) => ({
+  all: PROTOCOLS.filter(p => p.status === status).length,
+  aptos: PROTOCOLS.filter(p => p.status === status && p.chains.includes('aptos')).length,
+  movement: PROTOCOLS.filter(p => p.status === status && p.chains.includes('movement')).length,
+});
 const chainName = { aptos: 'Aptos', movement: 'Movement' } as const;
 ---
 <Base title="Coverage · hidden funds" description="Every Aptos and Movement protocol we know of, and what we did about each: counted, checked and excluded, or not checked yet.">
@@ -33,15 +39,16 @@ const chainName = { aptos: 'Aptos', movement: 'Movement' } as const;
   </div>
 
   <div class="cards summary">
-    {groups.map(([status, label]) => (
-      <a class="card" href={`#${status}`}><span class="muted">{label}</span><b>{PROTOCOLS.filter(p => p.status === status).length}</b></a>
-    ))}
+    {groups.map(([status, label]) => {
+      const n = counts(status);
+      return <a class="card" href={`#${status}`} data-all={n.all} data-aptos={n.aptos} data-movement={n.movement}><span class="muted">{label}</span><b>{n.all}</b></a>;
+    })}
   </div>
 
   {groups.map(([status, label, blurb]) => {
     const rows = PROTOCOLS.filter(p => p.status === status).sort((a, b) => a.name.localeCompare(b.name));
     return rows.length > 0 && (
-      <section id={status}>
+      <section id={status} data-all={counts(status).all} data-aptos={counts(status).aptos} data-movement={counts(status).movement}>
         <h2>{label}</h2>
         <p class="muted">{blurb}</p>
         <div class="table">
@@ -81,6 +88,13 @@ const chainName = { aptos: 'Aptos', movement: 'Movement' } as const;
     for (const row of document.querySelectorAll<HTMLElement>('tr[data-chains]')) {
       row.hidden = chain !== 'all' && !row.dataset.chains!.split(' ').includes(chain);
     }
+    // Counts and sections follow the filter: a card shows the selected chain's count; a section without rows hides.
+    for (const card of document.querySelectorAll<HTMLElement>('.summary .card')) {
+      const n = Number(card.dataset[chain]);
+      card.querySelector('b')!.textContent = String(n);
+      card.hidden = n === 0;
+    }
+    for (const section of document.querySelectorAll<HTMLElement>('section[data-all]')) section.hidden = Number(section.dataset[chain]) === 0;
   });
 </script>
 
@@ -90,6 +104,7 @@ const chainName = { aptos: 'Aptos', movement: 'Movement' } as const;
   .toggle button[aria-pressed="true"] { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
   .summary { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
   .summary a.card { text-decoration: none; color: inherit; }
+  .summary a.card[hidden], section[hidden] { display: none; }
   table { table-layout: fixed; }
   th:first-child { width: 30%; }
   th:last-child { width: 7.5em; }
