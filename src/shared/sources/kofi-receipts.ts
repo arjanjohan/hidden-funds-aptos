@@ -90,7 +90,9 @@ export const kofiReceipts: SourceDef<ReceiptHint> = {
     effectiveAt: '2026-07-24T07:55:53Z',
   },
   // Never in the headline; a changed balance (new hint version) still makes the holder due at once.
-  refresh: { nonZero: 'monthly', zero: 'monthly' },
+  // Positions rest on market quotes that expire after 7 days (MARKET_MAX_AGE_SECS), so holders are re-read within that
+  // window. While every bucket has a usable market the read is skipped, so this costs nothing until markets dry up.
+  refresh: { nonZero: 'every_run', zero: 'weekly' },
   version: 2,   // 2: market test applied (usable market → not counted)
   headlineAgeBases: ['protocol_closure'],
   howTo: [

@@ -4,6 +4,8 @@ import { canopyEndedRewards } from '../src/shared/sources/canopy-rewards.ts';
 import { delegation, MOVE, movementDelegation } from '../src/shared/sources/delegation.ts';
 import { delegationInactiveValidator } from '../src/shared/sources/delegation-inactive.ts';
 import { KAPT, kofiReceipts, STKAPT } from '../src/shared/sources/kofi-receipts.ts';
+import { MARKET_MAX_AGE_SECS } from '../src/shared/market.ts';
+import { AGE_LIMIT_MS } from '../src/node/state.ts';
 import { kofiWithdrawals } from '../src/shared/sources/kofi-withdrawals.ts';
 import { BTCB, layerzeroClaimable, LZ_COINS } from '../src/shared/sources/layerzero-claimable.ts';
 import { merkleMklp, MKLP } from '../src/shared/sources/merkle-mklp.ts';
@@ -603,6 +605,13 @@ describe('pancake farm ended rewards', () => {
   it('blocks a reward MasterChef cannot pay', async () => {
     const r = await pancakeFarmEndedRewards.read(context(chain({ amount: '111190', debt: '41917', apt: '0', cakeLeft: '10' })), OWNER);
     expect(r.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'reward_unfunded' }], expectedPayout: [] });
+  });
+});
+
+describe('market-dependent refresh', () => {
+  it('re-reads receipt holders within the lifetime of the market quotes their positions rest on', () => {
+    expect(AGE_LIMIT_MS[kofiReceipts.refresh.nonZero]).toBeLessThanOrEqual(MARKET_MAX_AGE_SECS * 1000);
+    expect(AGE_LIMIT_MS[kofiReceipts.refresh.zero]).toBeLessThanOrEqual(MARKET_MAX_AGE_SECS * 1000);
   });
 });
 

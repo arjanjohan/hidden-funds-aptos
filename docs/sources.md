@@ -225,7 +225,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - Redemption value: kAPT 1:1 in APT; stkAPT × `rewards_manager::get_exchange_rate` / 1e8 (1.0856 on 2026-10-19).
 - **Age (`protocol_closure`):** the later of the wind-down (2026-07-24 07:55:53 UTC) and the holder's last balance change. A holder who bought after the wind-down is dated from the purchase.
 - **Result (2026-10-19):** 11,619 positions, ~$98K redemption value. Sanity: user primary stores hold 89.11% of the kAPT supply and 99.77% of the stkAPT supply.
-- **Re-read schedule:** monthly, plus immediately when a holder's store changes. Never in the headline, so a weekly re-read (11.6K requests) is not worth it.
+- **Re-read schedule:** every run (owners with positions) and weekly (others), because positions rest on market quotes that are valid for 7 days. While every bucket has a usable market, holders are not read at all; once a market dries up, a run reads ~11.6K holders.
 - **Recovery:** `gateway::request_withdrawal_entry(amount)` for kAPT, or `gateway::unstake_and_request_withdrawal_entry(amount)` for stkAPT. Then `finalize_withdrawals_entry([ticket])` after 14 days.
   - Request step sample: 38/38 succeed across the four variants.
   - The finalize step is the `kofi-withdrawals` sample (10/10 exact).
