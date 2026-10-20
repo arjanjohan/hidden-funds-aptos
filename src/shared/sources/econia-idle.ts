@@ -39,9 +39,14 @@ function marketInfo(ctx: ReadContext, id: string): Promise<MarketInfo> {
   });
 }
 
-async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
+/** Enumeration hint: the time of the run that saw the owner change (deposit, withdrawal, order, or a fill of its order). */
+export interface EconiaHint { since?: string }
+
+async function read(ctx: ReadContext, ownerInput: string, hint?: EconiaHint): Promise<ReadResult> {
   const owner = normalizeAddress(ownerInput);
   const version = ctx.ledger.version;
+  // A balance that changed after the archive date has been idle only since then: the later of the two dates.
+  const since = hint?.since && Date.parse(hint.since) > Date.parse(ECONIA_ARCHIVED_AT) ? hint.since : ECONIA_ARCHIVED_AT;
   try {
     const [accounts] = await ctx.chain.view(`${ECONIA}::user::get_market_accounts`, [owner], [], version);
     const idle = (accounts as any[]).filter(a => a.custodian_id === '0' && !a.asks.length && !a.bids.length);
@@ -56,7 +61,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
         const locator = `market-${a.market_id}`;
         positions.push({
           ...positionIds(SOURCE, owner, locator, 'principal', asset), source: SOURCE, owner, locator, positionKind: 'principal', asset,
-          claimableSince: ECONIA_ARCHIVED_AT, ageBasis: 'protocol_closure',
+          claimableSince: since, ageBasis: 'protocol_closure',
           provenance: { reader: `${ECONIA}::user::get_market_accounts`, ledgerVersion: version },
           grossClaim: value, expectedPayout: value, payoutBasis: 'view',
           status: 'recoverable', blockers: [],
@@ -72,7 +77,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
   }
 }
 
-export const econiaIdleAccounts: SourceDef = {
+export const econiaIdleAccounts: SourceDef<EconiaHint> = {
   id: SOURCE,
   chain: 'aptos',
   protocol: 'Econia',

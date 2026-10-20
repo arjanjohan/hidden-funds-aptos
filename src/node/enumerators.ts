@@ -1,4 +1,5 @@
 // Chain-wide candidate enumeration and source-level sanity checks (node-only: keyed indexer use).
+import { iso } from '../shared/accounting.ts';
 import { mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
@@ -694,37 +695,46 @@ const noContractTotal: Enumerator['sanity'] = async () =>
 // changed; those only matter after an owner's first read, which comes after this source was added (2026-10-20), so
 // their scan starts there. A fill of a resting order is sent by the taker, so makers are taken from the coin markets'
 // open orders each run: current makers and last run's are re-read (an account with open orders does not count, and the
-// one whose order filled is read again in the run after).
+// one whose order filled is read again in the run after). A changed owner's hint carries the run's time, so a balance
+// that became idle after the archive date is aged from that run, never from the archive.
 const ECONIA_CHANGES_FROM = 7_696_900_000;
-const ECONIA_FUNCTIONS: EntryFunction[] = [
+const ECONIA_REGISTRATIONS: EntryFunction[] = [
   ...['register_market_account', 'register_market_account_generic_base'].map(name => ({ contract: ECONIA, module: 'user', name })),
   ...['deposit_and_register_base', 'deposit_and_register_quote', 'place_limit_order_user_entry', 'place_market_order_user_entry']
     .map(name => ({ contract: KANA_ECONIA_WRAPPER, module: 'wrapper', name })),
+];
+const ECONIA_CHANGES: EntryFunction[] = [
   ...[['user', 'deposit_from_coinstore'], ['user', 'withdraw_to_coinstore'], ['market', 'place_limit_order_user_entry'],
     ['market', 'place_market_order_user_entry'], ['market', 'place_limit_order_passive_advance_user_entry'],
     ['market', 'change_order_size_user'], ['market', 'cancel_order_user'], ['market', 'cancel_all_orders_user']]
     .map(([module, name]) => ({ contract: ECONIA, module, name, fromVersion: ECONIA_CHANGES_FROM })),
-  ...['place_limit_order_user_entry_without_deposit', 'place_market_order_user_entry_without_deposit', 'cancel_all_orders']
+  ...['place_limit_order_user_entry', 'place_market_order_user_entry', 'place_limit_order_user_entry_without_deposit',
+    'place_market_order_user_entry_without_deposit', 'cancel_all_orders', 'deposit_and_register_base', 'deposit_and_register_quote']
     .map(name => ({ contract: KANA_ECONIA_WRAPPER, module: 'wrapper', name, fromVersion: ECONIA_CHANGES_FROM })),
 ];
 
-const econiaSenders = entrySenders('econia-idle-accounts', ECONIA_FUNCTIONS, noContractTotal);
+const econiaSenders = entrySenders('econia-idle-accounts', [...ECONIA_REGISTRATIONS, ...ECONIA_CHANGES], noContractTotal);
 export const econiaIdleEnumerator: Enumerator = {
   ...econiaSenders,
   scope: `${econiaSenders.scope}; plus owner-controlled makers with open orders in coin markets ${ECONIA_COIN_MARKETS[0]}-${ECONIA_COIN_MARKETS.at(-1)}`,
   async run(chain, cursor) {
-    let stored: { s?: string; m?: string[] } = {};
+    let stored: { r?: string; c?: string; m?: string[] } = {};
     try { stored = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: rescan */ }
     if (typeof stored !== 'object' || stored === null) stored = {};
-    const sent = await senders(chain, ECONIA_FUNCTIONS, stored.s);
+    const ledger = await chain.ledger();
+    const registered = await senders(chain, ECONIA_REGISTRATIONS, stored.r);
+    const changed = await senders(chain, ECONIA_CHANGES, stored.c);
     const makers = new Set<string>();
     for (const market of ECONIA_COIN_MARKETS) {
       const [orders] = await chain.view(`${ECONIA}::market::get_open_orders_all`, [market]);
       for (const o of [...orders.asks, ...orders.bids]) if (o.custodian_id === '0') makers.add(normalizeAddress(o.user));
     }
-    const owners = new Set([...sent.candidates.map(c => c.owner), ...makers, ...(stored.m ?? [])]);
-    return { candidates: [...owners].map(owner => ({ owner })), cursor: JSON.stringify({ s: sent.cursor, m: [...makers].sort() }),
-      pages: sent.pages + ECONIA_COIN_MARKETS.length, incremental: true };
+    const since = iso(ledger.timestampSecs);
+    const recent = new Set([...changed.candidates.map(c => c.owner), ...makers, ...(stored.m ?? [])]);
+    const owners = new Set([...registered.candidates.map(c => c.owner), ...recent]);
+    return { candidates: [...owners].map(owner => (recent.has(owner) ? { owner, hint: { since } } : { owner })),
+      cursor: JSON.stringify({ r: registered.cursor, c: changed.cursor, m: [...makers].sort() }),
+      pages: registered.pages + changed.pages + ECONIA_COIN_MARKETS.length, incremental: true };
   },
 };
 
