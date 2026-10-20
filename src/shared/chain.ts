@@ -103,6 +103,19 @@ export function createReader(options: ReaderOptions = {}): ChainReader {
   };
 }
 
+/** Every row of a keyset-paged indexer query. The query takes `$after`, filters `<key>: {_gt: $after}` and orders by
+ *  `<key>` ascending; the indexer returns at most 100 rows a page, so a single page would silently truncate. */
+export async function gqlAll<T = any>(chain: ChainReader, query: string, variables: Record<string, unknown>, root: string, key: string): Promise<T[]> {
+  const rows: T[] = [];
+  let after = '';
+  for (;;) {
+    const page: any[] = (await chain.gql(query, { ...variables, after }))[root];
+    rows.push(...page);
+    if (page.length < 100) return rows;
+    after = page[page.length - 1][key];
+  }
+}
+
 /** Run fn over items with bounded concurrency, preserving order. */
 export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);

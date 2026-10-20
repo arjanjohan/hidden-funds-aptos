@@ -1,7 +1,7 @@
 // Active stake left in a delegation pool whose validator has left the validator set: it earns nothing and can be
 // unlocked and withdrawn immediately.
 import { iso, positionIds } from '../accounting.ts';
-import { mapLimit, normalizeAddress, once } from '../chain.ts';
+import { gqlAll, mapLimit, normalizeAddress, once } from '../chain.ts';
 import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
 import { NATIVE } from './delegation.ts';
 
@@ -11,8 +11,8 @@ const MIN_UNLOCK = 1_000_000_000n;
 
 export type InactiveHint = { pools: string[]; version?: number };
 
-const POOLS_QUERY = `query($d:String!){ current_delegator_balances(where:{delegator_address:{_eq:$d},
-  pool_type:{_eq:"active_shares"}, shares:{_gt:"0"}}, distinct_on:pool_address, order_by:{pool_address:asc}, limit:100){ pool_address } }`;
+const POOLS_QUERY = `query($d:String!,$after:String!){ current_delegator_balances(where:{delegator_address:{_eq:$d},
+  pool_type:{_eq:"active_shares"}, shares:{_gt:"0"}, pool_address:{_gt:$after}}, distinct_on:pool_address, order_by:{pool_address:asc}, limit:100){ pool_address } }`;
 
 // Rewards are distributed every epoch while a validator is in the set; the last one dates when staking stopped.
 const LAST_REWARD_QUERY = `query($p:String!){ delegated_staking_activities(where:{pool_address:{_eq:$p},
@@ -43,7 +43,7 @@ async function read(ctx: ReadContext, SOURCE: string, asset: string, ownerInput:
   const errors: string[] = [];
   let failedPools = 0;
   const pools: string[] = hint?.pools.map(normalizeAddress) ??
-    (await ctx.chain.gql(POOLS_QUERY, { d: owner })).current_delegator_balances.map((r: any) => normalizeAddress(r.pool_address));
+    (await gqlAll(ctx.chain, POOLS_QUERY, { d: owner }, 'current_delegator_balances', 'pool_address')).map((r: any) => normalizeAddress(r.pool_address));
   const found = await mapLimit(pools, 4, async (pool): Promise<Position | null> => {
     try {
       const info = await poolInfo(ctx, pool);

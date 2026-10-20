@@ -3,8 +3,8 @@
 // Usage: node src/node/snapshot.ts [--source id] [--limit N] [--cap N] [--state path] [--out path] [--anonymous]
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { ageDays, applyOwnerKind, HEADLINE_AGE_DAYS, headlineAge, sourceTotals, usd, type PriceBook } from '../shared/accounting.ts';
-import { ownerKind } from '../shared/owners.ts';
+import { ageDays, HEADLINE_AGE_DAYS, headlineAge, sourceTotals, usd, type PriceBook } from '../shared/accounting.ts';
+import { readClassified } from '../shared/owners.ts';
 import { mapLimit } from '../shared/chain.ts';
 import { SOURCES } from '../shared/sources/index.ts';
 import type { ChainReader, Ledger, Position, ReadContext, SourceDef } from '../shared/types.ts';
@@ -79,10 +79,8 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
     await mapLimit(batch, CONCURRENCY, async ({ owner, hint }) => {
       if (capHit.hit) return;
       try {
-        const r = await def.read(ctx, owner, hint);
-        // Indexer-only positions never reach a total, so their owner is not looked up.
-        const positions = r.positions.some(p => p.confidence !== 'indexer_only') ? applyOwnerKind(r.positions, await ownerKind(ctx, owner)) : r.positions;
-        state.recordRead(def.id, owner, positions, r.complete, runStart);
+        const r = await readClassified(def, ctx, owner, hint);
+        state.recordRead(def.id, owner, r.positions, r.complete, runStart);
         run.verification.read++;
         if (!r.complete) run.verification.incomplete++;
         run.errors.push(...r.errors.slice(0, 2));

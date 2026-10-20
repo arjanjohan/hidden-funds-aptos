@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readers, RequestCapReached } from '../src/node/client.ts';
-import { createReader } from '../src/shared/chain.ts';
+import { createReader, gqlAll } from '../src/shared/chain.ts';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -52,3 +52,19 @@ describe('request cap', () => {
     vi.unstubAllEnvs();
   });
 });
+
+describe('gqlAll', () => {
+  it('pages past the indexer\'s 100-row limit with the key of the last row', async () => {
+    const afters: unknown[] = [];
+    const chain = { gql: async (_q: string, v: Record<string, unknown>) => {
+      afters.push(v.after);
+      const start = v.after === '' ? 0 : Number(String(v.after).slice(1)) + 1;
+      const n = Math.max(0, Math.min(100, 230 - start));
+      return { rows: Array.from({ length: n }, (_, i) => ({ id: `k${String(start + i).padStart(3, '0')}` })) };
+    } } as any;
+    const rows = await gqlAll(chain, 'q', { o: 1 }, 'rows', 'id');
+    expect(rows).toHaveLength(230);
+    expect(afters).toEqual(['', 'k099', 'k199']);
+  });
+});
+

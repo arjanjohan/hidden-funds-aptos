@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ageDays, assertUniqueIds, positionIds, sourceTotals, usd, type PriceBook } from '../src/shared/accounting.ts';
+import { ageDays, assertUniqueIds, freshPrices, positionIds, sourceTotals, usd, type PriceBook } from '../src/shared/accounting.ts';
 import { APT } from '../src/shared/sources/delegation.ts';
 import type { AgeBasis, Position, Status } from '../src/shared/types.ts';
 import { addr } from './fake-chain.ts';
@@ -106,3 +106,12 @@ describe('usd', () => {
     expect(t.headline.ownersMin10).toBe(1);
   });
 });
+
+describe('freshPrices', () => {
+  it('drops quotes older than 7 days, so stale assets read as unpriced', () => {
+    const now = Date.parse('2026-10-20T00:00:00Z') / 1000;
+    const prices = { a: { usd: 1, decimals: 8, at: '2026-10-15T00:00:00Z', source: 't' }, b: { usd: 2, decimals: 8, at: '2026-10-01T00:00:00Z', source: 't' } };
+    expect(Object.keys(freshPrices(prices, now))).toEqual(['a']);
+  });
+});
+

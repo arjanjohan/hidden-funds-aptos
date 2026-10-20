@@ -1,9 +1,10 @@
 // Live check: reads Aptos mainnet from the browser, anonymously. Nothing is sent to this site.
 import { useRef, useState } from 'react';
-import { usd as toUsd, type PriceBook } from '../../shared/accounting.ts';
+import { freshPrices, usd as toUsd, type PriceBook } from '../../shared/accounting.ts';
 import { createReader, mapLimit, NETWORKS, normalizeAddress } from '../../shared/chain.ts';
 import { ASSETS } from '../../shared/assets.ts';
 import { tableProvider, type MarketTable } from '../../shared/market.ts';
+import { readClassified } from '../../shared/owners.ts';
 import { APT } from '../../shared/sources/delegation.ts';
 import { SOURCES } from '../../shared/sources/index.ts';
 import type { Memo, Position, ReadContext, ReadResult } from '../../shared/types.ts';
@@ -38,7 +39,10 @@ function memory(): Memo {
   return { get: async k => data.get(k), set: async (k, v) => { data.set(k, v); } };
 }
 
-export default function Check({ prices, markets }: { prices: PriceBook; markets?: MarketTable }) {
+export default function Check({ prices: published, markets }: { prices: PriceBook; markets?: MarketTable }) {
+  // The snapshot's prices may be old when its weekly run failed; stale quotes are dropped, never shown as values.
+  const prices = freshPrices(published, Date.now() / 1000);
+  const stalePrices = Object.keys(published).length - Object.keys(prices).length;
   const [text, setText] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState('');
@@ -56,22 +60,31 @@ export default function Check({ prices, markets }: { prices: PriceBook; markets?
     running.current = true;
     setBusy('Connecting…');
     try {
-      // One anonymous reader and ledger pin per network; sources read on their own chain.
-      const contexts = new Map<string, ReadContext>();
+      // One anonymous reader and ledger pin per network; sources read on their own chain. A network that cannot be
+      // reached only fails its own sources.
+      const contexts = new Map<string, ReadContext>(), unreachable = new Map<string, string>();
       for (const network of new Set(SOURCES.map(s => s.chain))) {
         const chain = createReader({ network, retries: RETRIES, onWait: (_label, ms, status) => {
           if (status === 429) setNotice(`The public ${NETWORKS[network].name} API is rate-limiting this browser; continuing in ${Math.ceil(ms / 1000)} s…`);
         } });
-        contexts.set(network, { chain, ledger: await chain.ledger(), memo: memory(), scratch: new Map(),
-          market: tableProvider(markets, prices[APT]?.usd ?? null) });
+        try {
+          contexts.set(network, { chain, ledger: await chain.ledger(), memo: memory(), scratch: new Map(),
+            market: tableProvider(markets, prices[APT]?.usd ?? null) });
+        } catch (err) {
+          unreachable.set(network, `could not reach ${NETWORKS[network].name}: ${readable(String(err))}`);
+        }
       }
+      if (!contexts.size) throw new Error([...unreachable.values()].join('; '));
       const out: Row[] = [];
       for (const [i, address] of addresses.entries()) {
         setBusy(`Checking ${i + 1} of ${addresses.length}…`);
         // A source that fails is reported on its own; the others still answer.
         const results = await mapLimit(SOURCES, SOURCE_CONCURRENCY, async s => {
-          try { return { sourceId: s.id, result: await s.read(contexts.get(s.chain)!, address) }; }
-          catch (err) { return { sourceId: s.id, result: { positions: [], complete: false, errors: [String(err)], ledgerVersion: contexts.get(s.chain)!.ledger.version } }; }
+          const ctx = contexts.get(s.chain);
+          if (!ctx) return { sourceId: s.id, result: { positions: [], complete: false, errors: [unreachable.get(s.chain)!], ledgerVersion: '0' } };
+          // Same read and owner classification as the pipeline: a resource account or object cannot sign a claim.
+          try { return { sourceId: s.id, result: await readClassified(s, ctx, address) }; }
+          catch (err) { return { sourceId: s.id, result: { positions: [], complete: false, errors: [String(err)], ledgerVersion: ctx.ledger.version } }; }
         });
         out.push({ address, results });
         setRows([...out]);
@@ -93,6 +106,7 @@ export default function Check({ prices, markets }: { prices: PriceBook; markets?
       <p><button className="button" onClick={run} disabled={!!busy}>{busy || `Check ${addresses.length || ''} wallet${addresses.length === 1 ? '' : 's'}`}</button></p>
       {notice && <p className="muted" role="status">{notice}</p>}
       {error && <p style={{ color: 'var(--bad)' }}>{error}</p>}
+      {rows.length > 0 && stalePrices > 0 && <p className="muted">{stalePrices} price{stalePrices === 1 ? ' is' : 's are'} older than 7 days and not shown; amounts are still exact.</p>}
       {rows.map(row => <AddressResult key={row.address} row={row} prices={prices} />)}
     </div>
   );

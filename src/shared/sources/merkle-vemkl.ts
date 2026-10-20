@@ -2,7 +2,7 @@
 // works regardless of the lock's unlock_time (simulated 2026-10-19). MKL has no fresh quote (CoinGecko last updated
 // 2026-05-04), so amounts stay unpriced.
 import { iso, positionIds } from '../accounting.ts';
-import { mapLimit, normalizeAddress } from '../chain.ts';
+import { gqlAll, mapLimit, normalizeAddress } from '../chain.ts';
 import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
 import { MERKLE } from './merkle-mklp.ts';
 
@@ -16,8 +16,8 @@ const WINDDOWN_SECS = Date.parse('2026-02-12T00:00:00Z') / 1000;
 
 export type TokensHint = { tokens: string[] };
 
-const TOKENS_QUERY = `query($o:String!,$c:String!){ current_token_ownerships_v2(where:{owner_address:{_eq:$o}, amount:{_gt:"0"},
-  current_token_data:{collection_id:{_eq:$c}}}, limit:100){ token_data_id } }`;
+const TOKENS_QUERY = `query($o:String!,$c:String!,$after:String!){ current_token_ownerships_v2(where:{owner_address:{_eq:$o}, amount:{_gt:"0"},
+  current_token_data:{collection_id:{_eq:$c}}, token_data_id:{_gt:$after}}, order_by:{token_data_id:asc}, limit:100){ token_data_id } }`;
 
 async function read(ctx: ReadContext, ownerInput: string, hint?: TokensHint): Promise<ReadResult> {
   const owner = normalizeAddress(ownerInput);
@@ -25,7 +25,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: TokensHint): Pr
   const errors: string[] = [];
   let failed = 0;
   const tokens: string[] = hint?.tokens ??
-    (await ctx.chain.gql(TOKENS_QUERY, { o: owner, c: VEMKL_COLLECTION })).current_token_ownerships_v2.map((t: any) => t.token_data_id);
+    (await gqlAll(ctx.chain, TOKENS_QUERY, { o: owner, c: VEMKL_COLLECTION }, 'current_token_ownerships_v2', 'token_data_id')).map((t: any) => t.token_data_id);
   const found = await mapLimit(tokens.map(normalizeAddress), 4, async (token): Promise<Position | null> => {
     try {
       const [core, lock] = await Promise.all([
