@@ -745,6 +745,13 @@ describe('aave frozen reserves', () => {
     expect(again.calls.filter(c => c.startsWith('archiveResource'))).toEqual([]);
   });
 
+  it('takes the freeze time from the enumeration hint without searching', async () => {
+    const c = chain();
+    const r = await aaveFrozenReserves.read(context(c, LEDGER), OWNER, { a: {}, d: {}, f: { [USDC]: '2026-11-01T00:00:00.000Z' } });
+    expect(r.positions[0]).toMatchObject({ claimableSince: '2026-11-01T00:00:00.000Z', ageBasis: 'protocol_closure' });
+    expect(c.calls.filter(x => x.startsWith('archiveResource'))).toEqual([]);
+  });
+
   it('leaves out a supplier with any Aave debt', async () => {
     expect(await aaveFrozenReserves.read(context(chain({ debt: '1' }), LEDGER), OWNER)).toMatchObject({ positions: [], complete: true });
   });

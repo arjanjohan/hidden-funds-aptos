@@ -5,7 +5,7 @@
 // for nothing (R4), and each lender is counted for its pro-rata share of the reserve's cash.
 import { iso, positionIds } from '../accounting.ts';
 import { mapLimit, normalizeAddress, once, transactionTime } from '../chain.ts';
-import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
+import type { ChainReader, Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
 import { APT } from './delegation.ts';
 
 export const AAVE = '0x39ddcd9e1a39fa14f25e3f9ec8a86074d05cc0881cbf667df8a6ee70942016fb';
@@ -54,38 +54,47 @@ function lentOut(ctx: ReadContext, r: AaveReserve): Promise<bigint> {
 }
 
 /** When a reserve froze: the first version whose configuration has the frozen bit, by binary search on the archive node
- *  from AAVE_UNFROZEN_AT, and that transaction's time. Memoized. Undefined when it cannot be dated (then the age is
- *  unknown). Assumes a reserve stays frozen once frozen, as the wind-down intends. */
+ *  from AAVE_UNFROZEN_AT, and that transaction's time. Undefined when it cannot be dated now (archive or indexer
+ *  failure, or the indexer has not caught up); the caller tries again later. Assumes a reserve stays frozen once frozen,
+ *  as the wind-down intends. */
+export async function findFreeze(chain: ChainReader, version: string, r: AaveReserve): Promise<string | undefined> {
+  try {
+    const [reserve] = await chain.view(`${AAVE}::pool::get_reserve_data`, [r.asset], [], version);
+    const frozenAt = async (at: bigint) => {
+      const data = await chain.archiveResource(reserve.inner, `${AAVE}::pool::ReserveData`, at.toString());
+      if (!data) throw new Error(`Aave reserve data for ${r.symbol} missing at version ${at}`);
+      return ((BigInt(data.configuration.data) >> FROZEN_BIT) & 1n) === 1n;
+    };
+    let lo = AAVE_UNFROZEN_AT, hi = BigInt(version);
+    if (await frozenAt(lo)) return undefined;
+    while (hi - lo > 1n) {
+      const mid = (lo + hi) / 2n;
+      if (await frozenAt(mid)) hi = mid; else lo = mid;
+    }
+    const secs = await transactionTime(chain, hi.toString());
+    return secs === null ? undefined : iso(secs);
+  } catch {
+    return undefined;
+  }
+}
+
+/** findFreeze for reads without the enumerator's date (the check page): memoized once found, retried while not. */
 async function frozenSince(ctx: ReadContext, r: AaveReserve): Promise<string | undefined> {
   const key = `${SOURCE}:frozen-since:${r.asset}`;
   const cached = await ctx.memo.get(key);
   if (cached) return cached;
   return once(ctx, key, async () => {
-    const [reserve] = await ctx.chain.view(`${AAVE}::pool::get_reserve_data`, [r.asset], [], ctx.ledger.version);
-    const frozenAt = async (version: bigint) => {
-      const data = await ctx.chain.archiveResource(reserve.inner, `${AAVE}::pool::ReserveData`, version.toString());
-      if (!data) throw new Error(`Aave reserve data for ${r.symbol} missing at version ${version}`);
-      return ((BigInt(data.configuration.data) >> FROZEN_BIT) & 1n) === 1n;
-    };
-    // A failed search leaves the age unknown for this run (the amounts still count) and is retried next run.
-    try {
-      let lo = AAVE_UNFROZEN_AT, hi = BigInt(ctx.ledger.version);
-      if (await frozenAt(lo)) return undefined;
-      while (hi - lo > 1n) {
-        const mid = (lo + hi) / 2n;
-        if (await frozenAt(mid)) hi = mid; else lo = mid;
-      }
-      const secs = await transactionTime(ctx.chain, hi.toString());
-      if (secs === null) return undefined;
-      await ctx.memo.set(key, iso(secs));
-      return iso(secs);
-    } catch {
-      return undefined;
-    }
+    const at = await findFreeze(ctx.chain, ctx.ledger.version, r);
+    if (at) await ctx.memo.set(key, at);
+    return at;
   });
 }
 
-async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
+/** Enumeration hint: scaled balances in frozen aTokens (`a`) and debt tokens (`d`) by reserve asset, and each frozen
+ *  reserve's freeze time (`f`, null while it could not be dated: the hint changes once it is, so the holder is re-read). */
+export interface AaveHint { a: Record<string, string>; d: Record<string, string>; f?: Record<string, string | null> }
+
+async function read(ctx: ReadContext, ownerInput: string, hint?: AaveHint): Promise<ReadResult> {
   const owner = normalizeAddress(ownerInput);
   const version = ctx.ledger.version;
   const none: ReadResult = { positions: [], complete: true, errors: [], ledgerVersion: version };
@@ -103,7 +112,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
       const supply = await lentOut(ctx, r);
       const withdrawable = r.cash >= supply || supply === 0n ? coins : coins * r.cash / supply;
       if (withdrawable === 0n && r.cash > 0n) return [];
-      const since = await frozenSince(ctx, r);
+      const since = hint?.f?.[r.asset] ?? await frozenSince(ctx, r);
       const gross = [{ asset: r.payoutAsset, raw: coins.toString() }];
       const payout = withdrawable > 0n ? [{ asset: r.payoutAsset, raw: withdrawable.toString() }] : [];
       const blockers = [
@@ -131,7 +140,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
   }
 }
 
-export const aaveFrozenReserves: SourceDef = {
+export const aaveFrozenReserves: SourceDef<AaveHint> = {
   id: SOURCE,
   chain: 'aptos',
   protocol: 'Aave',

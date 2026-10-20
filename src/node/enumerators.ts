@@ -2,7 +2,7 @@
 import { mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
-import { AAVE, aaveReserves } from '../shared/sources/aave-frozen.ts';
+import { AAVE, type AaveHint, aaveReserves, findFreeze } from '../shared/sources/aave-frozen.ts';
 import { ECHELON, FROZEN_MARKETS } from '../shared/sources/echelon-frozen.ts';
 import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
@@ -628,25 +628,33 @@ async function aaveScaledBalances(chain: ChainReader, token: string, version: st
 }
 
 // Aave (Aptos): holders of frozen reserves' aTokens. Each holder's hint is its scaled balances in the frozen aTokens and
-// in every debt token, so a supply, withdrawal, borrow or repayment re-reads it, and accruing interest does not. While
-// no reserve is frozen, a run costs one view.
+// in every debt token, so a supply, withdrawal, borrow or repayment re-reads it, and accruing interest does not. It also
+// carries each frozen reserve's freeze time, dated once and kept in the cursor; a freeze that could not be dated yet is
+// null, so its holders are re-read in the run that dates it. While no reserve is frozen, a run costs one view.
 export const aaveFrozenEnumerator: Enumerator = {
   sourceId: 'aave-frozen-reserves',
   processor: null,
   scope: `holders of frozen Aave reserves' aTokens (${AAVE}::token_base user tables, every bucket, read from the fullnode at the run's ledger version)`,
-  async run(chain) {
+  async run(chain, cursor) {
+    let dated: Record<string, string> = {};
+    try { dated = cursor ? JSON.parse(cursor).f ?? {} : {}; } catch { /* unreadable cursor: date again */ }
     const ledger = await chain.ledger();
     const ctx = { chain, ledger, memo: { get: async () => undefined, set: async () => {} }, scratch: new Map() };
     const reserves = await aaveReserves(ctx);
     const frozen = reserves.filter(r => r.frozen);
     let pages = 1;
-    if (!frozen.length) return { candidates: [], pages };
-    const hints = new Map<string, { a: Record<string, string>; d: Record<string, string> }>();
+    if (!frozen.length) return { candidates: [], cursor, pages };
+    for (const r of frozen) {
+      const at = dated[r.asset] ?? await findFreeze(chain, ledger.version, r);
+      if (at) dated[r.asset] = at;
+    }
+    const hints = new Map<string, AaveHint>();
     for (const r of frozen) {
       const t = await aaveScaledBalances(chain, r.aToken, ledger.version);
       pages += t.reads;
       for (const [owner, b] of t.balances) {
-        if (b > 0n) hints.set(owner, { a: { ...hints.get(owner)?.a, [r.asset]: b.toString() }, d: {} });
+        const hint = hints.get(owner);
+        if (b > 0n) hints.set(owner, { a: { ...hint?.a, [r.asset]: b.toString() }, d: {}, f: { ...hint?.f, [r.asset]: dated[r.asset] ?? null } });
       }
     }
     for (const r of reserves) {
@@ -657,7 +665,7 @@ export const aaveFrozenEnumerator: Enumerator = {
         if (hint && b > 0n) hint.d[r.asset] = b.toString();
       }
     }
-    return { candidates: [...hints].map(([owner, hint]) => ({ owner, hint })), pages };
+    return { candidates: [...hints].map(([owner, hint]) => ({ owner, hint })), cursor: JSON.stringify({ f: dated }), pages };
   },
   async sanity(chain, ledger, positions) {
     const ctx = { chain, ledger, memo: { get: async () => undefined, set: async () => {} }, scratch: new Map() };
