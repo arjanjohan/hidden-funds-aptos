@@ -111,11 +111,12 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
         ...(payout.length ? [] : [{ code: 'insufficient_cash', detail: 'The market has no cash to pay this out until borrowers repay.' }]),
         ...(stuck ? [{ code: 'stale_oracle', detail: `Echelon prices every market you still hold after a withdrawal and has no valid price for ${unpriced.map(label).join(', ')}.` }] : []),
       ];
-      // withdraw_all takes the whole claim and aborts when the market's cash is short of it; withdraw takes shares.
+      // withdraw_all takes the whole claim, which is what it pays while the market's cash covers it (the position counts
+      // only the pro-rata share), and aborts when the cash is short of it; withdraw takes shares.
       const step = m.coins <= m.cash
-        ? { function: m.coin ? `${ECHELON}::scripts::withdraw_all<${m.asset}>` : `${ECHELON}::scripts::withdraw_all_fa`, arguments: [m.market] }
+        ? { function: m.coin ? `${ECHELON}::scripts::withdraw_all<${m.asset}>` : `${ECHELON}::scripts::withdraw_all_fa`, arguments: [m.market], expectedOutputs: gross }
         : { function: m.coin ? `${ECHELON}::scripts::withdraw<${m.asset}>` : `${ECHELON}::scripts::withdraw_fa`,
-            arguments: [m.market, (withdrawable * shares.get(m.market)! / m.coins).toString()] };
+            arguments: [m.market, (withdrawable * shares.get(m.market)! / m.coins).toString()], expectedOutputs: payout };
       return [{
         ...positionIds(SOURCE, owner, m.label, 'principal', m.asset), source: SOURCE, owner, locator: m.label, positionKind: 'principal', asset: m.asset,
         claimableSince: m.frozenAt, ageBasis: 'protocol_closure',
@@ -123,8 +124,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
         grossClaim: gross, expectedPayout: payout, payoutBasis: 'view',
         status: blockers.length ? 'blocked' : 'recoverable', blockers,
         confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
-        steps: [{ ...step, prerequisites: first ? [`Withdraw your ${first.label} first: Echelon has no valid price for it, which blocks other withdrawals while you hold it.`] : [],
-          expectedOutputs: payout }],
+        steps: [{ ...step, prerequisites: first ? [`Withdraw your ${first.label} first: Echelon has no valid price for it, which blocks other withdrawals while you hold it.`] : [] }],
       }];
     });
     return { positions, complete: true, errors: [], ledgerVersion: version };

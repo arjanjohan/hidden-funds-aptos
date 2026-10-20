@@ -673,6 +673,10 @@ describe('echelon frozen markets', () => {
     expect(partial.positions[0].steps[0]).toMatchObject({ function: expect.stringContaining(`::scripts::withdraw<${LZUSDC.asset}>`), arguments: [LZUSDC.market, '750000'] });
     const none = await read({ coins: '1500000', cash: '0' });
     expect(none.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'insufficient_cash' }], expectedPayout: [] });
+    // A claim the cash covers is withdrawn whole (that is what withdraw_all pays); the position still counts 1/4.
+    const covered = await read({ coins: '500000', cash: '1000000' });
+    expect(covered.positions[0]).toMatchObject({ expectedPayout: [{ raw: '125000' }],
+      steps: [{ function: expect.stringContaining('::scripts::withdraw_all<'), expectedOutputs: [{ raw: '500000' }] }] });
     // 3 raw units x 1/4 rounds to nothing while the market has cash: no position.
     expect((await read({ coins: '3', cash: '1000000' })).positions).toEqual([]);
   });
@@ -749,6 +753,10 @@ describe('aave frozen reserves', () => {
     // Cash 1M of 4M lent out: a lender owed 1.5M is counted for 375K.
     const short = await aaveFrozenReserves.read(context(chain({ reserves: [reserve('USDC', USDC, { cash: '1000000' })], balance: '1500000', supply: '4000000' }), LEDGER), OWNER);
     expect(short.positions[0]).toMatchObject({ grossClaim: [{ raw: '1500000' }], expectedPayout: [{ raw: '375000' }], steps: [{ arguments: [USDC, '375000', OWNER] }] });
+    // A balance the cash covers is withdrawn whole (that is what the step pays); the position still counts 125K.
+    const covered = await aaveFrozenReserves.read(context(chain({ reserves: [reserve('USDC', USDC, { cash: '1000000' })], balance: '500000', supply: '4000000' }), LEDGER), OWNER);
+    expect(covered.positions[0]).toMatchObject({ expectedPayout: [{ raw: '125000' }],
+      steps: [{ arguments: [USDC, (2n ** 256n - 1n).toString(), OWNER], expectedOutputs: [{ raw: '500000' }] }] });
     const paused = await aaveFrozenReserves.read(context(chain({ reserves: [reserve('USDC', USDC, { paused: true })] }), LEDGER), OWNER);
     expect(paused.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'paused' }] });
   });
@@ -767,5 +775,9 @@ describe('aave frozen reserves', () => {
     });
     const r = await aaveFrozenReserves.read(context(undated, LEDGER), OWNER);
     expect(r.positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined });
+    // An archive failure keeps the position too, with an unknown age, and the read complete.
+    const noArchive = fakeChain({ view: (fn, args, t) => base.view(fn, args, t), archiveResource: () => { throw new Error('archive: HTTP 503'); } });
+    expect(await aaveFrozenReserves.read(context(noArchive, LEDGER), OWNER)).toMatchObject({ complete: true,
+      positions: [{ ageBasis: 'unknown', expectedPayout: [{ raw: '400000' }] }] });
   });
 });

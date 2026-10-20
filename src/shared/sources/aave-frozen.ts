@@ -67,16 +67,21 @@ async function frozenSince(ctx: ReadContext, r: AaveReserve): Promise<string | u
       if (!data) throw new Error(`Aave reserve data for ${r.symbol} missing at version ${version}`);
       return ((BigInt(data.configuration.data) >> FROZEN_BIT) & 1n) === 1n;
     };
-    let lo = AAVE_UNFROZEN_AT, hi = BigInt(ctx.ledger.version);
-    if (await frozenAt(lo)) return undefined;
-    while (hi - lo > 1n) {
-      const mid = (lo + hi) / 2n;
-      if (await frozenAt(mid)) hi = mid; else lo = mid;
+    // A failed search leaves the age unknown for this run (the amounts still count) and is retried next run.
+    try {
+      let lo = AAVE_UNFROZEN_AT, hi = BigInt(ctx.ledger.version);
+      if (await frozenAt(lo)) return undefined;
+      while (hi - lo > 1n) {
+        const mid = (lo + hi) / 2n;
+        if (await frozenAt(mid)) hi = mid; else lo = mid;
+      }
+      const secs = await transactionTime(ctx.chain, hi.toString());
+      if (secs === null) return undefined;
+      await ctx.memo.set(key, iso(secs));
+      return iso(secs);
+    } catch {
+      return undefined;
     }
-    const secs = await transactionTime(ctx.chain, hi.toString());
-    if (secs === null) return undefined;
-    await ctx.memo.set(key, iso(secs));
-    return iso(secs);
   });
 }
 
@@ -113,10 +118,11 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
         grossClaim: gross, expectedPayout: payout, payoutBasis: 'view',
         status: blockers.length ? 'blocked' : 'recoverable', blockers,
         confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
-        // The whole balance when the cash covers it; otherwise the pro-rata amount (withdrawing more would take other
-        // lenders' share, and the whole balance would abort).
-        steps: [{ function: `${AAVE}::supply_logic::withdraw`, arguments: [r.asset, coins <= r.cash ? WITHDRAW_ALL : withdrawable.toString(), owner],
-          prerequisites: [], expectedOutputs: payout }],
+        // The whole balance while the cash covers it: that is what the step pays (the position counts only the pro-rata
+        // share). Otherwise the pro-rata amount; the whole balance would abort.
+        steps: [coins <= r.cash
+          ? { function: `${AAVE}::supply_logic::withdraw`, arguments: [r.asset, WITHDRAW_ALL, owner], prerequisites: [], expectedOutputs: gross }
+          : { function: `${AAVE}::supply_logic::withdraw`, arguments: [r.asset, withdrawable.toString(), owner], prerequisites: [], expectedOutputs: payout }],
       }];
     });
     return { positions: found.flat(), complete: true, errors: [], ledgerVersion: version };
