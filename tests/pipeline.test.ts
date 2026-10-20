@@ -352,4 +352,12 @@ describe('econia enumerator', () => {
     expect(second.candidates).toEqual([{ owner: addr(1), hint: { markets: { 7: since } } }]);
     expect((await econiaIdleEnumerator.run(econia([]), second.cursor)).candidates).toEqual([]);
   });
+
+  it('gives an owner who only registered an empty hint, so the read keeps the archive date', async () => {
+    const c = fakeChain({
+      gql: (_q, vars) => ({ user_transactions: vars.f === 'register_market_account' && vars.after === '0' ? [{ version: '5', sender: addr(2) }] : [] }),
+      view: () => [{ asks: [], bids: [] }],
+    });
+    expect((await econiaIdleEnumerator.run(c, undefined)).candidates).toEqual([{ owner: addr(2), hint: {} }]);
+  });
 });

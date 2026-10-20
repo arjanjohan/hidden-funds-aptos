@@ -746,7 +746,9 @@ export const econiaIdleEnumerator: Enumerator = {
       hints.set(owner, { ...hint, markets: { ...hint.markets, ...Object.fromEntries(markets.map(m => [m, since])) } });
     }
     const owners = new Set([...registered.candidates.map(c => c.owner), ...hints.keys()]);
-    return { candidates: [...owners].map(owner => (hints.has(owner) ? { owner, hint: hints.get(owner) } : { owner })),
+    // Every candidate carries a hint (empty when nothing changed): a read without one is the check page's, which cannot
+    // tell whether a balance changed after the archive date.
+    return { candidates: [...owners].map(owner => ({ owner, hint: hints.get(owner) ?? {} })),
       cursor: JSON.stringify({ r: registered.cursor, c: changed.cursor, m: makers }),
       pages: registered.pages + changed.pages + ECONIA_COIN_MARKETS.length, incremental: true };
   },
