@@ -2,6 +2,7 @@
 import { mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
+import { ECHELON, SUNSET_MARKETS } from '../shared/sources/echelon-sunset.ts';
 import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
 import { CAKE, type ClaimableHint, claimableHandle, LZ_COINS } from '../shared/sources/layerzero-claimable.ts';
@@ -585,6 +586,28 @@ export const pancakeFarmEnumerator = entrySenders('pancake-farm-ended-rewards', 
     return { check: 'pending CAKE found <= CAKE held by MasterChef', ok: found <= cakeLeft, detail: `${found} of ${cakeLeft} (${pct(found, cakeLeft)})` };
   });
 
+// Echelon suppliers up to the last sunset freeze (version 2,729,033,032, 2025-05-17): supplying a frozen market later
+// is pointless. Withdrawals at any time mark a supplier changed.
+export const echelonSunsetEnumerator = entrySenders('echelon-sunset-markets', [
+  { contract: ECHELON, module: 'scripts', name: 'supply', untilVersion: 2_729_034_000 },
+  { contract: ECHELON, module: 'scripts', name: 'withdraw' },
+  { contract: ECHELON, module: 'scripts', name: 'withdraw_all' }],
+  async (chain, ledger, positions) => {
+    const parts: string[] = [];
+    let ok = true;
+    for (const m of SUNSET_MARKETS) {
+      const [[shares], [num, den]] = await Promise.all([
+        chain.view(`${ECHELON}::lending::market_total_shares`, [m.market], [], ledger.version),
+        chain.view(`${ECHELON}::lending::exchange_rate`, [m.market], [], ledger.version),
+      ]);
+      const supplied = BigInt(shares) * BigInt(num) / BigInt(den);
+      const found = sumGross(positions.filter(p => p.locator === m.label));
+      ok &&= found <= supplied;
+      parts.push(`${m.label} ${pct(found, supplied)}`);
+    }
+    return { check: 'supply found per market <= market supply (shares x exchange rate)', ok, detail: parts.join('; ') };
+  });
+
 const noContractTotal: Enumerator['sanity'] = async () =>
   ({ check: 'none', ok: null, detail: 'no contract total available: balances are stored per account' });
 
@@ -599,4 +622,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonSunsetEnumerator];

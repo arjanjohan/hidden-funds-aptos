@@ -328,6 +328,19 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - Sample (394 depositors across its history, 2026-10-19): 57 (14%) have rewards, 57.5 CAKE + 111.3 APT. Scaled to an estimated ~25K depositors, that's roughly 3,600 CAKE and 7,000 APT (~$13K).
 - **Cost:** ~3.9 requests per depositor for those with LP staked (fewer for the rest), so the first run is ~100K+ requests and needs its own run. Nothing accrues after the end, so an owner with nothing pending is never re-read (`zero: 'never'`); owners with rewards are re-read monthly.
 
+## echelon-sunset-markets (draft, pending issue #10)
+
+- **What:** supply left in Echelon's (Aptos) lending markets for bridge-wrapped assets. Echelon sunset them as native USDC and USDT replaced the bridged ones (Aptos Foundation: Echelon "helped sunset bridge-wrapped assets").
+- **On chain:** admin transactions froze them, setting collateral factor 0 and borrow cap 0 (no new borrowing, no collateral use): lzUSDC, lzUSDT and Wormhole USDC on 2025-05-03, Wormhole WETH on 2025-05-17. The freeze is the effective date and the age. A market Echelon reopens stops counting.
+- **Scope:** only the bridged-asset markets, which have sunset evidence (issue #10, option (a)). 17 other markets are also frozen (Amnis stAPT ~$570K, sthAPT, THL, MOD, Kofi tokens, …) but have no sunset notice and are not counted.
+- **Read:** the supplier's `lending::Vault` (one resource lists every market and share count), then `account_coins` per sunset market held.
+  - Payout = min(coins, `account_withdrawable_coins`, the market's `total_cash`). The view is a health limit and returns u64::MAX for a lender without debt; the cash is what can leave now.
+  - No cash means `blocked` (`insufficient_cash`). Supply in a frozen market is not collateral (factor 0), so withdrawing does not touch any debt.
+- **Recovery:** `scripts::withdraw_all<coin type>(market)`. Simulated for the three largest sampled positions: each paid the read amount (within 1 raw unit of accrued interest).
+- **Enumeration:** senders of `scripts::supply` up to the last freeze (version 2,729,034,000), plus `withdraw` / `withdraw_all` senders at any time as change events.
+- **Size:** the four markets hold ~66K lzUSDC, ~22.5K lzUSDT, ~930 Wormhole USDC and 0.09 WETH (~$90K). Most of each is cash. In a sample of the latest pre-freeze suppliers, the positions are mostly dust plus a few holders of $64–$100.
+- **Sanity:** supply found per market ≤ the market's supply (shares × exchange rate).
+
 ## topaz-bids
 
 - **What:** APT escrowed in expired Topaz NFT bids. Topaz ceased operations on 2024-08-21 (homepage notice; aptos.dev lists it as deprecated). A bid's APT stays in Topaz's tables, also after its deadline, until the bidder cancels.

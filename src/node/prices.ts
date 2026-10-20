@@ -1,6 +1,7 @@
 // Identity-bound USD prices. A quote older than 7 days is not a price.
 import { PRICE_MAX_AGE_SECS, type PriceBook } from '../shared/accounting.ts';
 import { APT, MOVE } from '../shared/sources/delegation.ts';
+import { WH_USDC } from '../shared/sources/echelon-sunset.ts';
 import { BTCB, CAKE, LZ_BRIDGE } from '../shared/sources/layerzero-claimable.ts';
 import { THL } from '../shared/sources/thala-thl.ts';
 
@@ -16,6 +17,7 @@ const COINGECKO = [
   // CAKE and BTC.b on Aptos are the tokens' own LayerZero OFTs (mint/burn, redeemable 1:1), priced as the token.
   { asset: CAKE, id: 'pancakeswap-token', decimals: 8 },
   { asset: BTCB, id: 'bitcoin-avalanche-bridged-btc-b', decimals: 8 },
+  { asset: WH_USDC, id: 'usd-coin-wormhole-from-ethereum', decimals: 6 },
 ];
 
 export async function fetchPrices(nowSecs: number): Promise<{ prices: PriceBook; errors: string[] }> {

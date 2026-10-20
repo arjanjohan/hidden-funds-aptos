@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ownerKind } from '../src/shared/owners.ts';
 import { canopyEndedRewards } from '../src/shared/sources/canopy-rewards.ts';
 import { delegation, MOVE, movementDelegation } from '../src/shared/sources/delegation.ts';
+import { echelonSunsetMarkets, SUNSET_MARKETS } from '../src/shared/sources/echelon-sunset.ts';
 import { delegationInactiveValidator } from '../src/shared/sources/delegation-inactive.ts';
 import { KAPT, kofiReceipts, STKAPT } from '../src/shared/sources/kofi-receipts.ts';
 import { MARKET_MAX_AGE_SECS } from '../src/shared/market.ts';
@@ -612,6 +613,42 @@ describe('market-dependent refresh', () => {
   it('re-reads receipt holders within the lifetime of the market quotes their positions rest on', () => {
     expect(AGE_LIMIT_MS[kofiReceipts.refresh.nonZero]).toBeLessThanOrEqual(MARKET_MAX_AGE_SECS * 1000);
     expect(AGE_LIMIT_MS[kofiReceipts.refresh.zero]).toBeLessThanOrEqual(MARKET_MAX_AGE_SECS * 1000);
+  });
+});
+
+describe('echelon sunset markets', () => {
+  const LZUSDC = SUNSET_MARKETS[0], OTHER = addr('c3');
+  const chain = (opts: { coins: string; withdrawable: string; frozen?: boolean; cash?: string }) => fakeChain({
+    resource: (address, type) => {
+      if (type.endsWith('::lending::Vault') && address === OWNER) return { collaterals: { data: [{ key: { inner: LZUSDC.market }, value: '5' }, { key: { inner: OTHER }, value: '9' }] }, liabilities: { data: [] } };
+      if (type.endsWith('::lending::Market')) return { collateral_factor_bps: opts.frozen === false ? '7000' : '0', borrow_cap: '0', total_cash: opts.cash ?? '99999999999' };
+      return null;
+    },
+    view: (fn) => {
+      if (fn.endsWith('::account_coins')) return [opts.coins];
+      if (fn.endsWith('::account_withdrawable_coins')) return [opts.withdrawable];
+      throw new Error(fn);
+    },
+  });
+
+  it('lists supply in a sunset market, aged from the freeze, and ignores other markets', async () => {
+    const r = await echelonSunsetMarkets.read(context(chain({ coins: '1500000', withdrawable: '1500000' })), OWNER);
+    expect(r.positions).toHaveLength(1);
+    expect(r.positions[0]).toMatchObject({ locator: 'lzUSDC', asset: LZUSDC.asset, status: 'recoverable', ageBasis: 'protocol_closure',
+      claimableSince: LZUSDC.frozenAt, expectedPayout: [{ asset: LZUSDC.asset, raw: '1500000' }] });
+    expect(r.positions[0].steps[0]).toMatchObject({ function: expect.stringContaining(`::scripts::withdraw_all<${LZUSDC.asset}>`), arguments: [LZUSDC.market] });
+  });
+
+  it('pays at most the market\'s cash, and blocks when there is none', async () => {
+    // account_withdrawable_coins is u64::MAX for a lender without debt: only the cash limits the payout.
+    const partial = await echelonSunsetMarkets.read(context(chain({ coins: '1500000', withdrawable: '18446744073709551615', cash: '400000' })), OWNER);
+    expect(partial.positions[0]).toMatchObject({ status: 'recoverable', grossClaim: [{ raw: '1500000' }], expectedPayout: [{ raw: '400000' }] });
+    const none = await echelonSunsetMarkets.read(context(chain({ coins: '1500000', withdrawable: '18446744073709551615', cash: '0' })), OWNER);
+    expect(none.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'insufficient_cash' }], expectedPayout: [] });
+  });
+
+  it('does not count a market Echelon reopened', async () => {
+    expect((await echelonSunsetMarkets.read(context(chain({ coins: '1500000', withdrawable: '1500000', frozen: false })), OWNER)).positions).toEqual([]);
   });
 });
 
