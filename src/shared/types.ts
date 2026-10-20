@@ -70,6 +70,9 @@ export interface SourceDef<Hint = unknown> {
   /** How often known owners are re-read. `zero: 'never'`: an owner without positions is only re-read when the enumerator
    *  reports it again; for sources where nothing can accrue any more (ended emissions). */
   refresh: { nonZero: 'every_run' | 'weekly' | 'monthly'; zero: 'weekly' | 'monthly' | 'never' };
+  /** Positions rest on market-test quotes, which expire after 7 days (MARKET_MAX_AGE_SECS). A snapshot that runs only
+   *  some sources still re-runs such a source once its last run is older than that. */
+  usesMarketQuotes?: boolean;
   /** Bump when the source's rules change: every candidate is then re-read on the next run. Default 1. */
   version?: number;
   /** Age bases this source documents as valid for the headline. */

@@ -36,10 +36,10 @@ Native delegation and Thala are documented in [phase0-report.md](phase0-report.m
 Each source page also states the largest single wallet's share of its 90+ day total. No address is published.
 
 **Re-read schedule (all sources):**
-- Owners holding something are re-read every run.
-- Owners holding nothing are re-read monthly, or immediately when enumeration shows activity. Activity means a new entry-function call since the cursor, or a changed hint (delegation row version, token list).
+- Owners holding something are re-read every run (native staking, LST requests, Thala, Amnis, Tortuga, TruFin, Kofi withdrawals), or at least monthly in the newer sources, spread over four weekly runs.
+- Any owner is re-read in the run after enumeration shows a change. A change is a new entry-function call since the cursor (deposits, and also withdrawals, claims and unsubscribes where a source tracks them), a changed table row or hint, or an owner with positions dropping out of a full scan.
+- Owners holding nothing are re-read monthly, or never where nothing can accrue any more (PancakeSwap farms after emissions ended), unless enumeration reports them again.
 - A position counts as "not re-read" only once it is older than its source's own refresh window.
-- This keeps weekly cost proportional to non-zero positions.
 
 ## kofi-withdrawals
 
@@ -180,7 +180,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - A staker who left a pool (`is_subscribed = false`) cannot claim its accrual through `claim_reward`: `blocked` (`unsubscribed`). None found.
 - **Result (2026-10-19):** 5,620 `recoverable` positions, 4,925 stakers, **$4.8K** (MOVE at $0.0072), all aged ≥ 90 days; 15 stakers with ≥ $10. Sanity: the ended pools hold 669K MOVE; the earned amounts are part of that.
 - **Recovery:** `multi_rewards::claim_reward(staking token)`. It claims every subscribed pool of that staking token, live ones included. Sample simulation: 12/12, paying exactly the expected MOVE; 1 needs gas.
-- **Re-read schedule:** monthly, or when a stake changes. First run: 12.6K requests, all to Movement's public endpoints.
+- **Re-read schedule:** monthly, or when a stake changes or the staker claims or unsubscribes. First run: 12.6K requests, all to Movement's public endpoints.
 
 ## Sized and not added
 
@@ -191,9 +191,14 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Mirage Protocol (Aptos and Movement, mUSD vaults):** the team reportedly announced its closure (Cryptorank, pointing to mirage.money/vaults). DefiLlama shows ~$714 of TVL left. Skipped.
 - **Yuzu (Movement):** the only whitelisted reward token is MOVE; incentives are worth too little to track.
 - **Argo, Laminar Markets:** no closure notice found (Laminar was merged into Econia in 2023).
+- **Amnis AMI vesting** (`0xbc99…::token_vesting`, buckets airdrop / KOL / seed / private / team / …): vested AMI that claimers never took (e.g. the KOL bucket, 156 claimers, fully vested 2025-12-23) would count. But AMI trades at $0.00084 (market cap ~$515K), so even millions of unclaimed AMI are worth a few thousand dollars. Skipped. The AMI lock pools from the June 2025 campaign were not found on chain.
+- **ThalaSwap v1:** no deprecation notice and still trading, so v1 LP is live liquidity (R4).
 - **Hyperion fridge** (delayed LP withdrawals): `fridge::asset_unclaimed_all()` reports 4.70 APT in total across all users, about $3.50. Too small to maintain.
 - **Superposition** (Aptos lending): not left behind. Its markets are unpaused and still used (last deposit 2026-10-14). Operator-signed packets are its normal app flow, not closure evidence.
-- **Validator-owned stake pools** (not delegation pools): 43.6K APT of withdrawable inactive stake in 13 pools, plus 13.4K APT active in pools whose validator stopped. Owners are `staking_contract` or vesting resource accounts, which the owner rule makes `unknown`.
+- **Validator-owned stake pools** (not delegation pools; re-sized 2026-10-20, 378 pools):
+  - Two resource-account pools outside the validator set hold **14.4M and 4.1M APT** of active stake, with lockups ending 2026-10-31 and 10-22. They look like institutional `staking_contract`/vesting pools between validator setups, not abandoned funds, and would roughly double the headline. Not counted without evidence of abandonment.
+  - Active validators hold small withdrawable inactive stakes (334–3,410 APT each): normal operator flow.
+  - About 30 small pools outside the set hold 1.5–855 APT each, with lockups that ended in 2023–2026. Owners are `staking_contract` or vesting resource accounts (the owner rule makes them `unknown`); tracing each to its staker or shareholders is not worth it at this size.
 - **Moar farming rewards:** paid in Moar's own token, which has no CoinGecko price, so the value would be unpriced. Skipped.
 - **Amnis "$AMI Claim" NFTs:** a marker with an `is_claimed` flag; the tokens were paid through an off-chain claim portal. No on-chain claim exists.
 - **"Amnis Reward Voucher" NFTs:** phishing. They point to `pamnis.com`, and the creator account has no contract.
@@ -209,7 +214,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
 
 ## kofi-receipts
 
-- **Market test (2026-10-19, Panora public API key):** quotes into APT per value bucket (quoted at each bucket's lower bound; cached per run). Every bucket is usable for both tokens:
+- **Market test (2026-10-19, Panora public API key):** quotes into APT per value bucket (quoted at each bucket's lower bound; cached per run; valid 7 days; since 2026-10-20 in 3× steps from $0.10 to $1k). Every bucket was usable for both tokens:
   - kAPT: 99.91–99.99% of redemption value.
   - stkAPT: 97.0–99.93%.
 - Under the rules, a wallet token with a usable market is not left behind, so the source currently yields **0 positions**.
@@ -222,7 +227,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - Redemption value: kAPT 1:1 in APT; stkAPT × `rewards_manager::get_exchange_rate` / 1e8 (1.0856 on 2026-10-19).
 - **Age (`protocol_closure`):** the later of the wind-down (2026-07-24 07:55:53 UTC) and the holder's last balance change. A holder who bought after the wind-down is dated from the purchase.
 - **Result (2026-10-19):** 11,619 positions, ~$98K redemption value. Sanity: user primary stores hold 89.11% of the kAPT supply and 99.77% of the stkAPT supply.
-- **Re-read schedule:** monthly, plus immediately when a holder's store changes. Never in the headline, so a weekly re-read (11.6K requests) is not worth it.
+- **Re-read schedule:** every run (owners with positions) and weekly (others), because positions rest on market quotes that are valid for 7 days. While every bucket has a usable market, holders are not read at all; once a market dries up, a run reads ~11.6K holders.
 - **Recovery:** `gateway::request_withdrawal_entry(amount)` for kAPT, or `gateway::unstake_and_request_withdrawal_entry(amount)` for stkAPT. Then `finalize_withdrawals_entry([ticket])` after 14 days.
   - Request step sample: 38/38 succeed across the four variants.
   - The finalize step is the `kofi-withdrawals` sample (10/10 exact).
@@ -299,7 +304,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - CAKE staked in the 6 CAKE pools: **60,052 CAKE (~$130K at $2.17)**, 49,547 of it in the MoveCoin-reward pool that ended 2024-02-09.
   - Gui Inu staked in the 4 GUI pools: 441.7M GUI (~$66; CoinGecko's quote is stale) with ~2.75 APT of rewards. Those pools are left out: not worth 4 reads per depositor.
   - Rewards left in the CAKE pools: unpriced Blt, ETERN, MoveCoin (BlueMove), Ditto stAPT and Celer USDC.
-- **Enumeration:** senders of `smart_chef::deposit` (incremental by version).
+- **Enumeration:** senders of `smart_chef::deposit` (incremental by version), plus senders of `withdraw` and `emergency_withdraw` at any time, so a staker who exits drops out in the next run.
 - **Read:** the staker's `UserInfo<stake, reward, pool id>` for each CAKE pool (6 reads the first time, then only the pools the staker was found in, kept in memo), and `PoolInfo` once per run. Pending reward = `amount × acc_token_per_share / precision_factor − reward_debt` (`derived_math`; smart_chef has no views).
   - When a pool holds less reward than the staker is owed, `withdraw` would abort, so the step is `emergency_withdraw` (stake only) and the reward is `blocked` (`reward_unfunded`).
   - A staker who deposits into a pool not in their memo after the first read would be missed. The pools are over, so nobody has a reason to join one.
@@ -318,10 +323,10 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - the APT incentive from the `get_pending_apt<LP>` view.
   - A reward MasterChef cannot pay (more than its CAKE or APT balance) is `blocked` (`reward_unfunded`).
 - **Recovery:** `masterchef::withdraw<LP>(0)` harvests and leaves the LP staked. Simulated: it paid exactly the computed 78,858 raw CAKE and the 33,565 raw APT from `get_pending_apt`.
-- **Enumeration:** senders of `masterchef::deposit` up to version 2,484,045,000 (the end of emissions); a later deposit harvests.
+- **Enumeration:** senders of `masterchef::deposit`, `withdraw` and `emergency_withdraw` at any time. A deposit or withdrawal after the end harvests (a harvest is `withdraw(0)`), so the farmer is re-read in the next run. A depositor with nothing pending is read once and never again.
 - **Size:** bounded by what MasterChef holds: 5,771 CAKE (~$12.5K) and 12,988 APT (~$9.9K).
   - Sample (394 depositors across its history, 2026-10-19): 57 (14%) have rewards, 57.5 CAKE + 111.3 APT. Scaled to an estimated ~25K depositors, that's roughly 3,600 CAKE and 7,000 APT (~$13K).
-- **Cost:** ~3.9 requests per depositor, so the first run is ~100K requests and needs its own run. Nothing accrues after the end, so an owner with nothing pending is never re-read (`zero: 'never'`); owners with rewards are re-read monthly.
+- **Cost:** ~3.9 requests per depositor for those with LP staked (fewer for the rest), so the first run is ~100K+ requests and needs its own run. Nothing accrues after the end, so an owner with nothing pending is never re-read (`zero: 'never'`); owners with rewards are re-read monthly.
 - **Published (CI run, 2026-10-20):** complete. **$16.1K** (CAKE plus the APT incentive) in 13,126 positions, 5,581 farmers, 165 with ≥ $10. Sanity: pending CAKE found = 5,526 of the 5,771 CAKE MasterChef holds (95.8%). First run: 45.8K requests (14,219 depositors, 1,090 indexer pages).
 
 ## topaz-bids

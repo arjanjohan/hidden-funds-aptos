@@ -62,5 +62,6 @@ Repository secrets:
 | Secret | Purpose |
 |---|---|
 | `GEOMI_API_KEY` | Aptos API key, pipeline only |
+| `PANORA_API_KEY` | Panora quote API key for the receipt-token market test; without it, Kofi receipt positions are `unknown` and the run is degraded |
 | `CLOUDFLARE_API_TOKEN` | token with Cloudflare Pages: Edit |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |

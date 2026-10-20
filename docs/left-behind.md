@@ -29,7 +29,7 @@ The market test:
 
 - Provider: Panora quote API.
 - Input: the exact asset identity (FA metadata address or Coin type), never a ticker. Output: APT.
-- Reference input = min($1k, the holder's redemption value). Holders fall into buckets with lower bounds $0.10 / $1 / $10 / $100 / $1k. Each bucket is quoted once per run at its lower bound: a smaller amount has less price impact, so a market that is usable for some holder in the bucket is never called unusable. Each quote stores its time.
+- Reference input = min($1k, the holder's redemption value). Holders fall into buckets with lower bounds $0.10 / $0.30 / $1 / $3 / $10 / $30 / $100 / $300 / $1k. Each bucket is quoted once per run at its lower bound: a smaller amount has less price impact, so a market that is usable for some holder in the bucket is never called unusable (stranded value is never over-counted). The flip side: a holder near the top of a bucket trades up to ~3.3× the quoted amount and may not clear 80%, so it can be missed. Each quote stores its time and is valid for 7 days; an older verdict reads as `unknown`, and a run whose positions lack a fresh quote is `degraded`.
 - Usable market = a well-formed quote with output ≥ 80% of the input's redemption value.
 - No usable market = a well-formed "no route" response, or output < 80%.
 - An error, timeout or malformed response → `unknown`, never "no market".
@@ -89,4 +89,4 @@ Snapshots are not atomic. Each source records:
 
 "Complete" means complete within a **named enumeration scope**, never chain-wide.
 
-Every known non-zero position is re-read on every run. Recent activity only sets the order of reads, never whether a position is correct.
+A known non-zero position is re-read in the run after its on-chain record changes, and in any case at least monthly. Most sources (native staking, LST requests, Thala) re-read every run. A change is anything the source's enumeration sees: a new entry-function call (including exits, claims and withdrawals), a changed table row or hint, or an owner that drops out of a full scan. The monthly re-reads are spread over four weekly runs. A position that changes without any on-chain record (for example a value that drifts with a price) can therefore be up to 35 days old; each source page shows when it was read. Recent activity only sets the order of reads, never whether a position is correct.

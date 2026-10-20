@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RequestCapReached } from '../src/node/client.ts';
 import type { Enumerator } from '../src/node/enumerators.ts';
 import { fetchPrices } from '../src/node/prices.ts';
-import { runSource } from '../src/node/snapshot.ts';
+import { keepPrevious, runSource } from '../src/node/snapshot.ts';
 import { State } from '../src/node/state.ts';
 import { positionIds } from '../src/shared/accounting.ts';
 import type { ChainReader, Position, ReadResult, SourceDef } from '../src/shared/types.ts';
@@ -87,6 +87,29 @@ describe('runSource', () => {
   });
 });
 
+describe('market evidence', () => {
+  it('re-runs a market-dependent source in a single-source run once its quotes have expired', () => {
+    const now = Date.parse('2026-10-20T00:00:00Z') / 1000;
+    const kofi = { ...source(async () => { throw new Error(); }), id: 'k', usesMarketQuotes: true } as SourceDef;
+    const plain = { ...source(async () => { throw new Error(); }), id: 'p' } as SourceDef;
+    const prev = { run: { verification: { end: '2026-10-19T00:00:00Z' } } } as any;
+    const quotes = (...at: string[]) => ({ kapt: Object.fromEntries(at.map((t, i) => [String(i), { verdict: 'usable' as const, quotedAt: t }])) });
+    expect(keepPrevious(plain, prev, 'x', now)).toBe(true);
+    expect(keepPrevious(kofi, prev, 'x', now, quotes('2026-10-18T00:00:00Z', '2026-10-17T00:00:00Z'))).toBe(true);
+    // The run ended recently, but one quote it relied on is older than 7 days: decided by the quote, not the run.
+    expect(keepPrevious(kofi, prev, 'x', now, quotes('2026-10-18T00:00:00Z', '2026-10-12T00:00:00Z'))).toBe(false);
+    expect(keepPrevious(kofi, prev, 'x', now, {})).toBe(false);
+    expect(keepPrevious(kofi, undefined, 'x', now, quotes('2026-10-18T00:00:00Z'))).toBe(false);
+  });
+
+  it('reports a run whose receipt positions have no market quote as degraded', async () => {
+    const blocked: Position = { ...position(addr(1)), status: 'unknown', blockers: [{ code: 'market_check_unavailable', detail: '' }] };
+    const { run } = await runSource(source(async () => ({ positions: [blocked], complete: true, errors: [], ledgerVersion: '1' })),
+      enumerator([addr(1)]), new State(':memory:'), chain(), { hit: false });
+    expect(run.degradedReasons.join()).toMatch(/without market evidence/);
+  });
+});
+
 describe('owner rule', () => {
   it('keeps positions held by a resource account visible but unknown', async () => {
     const state = new State(':memory:');
@@ -147,6 +170,17 @@ describe('state', () => {
 
 describe('state changes', () => {
   const def = () => source(async () => { throw new Error(); });
+
+  it('makes an owner with positions due when a full scan no longer returns it', async () => {
+    const state = new State(':memory:');
+    const monthly = { ...def(), refresh: { nonZero: 'monthly', zero: 'monthly' } } as SourceDef;
+    state.upsertCandidates('t', [{ owner: addr(1) }, { owner: addr(2) }], '2026-10-01T00:00:00Z');
+    state.recordRead('t', addr(1), [position(addr(1))], true, '2026-10-01T00:00:01Z');
+    state.recordRead('t', addr(2), [position(addr(2))], true, '2026-10-01T00:00:01Z');
+    expect(state.due(monthly, Date.parse('2026-10-02T00:00:00Z'), new Set())).toEqual([]);
+    state.markGone('t', new Set([addr(1)]), '2026-10-02T00:00:00Z');
+    expect(state.due(monthly, Date.parse('2026-10-02T00:00:00Z'), new Set()).map(d => d.owner)).toEqual([addr(2)]);
+  });
 
   it('makes a zero owner due again when an activity scan returns it', () => {
     const state = new State(':memory:');
