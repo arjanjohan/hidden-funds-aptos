@@ -7,6 +7,7 @@
 import { iso, positionIds } from '../accounting.ts';
 import { mapLimit, normalizeAddress, once } from '../chain.ts';
 import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
+import { THL } from './thala-thl.ts';
 
 export const ECHELON = '0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba';
 export const WH_USDC = '0x5e156f1207d0ebfa19a9eeff00d62a282278fb8719f4fab3a586a0a2c0fffbea::coin::T';
@@ -23,7 +24,7 @@ export const FROZEN_MARKETS = [
   { label: 'lzUSDT', market: '0x447b3b516546f28e8c4f6825a6287b09161659e7c500c599c29c28a8492844b8', asset: '0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDT', coin: true, decimals: 6, frozenAt: '2025-05-03T04:56:11Z' },
   { label: 'lzUSDC', market: '0xa9c51ca3bcd93978d0c4aada7c4cf47c0791caced3cdc4e15f2c8e0797d1f93c', asset: '0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC', coin: true, decimals: 6, frozenAt: '2025-05-03T04:56:05Z' },
   { label: 'MOD', market: '0xef2ae89796725d0eb363326ecb7df159feb949f6d1f400f76deeeebccbac00f1', asset: MOD, coin: true, decimals: 8, frozenAt: '2025-09-03T04:44:52Z' },
-  { label: 'THL', market: '0x127ea5b4c450be695e488da1c3bc013e2e93d8cf00270ef90385189844bc9755', asset: '0x7fd500c11216f0fe3095d0c4b8aa4d64a4e2e04f83758462f2b127255643615::thl_coin::THL', coin: true, decimals: 8, frozenAt: '2025-09-26T16:44:00Z' },
+  { label: 'THL', market: '0x127ea5b4c450be695e488da1c3bc013e2e93d8cf00270ef90385189844bc9755', asset: THL, coin: true, decimals: 8, frozenAt: '2025-09-26T16:44:00Z' },
   { label: 'sthAPT', market: '0xed6bf9fe7e3f42c6831ffac91824a545c4b8bfcb40a59b3f4ccfe203cafb7f42', asset: '0xfaf4e633ae9eb31366c9ca24214231760926576c7b625313b3688b5e900731f6::staking::StakedThalaAPT', coin: true, decimals: 8, frozenAt: '2026-04-09T17:25:06Z' },
   { label: 'whUSDC', market: '0xa76ebfb432982c864783fdb33cdf5a9edb18ac1b950deb8037f5cf8c984da3d2', asset: WH_USDC, coin: true, decimals: 6, frozenAt: '2025-05-03T04:56:16Z' },
   { label: 'whWETH', market: '0x114ee519ffa1e8697784bd1a350822cb37601a1476289051b8295165597a4538', asset: '0xcc8a89c8dce9693d354449f1f73e60e14e347417854f029db5bc8e7454008abb::coin::T', coin: true, decimals: 8, frozenAt: '2025-05-17T03:22:06Z' },
@@ -99,11 +100,14 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
       const payout = withdrawable > 0n ? [{ asset: m.asset, raw: withdrawable.toString() }] : [];
       // Another held market without a price blocks this withdrawal. With exactly one, withdrawing it first (all of it,
       // so it leaves the vault) unblocks this one; that needs this market priced and the other's cash to cover it.
+      // An unpriced market whose cash is short of the claim only allows a partial withdrawal, which leaves it in the
+      // vault, priced: blocked too.
       const others = unpriced.filter(u => u !== m.market);
       const first = others.length === 1 && !unpriced.includes(m.market) ? supplied.find(f => f.market === others[0] && f.coins <= f.cash) : undefined;
+      const stuck = (others.length > 0 && !first) || (unpriced.includes(m.market) && m.coins > m.cash);
       const blockers = [
         ...(payout.length ? [] : [{ code: 'insufficient_cash', detail: 'The market has no cash to pay this out until borrowers repay.' }]),
-        ...(others.length && !first ? [{ code: 'stale_oracle', detail: `Echelon prices every market you hold on withdrawal and has no valid price for ${others.map(label).join(', ')}${unpriced.includes(m.market) ? ` or ${m.label}` : ''}.` }] : []),
+        ...(stuck ? [{ code: 'stale_oracle', detail: `Echelon prices every market you still hold after a withdrawal and has no valid price for ${unpriced.map(label).join(', ')}.` }] : []),
       ];
       // withdraw_all takes the whole claim and aborts when the market's cash is short of it; withdraw takes shares.
       const step = m.coins <= m.cash

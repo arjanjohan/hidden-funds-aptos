@@ -684,15 +684,18 @@ describe('echelon frozen markets', () => {
     const two = await read({ coins: '1500000', held: [THL_MARKET.market, WHWETH.market, LZUSDC.market], unpriced: [THL_MARKET.market, WHWETH.market] });
     expect(two.positions).toHaveLength(3);
     for (const p of two.positions) expect(p).toMatchObject({ status: 'blocked', blockers: [{ code: 'stale_oracle' }], expectedPayout: [{ raw: '1500000' }] });
+    // Short of cash, the unpriced market itself only allows a partial withdrawal, which leaves it in the vault: blocked.
+    const short = await read({ coins: '1500000', cash: '1000000', held: [THL_MARKET.market], unpriced: [THL_MARKET.market] });
+    expect(short.positions[0]).toMatchObject({ locator: 'THL', status: 'blocked', blockers: [{ code: 'stale_oracle' }], expectedPayout: [{ raw: '375000' }] });
   });
 
   it('does not count a market Echelon reopened', async () => {
     expect((await read({ coins: '1500000', frozen: false })).positions).toEqual([]);
   });
 
-  it('lists every market at a full-length address, once', () => {
+  it('lists every market and asset at a full-length address (price lookups are exact), once', () => {
     expect(new Set(FROZEN_MARKETS.map(m => m.market)).size).toBe(FROZEN_MARKETS.length);
-    expect(FROZEN_MARKETS.every(m => /^0x[0-9a-f]{64}$/.test(m.market))).toBe(true);
+    expect(FROZEN_MARKETS.filter(m => !/^0x[0-9a-f]{64}$/.test(m.market) || !/^0x[0-9a-f]{64}(::|$)/.test(m.asset))).toEqual([]);
   });
 });
 
