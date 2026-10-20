@@ -191,6 +191,8 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Mirage Protocol (Aptos and Movement, mUSD vaults):** the team reportedly announced its closure (Cryptorank, pointing to mirage.money/vaults). DefiLlama shows ~$714 of TVL left. Skipped.
 - **Yuzu (Movement):** the only whitelisted reward token is MOVE; incentives are worth too little to track.
 - **Argo, Laminar Markets:** no closure notice found (Laminar was merged into Econia in 2023).
+- **Amnis AMI vesting** (`0xbc99…::token_vesting`, buckets airdrop / KOL / seed / private / team / …): vested AMI that claimers never took (e.g. the KOL bucket, 156 claimers, fully vested 2025-12-23) would count. But AMI trades at $0.00084 (market cap ~$515K), so even millions of unclaimed AMI are worth a few thousand dollars. Skipped. The AMI lock pools from the June 2025 campaign were not found on chain.
+- **ThalaSwap v1:** no deprecation notice and still trading, so v1 LP is live liquidity (R4).
 - **Hyperion fridge** (delayed LP withdrawals): `fridge::asset_unclaimed_all()` reports 4.70 APT in total across all users, about $3.50. Too small to maintain.
 - **Superposition** (Aptos lending): not left behind. Its markets are unpaused and still used (last deposit 2026-10-14). Operator-signed packets are its normal app flow, not closure evidence.
 - **Validator-owned stake pools** (not delegation pools; re-sized 2026-10-20, 378 pools):
