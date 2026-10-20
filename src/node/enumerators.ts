@@ -586,10 +586,10 @@ export const pancakeFarmEnumerator = entrySenders('pancake-farm-ended-rewards', 
     return { check: 'pending CAKE found <= CAKE held by MasterChef', ok: found <= cakeLeft, detail: `${found} of ${cakeLeft} (${pct(found, cakeLeft)})` };
   });
 
-// Echelon suppliers up to the last sunset freeze (version 2,729,033,032, 2025-05-17): supplying a frozen market later
-// is pointless. Withdrawals at any time mark a supplier changed.
+// Echelon suppliers at any time: a frozen market still accepts supply, so a late supplier counts too. Withdrawals mark a
+// supplier changed. Suppliers with nothing in the sunset markets are read once (zero: 'never').
 export const echelonSunsetEnumerator = entrySenders('echelon-sunset-markets', [
-  { contract: ECHELON, module: 'scripts', name: 'supply', untilVersion: 2_729_034_000 },
+  { contract: ECHELON, module: 'scripts', name: 'supply' },
   { contract: ECHELON, module: 'scripts', name: 'withdraw' },
   { contract: ECHELON, module: 'scripts', name: 'withdraw_all' }],
   async (chain, ledger, positions) => {
@@ -603,9 +603,10 @@ export const echelonSunsetEnumerator = entrySenders('echelon-sunset-markets', [
       const supplied = BigInt(shares) * BigInt(num) / BigInt(den);
       const found = sumGross(positions.filter(p => p.locator === m.label));
       ok &&= found <= supplied;
-      parts.push(`${m.label} ${pct(found, supplied)}`);
+      parts.push(`${m.label} ${pct(found, supplied)} of supply found`);
     }
-    return { check: 'supply found per market <= market supply (shares x exchange rate)', ok, detail: parts.join('; ') };
+    // Coverage below 100% is supply held by contracts that never call scripts::supply themselves (vaults, strategies).
+    return { check: 'supply found per market <= market supply (shares x exchange rate); coverage shown', ok, detail: parts.join('; ') };
   });
 
 const noContractTotal: Enumerator['sanity'] = async () =>

@@ -337,9 +337,9 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - Payout = min(coins, `account_withdrawable_coins`, the market's `total_cash`). The view is a health limit and returns u64::MAX for a lender without debt; the cash is what can leave now.
   - No cash means `blocked` (`insufficient_cash`). Supply in a frozen market is not collateral (factor 0), so withdrawing does not touch any debt.
 - **Recovery:** `scripts::withdraw_all<coin type>(market)`. Simulated for the three largest sampled positions: each paid the read amount (within 1 raw unit of accrued interest).
-- **Enumeration:** senders of `scripts::supply` up to the last freeze (version 2,729,034,000), plus `withdraw` / `withdraw_all` senders at any time as change events.
+- **Enumeration:** senders of `scripts::supply` at any time (a frozen market still accepts supply), plus `withdraw` / `withdraw_all` senders as change events. A supplier with nothing in the sunset markets is read once and never again.
+- **Sanity:** supply found per market ≤ the market's supply, with coverage shown. Below 100% means supply held by contracts that never call `scripts::supply` themselves.
 - **Size:** the four markets hold ~66K lzUSDC, ~22.5K lzUSDT, ~930 Wormhole USDC and 0.09 WETH (~$90K). Most of each is cash. In a sample of the latest pre-freeze suppliers, the positions are mostly dust plus a few holders of $64–$100.
-- **Sanity:** supply found per market ≤ the market's supply (shares × exchange rate).
 
 ## topaz-bids
 
