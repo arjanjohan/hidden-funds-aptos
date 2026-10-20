@@ -343,12 +343,13 @@ describe('econia enumerator', () => {
   it('re-reads makers with open orders, and last run\'s makers once more after their orders are gone, dated from the run', async () => {
     // A maker's hint carries the run's time: a balance its fill frees is aged from then, not from the archive date.
     const since = new Date(1_800_000_000 * 1000).toISOString();
+    // The date applies to the market the order rests in only, so the maker's other balances keep their age.
     const first = await econiaIdleEnumerator.run(econia([1]), undefined);
-    expect(first.candidates).toEqual([{ owner: addr(1), hint: { since } }]);
+    expect(first.candidates).toEqual([{ owner: addr(1), hint: { markets: { 7: since } } }]);
     expect(first.incremental).toBe(true);
     // The order filled (the taker sent that transaction): owner 1 is no longer a maker but is read once more.
     const second = await econiaIdleEnumerator.run(econia([]), first.cursor);
-    expect(second.candidates).toEqual([{ owner: addr(1), hint: { since } }]);
+    expect(second.candidates).toEqual([{ owner: addr(1), hint: { markets: { 7: since } } }]);
     expect((await econiaIdleEnumerator.run(econia([]), second.cursor)).candidates).toEqual([]);
   });
 });

@@ -39,14 +39,16 @@ function marketInfo(ctx: ReadContext, id: string): Promise<MarketInfo> {
   });
 }
 
-/** Enumeration hint: the time of the run that saw the owner change (deposit, withdrawal, order, or a fill of its order). */
-export interface EconiaHint { since?: string }
+/** Enumeration hint: the time of the run that saw the owner act (`since`: a deposit, withdrawal or order of its own,
+ *  market unknown) and, per market, the last run that saw a resting order of its there (`markets`). */
+export interface EconiaHint { since?: string; markets?: Record<string, string> }
 
 async function read(ctx: ReadContext, ownerInput: string, hint?: EconiaHint): Promise<ReadResult> {
   const owner = normalizeAddress(ownerInput);
   const version = ctx.ledger.version;
-  // A balance that changed after the archive date has been idle only since then: the later of the two dates.
-  const since = hint?.since && Date.parse(hint.since) > Date.parse(ECONIA_ARCHIVED_AT) ? hint.since : ECONIA_ARCHIVED_AT;
+  // A balance that changed after the archive date has been idle only since then: the latest of the dates that apply.
+  const since = (market: string) => [ECONIA_ARCHIVED_AT, hint?.since, hint?.markets?.[market]]
+    .filter((d): d is string => !!d).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a));
   try {
     const [accounts] = await ctx.chain.view(`${ECONIA}::user::get_market_accounts`, [owner], [], version);
     const idle = (accounts as any[]).filter(a => a.custodian_id === '0' && !a.asks.length && !a.bids.length);
@@ -61,7 +63,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: EconiaHint): Pr
         const locator = `market-${a.market_id}`;
         positions.push({
           ...positionIds(SOURCE, owner, locator, 'principal', asset), source: SOURCE, owner, locator, positionKind: 'principal', asset,
-          claimableSince: since, ageBasis: 'protocol_closure',
+          claimableSince: since(a.market_id), ageBasis: 'protocol_closure',
           provenance: { reader: `${ECONIA}::user::get_market_accounts`, ledgerVersion: version },
           grossClaim: value, expectedPayout: value, payoutBasis: 'view',
           status: 'recoverable', blockers: [],

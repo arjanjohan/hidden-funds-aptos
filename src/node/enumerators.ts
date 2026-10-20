@@ -5,7 +5,7 @@ import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-with
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
 import { AAVE, type AaveHint, aaveReserves, findFreeze } from '../shared/sources/aave-frozen.ts';
 import { ECHELON, FROZEN_MARKETS } from '../shared/sources/echelon-frozen.ts';
-import { ECONIA, ECONIA_COIN_MARKETS, KANA_ECONIA_WRAPPER } from '../shared/sources/econia-idle.ts';
+import { ECONIA, ECONIA_COIN_MARKETS, type EconiaHint, KANA_ECONIA_WRAPPER } from '../shared/sources/econia-idle.ts';
 import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
 import { CAKE, type ClaimableHint, claimableHandle, LZ_COINS } from '../shared/sources/layerzero-claimable.ts';
@@ -695,8 +695,9 @@ const noContractTotal: Enumerator['sanity'] = async () =>
 // changed; those only matter after an owner's first read, which comes after this source was added (2026-10-20), so
 // their scan starts there. A fill of a resting order is sent by the taker, so makers are taken from the coin markets'
 // open orders each run: current makers and last run's are re-read (an account with open orders does not count, and the
-// one whose order filled is read again in the run after). A changed owner's hint carries the run's time, so a balance
-// that became idle after the archive date is aged from that run, never from the archive.
+// one whose order filled is read again in the run after). A changed owner's hint carries the run's time (owner-wide for
+// its own calls, per market for its resting orders), so a balance that became idle after the archive date is aged from
+// that run, never from the archive.
 const ECONIA_CHANGES_FROM = 7_696_900_000;
 const ECONIA_REGISTRATIONS: EntryFunction[] = [
   ...['register_market_account', 'register_market_account_generic_base'].map(name => ({ contract: ECONIA, module: 'user', name })),
@@ -718,22 +719,35 @@ export const econiaIdleEnumerator: Enumerator = {
   ...econiaSenders,
   scope: `${econiaSenders.scope}; plus owner-controlled makers with open orders in coin markets ${ECONIA_COIN_MARKETS[0]}-${ECONIA_COIN_MARKETS.at(-1)}`,
   async run(chain, cursor) {
-    let stored: { r?: string; c?: string; m?: string[] } = {};
+    let stored: { r?: string; c?: string; m?: Record<string, string[]> } = {};
     try { stored = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: rescan */ }
     if (typeof stored !== 'object' || stored === null) stored = {};
     const ledger = await chain.ledger();
     const registered = await senders(chain, ECONIA_REGISTRATIONS, stored.r);
     const changed = await senders(chain, ECONIA_CHANGES, stored.c);
-    const makers = new Set<string>();
+    // Makers by owner, with the markets they rest orders in: now, and last run (whose orders may have filled since).
+    const makers: Record<string, string[]> = {};
     for (const market of ECONIA_COIN_MARKETS) {
       const [orders] = await chain.view(`${ECONIA}::market::get_open_orders_all`, [market]);
-      for (const o of [...orders.asks, ...orders.bids]) if (o.custodian_id === '0') makers.add(normalizeAddress(o.user));
+      for (const o of [...orders.asks, ...orders.bids]) {
+        if (o.custodian_id !== '0') continue;
+        const owner = normalizeAddress(o.user);
+        makers[owner] = [...new Set([...(makers[owner] ?? []), market])];
+      }
     }
+    const previous = typeof stored.m === 'object' && stored.m !== null && !Array.isArray(stored.m) ? stored.m : {};
     const since = iso(ledger.timestampSecs);
-    const recent = new Set([...changed.candidates.map(c => c.owner), ...makers, ...(stored.m ?? [])]);
-    const owners = new Set([...registered.candidates.map(c => c.owner), ...recent]);
-    return { candidates: [...owners].map(owner => (recent.has(owner) ? { owner, hint: { since } } : { owner })),
-      cursor: JSON.stringify({ r: registered.cursor, c: changed.cursor, m: [...makers].sort() }),
+    // The owner's own calls date all of its balances (the indexer does not say which market a call touched); a maker's
+    // order dates only the market it rests in.
+    const hints = new Map<string, EconiaHint>();
+    for (const c of changed.candidates) hints.set(c.owner, { since });
+    for (const [owner, markets] of [...Object.entries(previous), ...Object.entries(makers)]) {
+      const hint = hints.get(owner) ?? {};
+      hints.set(owner, { ...hint, markets: { ...hint.markets, ...Object.fromEntries(markets.map(m => [m, since])) } });
+    }
+    const owners = new Set([...registered.candidates.map(c => c.owner), ...hints.keys()]);
+    return { candidates: [...owners].map(owner => (hints.has(owner) ? { owner, hint: hints.get(owner) } : { owner })),
+      cursor: JSON.stringify({ r: registered.cursor, c: changed.cursor, m: makers }),
       pages: registered.pages + changed.pages + ECONIA_COIN_MARKETS.length, incremental: true };
   },
 };
