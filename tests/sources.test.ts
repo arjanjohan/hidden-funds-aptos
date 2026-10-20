@@ -808,10 +808,15 @@ describe('econia idle accounts', () => {
   } });
 
   it('lists the idle base and quote of an account the owner controls, aged from the archive date', async () => {
-    const r = await econiaIdleAccounts.read(context(chain([account('7', { base: '200000000', quote: '5000445704' })])), OWNER);
+    const r = await econiaIdleAccounts.read(context(chain([account('7', { base: '200000000', quote: '5000445704' })])), OWNER, {});
     expect(r.positions.map(p => [p.asset, p.expectedPayout[0].raw])).toEqual([[APT, '200000000'], [LZUSDC, '5000445704']]);
     expect(r.positions[0]).toMatchObject({ locator: 'market-7', claimableSince: ECONIA_ARCHIVED_AT, ageBasis: 'protocol_closure', status: 'recoverable',
       steps: [{ function: `${ECONIA}::user::withdraw_to_coinstore<${addr(1)}::aptos_coin::AptosCoin>`, arguments: ['7', '200000000'] }] });
+  });
+
+  it('leaves the age unknown without the enumeration hint (the check page cannot rule out a later change)', async () => {
+    const r = await econiaIdleAccounts.read(context(chain([account('7', { quote: '5' })])), OWNER);
+    expect(r.positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined, status: 'recoverable' });
   });
 
   it('ages a balance that changed after the archive date from that change, never earlier', async () => {

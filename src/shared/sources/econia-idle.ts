@@ -47,7 +47,8 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: EconiaHint): Pr
   const owner = normalizeAddress(ownerInput);
   const version = ctx.ledger.version;
   // A balance that changed after the archive date has been idle only since then: the latest of the dates that apply.
-  const since = (market: string) => [ECONIA_ARCHIVED_AT, hint?.since, hint?.markets?.[market]]
+  // Without the enumeration hint (the check page) a later change cannot be ruled out, so the age is unknown.
+  const since = (market: string) => hint && [ECONIA_ARCHIVED_AT, hint.since, hint.markets?.[market]]
     .filter((d): d is string => !!d).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a));
   try {
     const [accounts] = await ctx.chain.view(`${ECONIA}::user::get_market_accounts`, [owner], [], version);
@@ -63,7 +64,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: EconiaHint): Pr
         const locator = `market-${a.market_id}`;
         positions.push({
           ...positionIds(SOURCE, owner, locator, 'principal', asset), source: SOURCE, owner, locator, positionKind: 'principal', asset,
-          claimableSince: since(a.market_id), ageBasis: 'protocol_closure',
+          claimableSince: since(a.market_id), ageBasis: hint ? 'protocol_closure' : 'unknown',
           provenance: { reader: `${ECONIA}::user::get_market_accounts`, ledgerVersion: version },
           grossClaim: value, expectedPayout: value, payoutBasis: 'view',
           status: 'recoverable', blockers: [],

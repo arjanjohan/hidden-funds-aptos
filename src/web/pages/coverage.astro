@@ -1,0 +1,114 @@
+---
+import Base from '../layouts/Base.astro';
+import { snapshot } from '../lib/data.ts';
+import { date } from '../lib/format.ts';
+import { PROTOCOLS, type ProtocolStatus } from '../../shared/protocols.ts';
+
+const REPO = 'https://github.com/arjanjohan/hidden-funds-aptos';
+const groups: [ProtocolStatus, string, string][] = [
+  ['implemented', 'Counted', 'We read these on chain every week.'],
+  ['dormant', 'Waiting for a trigger', 'Built, but counts nothing until the protocol does something (for example, freezes its markets).'],
+  ['needs_decision', 'Needs a decision', 'Open questions about whether or how to count them.'],
+  ['blocked', 'Blocked', 'Funds may be left behind, but cannot be read or recovered in a useful way.'],
+  ['too_small', 'Too small', 'Checked and sized; too little to be worth tracking.'],
+  ['not_left_behind', 'Nothing left behind', 'Checked: live protocols, nothing that has ended, or nothing held for users.'],
+  ['not_checked', 'Not checked yet', 'Known protocols nobody has looked at yet.'],
+  ['out_of_scope', 'Out of scope', 'Custodial exchanges: balances there are not on-chain positions.'],
+];
+const published = new Set((snapshot?.sources ?? []).map(s => s.id));
+/** Entries per status for each chain filter, so the cards and sections follow the toggle. */
+const counts = (status: ProtocolStatus) => ({
+  all: PROTOCOLS.filter(p => p.status === status).length,
+  aptos: PROTOCOLS.filter(p => p.status === status && p.chains.includes('aptos')).length,
+  movement: PROTOCOLS.filter(p => p.status === status && p.chains.includes('movement')).length,
+});
+const chainName = { aptos: 'Aptos', movement: 'Movement' } as const;
+---
+<Base title="Coverage · hidden funds" description="Every Aptos and Movement protocol we know of, and what we did about each: counted, checked and excluded, or not checked yet.">
+  <h1>Protocol coverage</h1>
+  <p class="muted">
+    Every Aptos and Movement protocol we know of ({PROTOCOLS.length}), from DefiLlama's list plus a few it does not track, and what we did
+    about each. The evidence for each decision is in <a href={`${REPO}/blob/main/docs/sources.md`}>sources and evidence</a>.
+    Something missing or wrong? <a href={`${REPO}/issues`}>Open an issue</a>.
+  </p>
+
+  <div class="toggle" role="group" aria-label="Chain">
+    <button type="button" data-chain="all" aria-pressed="true">Both</button>
+    <button type="button" data-chain="aptos" aria-pressed="false">Aptos</button>
+    <button type="button" data-chain="movement" aria-pressed="false">Movement</button>
+  </div>
+
+  <div class="cards summary">
+    {groups.map(([status, label]) => {
+      const n = counts(status);
+      return <a class="card" href={`#${status}`} data-all={n.all} data-aptos={n.aptos} data-movement={n.movement}><span class="muted">{label}</span><b>{n.all}</b></a>;
+    })}
+  </div>
+
+  {groups.map(([status, label, blurb]) => {
+    const rows = PROTOCOLS.filter(p => p.status === status).sort((a, b) => a.name.localeCompare(b.name));
+    return rows.length > 0 && (
+      <section id={status} data-all={counts(status).all} data-aptos={counts(status).aptos} data-movement={counts(status).movement}>
+        <h2>{label}</h2>
+        <p class="muted">{blurb}</p>
+        <div class="table">
+          <table>
+            <thead><tr><th>Protocol</th><th>Why</th><th>Checked</th></tr></thead>
+            <tbody>
+              {rows.map(p => (
+                <tr data-chains={p.chains.join(' ')}>
+                  <td>
+                    {p.name}
+                    <div class="muted">{p.chains.map(c => chainName[c]).join(', ')} · {p.category}{p.dead && <> · <span title="DefiLlama marks this protocol dead">dead on DefiLlama{p.dead !== 'yes' ? ` since ${p.dead}` : ''}</span></>}</div>
+                  </td>
+                  <td>
+                    {p.reason}
+                    <div class="links">
+                      {(p.sources ?? []).map(id => published.has(id) ? <a href={`/source/${id}`}>{id}</a> : <span class="muted">{id}</span>)}
+                      {p.issue && <a href={`${REPO}/issues/${p.issue}`}>issue #{p.issue}</a>}
+                      {p.defillama && <a href={`https://defillama.com/protocol/${p.defillama}`}>DefiLlama</a>}
+                    </div>
+                  </td>
+                  <td class="muted">{p.checkedAt ? date(p.checkedAt) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    );
+  })}
+</Base>
+
+<script>
+  const buttons = document.querySelectorAll<HTMLButtonElement>('.toggle button');
+  for (const b of buttons) b.addEventListener('click', () => {
+    for (const x of buttons) x.setAttribute('aria-pressed', String(x === b));
+    const chain = b.dataset.chain!;
+    for (const row of document.querySelectorAll<HTMLElement>('tr[data-chains]')) {
+      row.hidden = chain !== 'all' && !row.dataset.chains!.split(' ').includes(chain);
+    }
+    // Counts and sections follow the filter: a card shows the selected chain's count; a section without rows hides.
+    for (const card of document.querySelectorAll<HTMLElement>('.summary .card')) {
+      const n = Number(card.dataset[chain]);
+      card.querySelector('b')!.textContent = String(n);
+      card.hidden = n === 0;
+    }
+    for (const section of document.querySelectorAll<HTMLElement>('section[data-all]')) section.hidden = Number(section.dataset[chain]) === 0;
+  });
+</script>
+
+<style>
+  .toggle { display: inline-flex; background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 3px; margin: 8px 0 20px; }
+  .toggle button { font: inherit; font-size: 14px; border: 0; background: transparent; color: var(--muted); padding: 6px 14px; border-radius: 8px; cursor: pointer; }
+  .toggle button[aria-pressed="true"] { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+  .summary { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .summary a.card { text-decoration: none; color: inherit; }
+  .summary a.card[hidden], section[hidden] { display: none; }
+  table { table-layout: fixed; }
+  th:first-child { width: 30%; }
+  th:last-child { width: 7.5em; }
+  td:last-child { white-space: nowrap; }
+  .links { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 13px; }
+  section { margin-top: 32px; }
+</style>
