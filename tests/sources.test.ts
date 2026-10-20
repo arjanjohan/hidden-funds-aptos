@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ownerKind } from '../src/shared/owners.ts';
+import { AAVE, aaveFrozenReserves, AAVE_UNFROZEN_AT, USDC } from '../src/shared/sources/aave-frozen.ts';
 import { canopyEndedRewards } from '../src/shared/sources/canopy-rewards.ts';
-import { delegation, MOVE, movementDelegation } from '../src/shared/sources/delegation.ts';
+import { APT, delegation, MOVE, movementDelegation } from '../src/shared/sources/delegation.ts';
 import { echelonFrozenMarkets, FROZEN_MARKETS } from '../src/shared/sources/echelon-frozen.ts';
 import { delegationInactiveValidator } from '../src/shared/sources/delegation-inactive.ts';
 import { KAPT, kofiReceipts, STKAPT } from '../src/shared/sources/kofi-receipts.ts';
@@ -699,3 +700,72 @@ describe('echelon frozen markets', () => {
   });
 });
 
+
+describe('aave frozen reserves', () => {
+  const FREEZE = AAVE_UNFROZEN_AT + 500n;
+  const LEDGER = { version: String(AAVE_UNFROZEN_AT + 1000n), timestampSecs: NOW };
+  const reserve = (symbol: string, underlying: string, o: { frozen?: boolean; paused?: boolean; cash?: string } = {}) => ({
+    underlying_asset: underlying, symbol, a_token_address: addr(`a${symbol.length}`), variable_debt_token_address: addr(`d${symbol.length}`),
+    is_frozen: o.frozen ?? true, is_active: true, is_paused: o.paused ?? false, available_liquidity: o.cash ?? '99000000' });
+  type Opts = { reserves?: unknown[]; debt?: string; balance?: string; supply?: string };
+  const chain = (opts: Opts = {}) => fakeChain({
+    view: (fn) => {
+      if (fn.endsWith('::get_reserves_data')) return [opts.reserves ?? [reserve('USDC', USDC)], {}];
+      if (fn.endsWith('::get_user_account_data')) return ['0', opts.debt ?? '0', '0', '0', '0', '0'];
+      if (fn.endsWith('::balance_of')) return [opts.balance ?? '400000'];
+      if (fn.endsWith('::get_a_token_total_supply')) return [opts.supply ?? '1000000'];
+      if (fn.endsWith('::pool::get_reserve_data')) return [{ inner: addr('r1') }];
+      throw new Error(fn);
+    },
+    // Frozen (bit 57) from version FREEZE on.
+    archiveResource: (_address, _type, version) => ({ configuration: { data: (BigInt(version) >= FREEZE ? 1n << 57n : 0n).toString() } }),
+    gql: (_query, vars) => ({ user_transactions: vars.v === String(FREEZE) ? [{ timestamp: '2026-11-02T10:00:00' }] : [] }),
+  });
+
+  it('reads nothing but the reserve flags while no reserve is frozen', async () => {
+    const c = chain({ reserves: [reserve('USDC', USDC, { frozen: false })] });
+    expect(await aaveFrozenReserves.read(context(c, LEDGER), OWNER)).toMatchObject({ positions: [], complete: true });
+    expect(c.calls).toEqual([`view ${AAVE}::ui_pool_data_provider_v3::get_reserves_data`]);
+  });
+
+  it('counts a debt-free supplier of a frozen reserve, aged from the freeze found on the archive node', async () => {
+    const memo = memoryMemo();
+    const r = await aaveFrozenReserves.read(context(chain(), LEDGER, memo), OWNER);
+    expect(r.positions).toHaveLength(1);
+    expect(r.positions[0]).toMatchObject({ locator: 'USDC', asset: USDC, status: 'recoverable', ageBasis: 'protocol_closure',
+      claimableSince: '2026-11-02T10:00:00.000Z', expectedPayout: [{ asset: USDC, raw: '400000' }],
+      steps: [{ function: `${AAVE}::supply_logic::withdraw`, arguments: [USDC, (2n ** 256n - 1n).toString(), OWNER] }] });
+    // The freeze time is memoized: a later read does not search again.
+    const again = chain();
+    await aaveFrozenReserves.read(context(again, LEDGER, memo), OWNER);
+    expect(again.calls.filter(c => c.startsWith('archiveResource'))).toEqual([]);
+  });
+
+  it('leaves out a supplier with any Aave debt', async () => {
+    expect(await aaveFrozenReserves.read(context(chain({ debt: '1' }), LEDGER), OWNER)).toMatchObject({ positions: [], complete: true });
+  });
+
+  it('counts the pro-rata share of a short reserve\'s cash and withdraws that amount; blocks a paused reserve', async () => {
+    // Cash 1M of 4M lent out: a lender owed 1.5M is counted for 375K.
+    const short = await aaveFrozenReserves.read(context(chain({ reserves: [reserve('USDC', USDC, { cash: '1000000' })], balance: '1500000', supply: '4000000' }), LEDGER), OWNER);
+    expect(short.positions[0]).toMatchObject({ grossClaim: [{ raw: '1500000' }], expectedPayout: [{ raw: '375000' }], steps: [{ arguments: [USDC, '375000', OWNER] }] });
+    const paused = await aaveFrozenReserves.read(context(chain({ reserves: [reserve('USDC', USDC, { paused: true })] }), LEDGER), OWNER);
+    expect(paused.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'paused' }] });
+  });
+
+  it('pays the APT reserve out as APT (0xa is the paired fungible asset of the APT coin)', async () => {
+    const r = await aaveFrozenReserves.read(context(chain({ reserves: [reserve('APT', '0xa')] }), LEDGER), OWNER);
+    expect(r.positions[0]).toMatchObject({ locator: 'APT', asset: APT, expectedPayout: [{ asset: APT }] });
+  });
+
+  it('leaves the age unknown when the freeze cannot be dated', async () => {
+    const base = chain();
+    const undated = fakeChain({
+      view: (fn, args, t) => base.view(fn, args, t),
+      archiveResource: (a, t, v) => base.archiveResource(a, t, v),
+      gql: () => ({ user_transactions: [] }),
+    });
+    const r = await aaveFrozenReserves.read(context(undated, LEDGER), OWNER);
+    expect(r.positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined });
+  });
+});

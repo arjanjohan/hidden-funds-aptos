@@ -1,5 +1,6 @@
 // Identity-bound USD prices. A quote older than 7 days is not a price.
 import { PRICE_MAX_AGE_SECS, type PriceBook } from '../shared/accounting.ts';
+import { SUSDE, USDC, USDT } from '../shared/sources/aave-frozen.ts';
 import { AMNIS } from '../shared/sources/amnis-withdrawals.ts';
 import { APT, MOVE } from '../shared/sources/delegation.ts';
 import { AMAPT_FA, MOD, STAPT, STHAPT, WH_USDC } from '../shared/sources/echelon-frozen.ts';
@@ -26,6 +27,10 @@ const COINGECKO = [
   { asset: KAPT, id: 'kofi-aptos', decimals: 8 },
   // CoinGecko lists the amAPT coin; this is its paired fungible asset.
   { asset: AMAPT_FA, id: 'amnis-aptos', decimals: 8 },
+  // Native fungible assets of the Aave reserves; each id's Aptos contract is this exact address.
+  { asset: USDT, id: 'tether', decimals: 6 },
+  { asset: USDC, id: 'usd-coin', decimals: 6 },
+  { asset: SUSDE, id: 'ethena-staked-usde', decimals: 6 },
 ];
 
 export async function fetchPrices(nowSecs: number, aptos: ChainReader): Promise<{ prices: PriceBook; errors: string[] }> {
