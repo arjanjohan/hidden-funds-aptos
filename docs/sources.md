@@ -327,6 +327,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Size:** bounded by what MasterChef holds: 5,771 CAKE (~$12.5K) and 12,988 APT (~$9.9K).
   - Sample (394 depositors across its history, 2026-10-19): 57 (14%) have rewards, 57.5 CAKE + 111.3 APT. Scaled to an estimated ~25K depositors, that's roughly 3,600 CAKE and 7,000 APT (~$13K).
 - **Cost:** ~3.9 requests per depositor for those with LP staked (fewer for the rest), so the first run is ~100K+ requests and needs its own run. Nothing accrues after the end, so an owner with nothing pending is never re-read (`zero: 'never'`); owners with rewards are re-read monthly.
+- **Published (CI run, 2026-10-20):** complete. **$16.1K** (CAKE plus the APT incentive) in 13,126 positions, 5,581 farmers, 165 with ≥ $10. Sanity: pending CAKE found = 5,526 of the 5,771 CAKE MasterChef holds (95.8%). First run: 45.8K requests (14,219 depositors, 1,090 indexer pages).
 
 ## topaz-bids
 
@@ -339,6 +340,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Read:** with the enumeration hint, only the bids it lists as funded and expired are read on chain (one table read each).
   - Without a hint (the check page), the bidder's ids come from Topaz's per-bidder `Index`. That index lists some ids under the wrong bidder (ids 1, 4 and 9 appear under several), so a bid counts only when its own record names the owner as buyer. Walking the index without that check counted 32 bids twice.
 - **Dust:** a bidder whose expired bids total under 0.25 APT (~$0.20) is not read on chain: `indexer_only`, out of totals.
+- **Published (CI run, 2026-10-20):** complete. $3.9K left behind 90+ days, 1,736 bidders; 203,617 dust bids not counted. First run: 16.8K requests (8,576 indexer pages, 67,290 bidders).
 - **Result (2026-10-19, local run with the pipeline code):** complete. **5,120 APT (~$3.9K) in 4,155 expired bids, 1,736 bidders**, 71 with ≥ $10; the largest holds 138 APT. Dust: 203,617 bids, 1,002 APT. Most of the 30.5K APT in collection bids sits in bids whose deadlines are years away (R4).
 - **Cost:** first run 8.6K indexer pages + ~6.6K table reads. The first version walked every bidder's index and used 176K requests; reading only hinted expired bids gives the same result (minus the 32 double counts) for 6.7K.
 - **Simulation (anonymous fullnode, seed 20261018):** 18/18 sampled cancels succeed and return exactly the escrowed APT, across both bid kinds; 9 need gas.
