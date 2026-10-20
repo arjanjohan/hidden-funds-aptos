@@ -796,6 +796,7 @@ describe('econia idle accounts', () => {
   const coin = (t: string) => { const [package_address, module_name, type_name] = t.split('::'); return { package_address, module_name, type_name }; };
   const markets: Record<string, unknown> = {
     7: { base_name_generic: '', base_type: coin('0x1::aptos_coin::AptosCoin'), quote_type: coin(LZUSDC) },
+    8: { base_name_generic: '', base_type: coin('0x1::aptos_coin::AptosCoin'), quote_type: coin(LZUSDC) },
     12: { base_name_generic: 'YT_9', base_type: coin('0x1::string::String'), quote_type: coin(LZUSDC) },
   };
   const account = (market: string, o: { custodian?: string; asks?: unknown[]; base?: string; quote?: string } = {}) => ({ market_id: market,
@@ -819,6 +820,10 @@ describe('econia idle accounts', () => {
     expect(later.positions[0].claimableSince).toBe('2026-10-27T03:17:00.000Z');
     const earlier = await econiaIdleAccounts.read(context(chain(accounts)), OWNER, { since: '2025-01-01T00:00:00.000Z' });
     expect(earlier.positions[0].claimableSince).toBe(ECONIA_ARCHIVED_AT);
+    // An order in market 8 dates market 8 only.
+    const two = [account('7', { quote: '5' }), account('8', { quote: '6' })];
+    const scoped = await econiaIdleAccounts.read(context(chain(two)), OWNER, { markets: { 8: '2026-10-27T03:17:00.000Z' } });
+    expect(scoped.positions.map(p => [p.locator, p.claimableSince])).toEqual([['market-7', ECONIA_ARCHIVED_AT], ['market-8', '2026-10-27T03:17:00.000Z']]);
   });
 
   it('has display metadata (decimals) for every coin the coin markets trade', () => {
