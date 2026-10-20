@@ -1,60 +1,179 @@
 {
   "schema": 1,
-  "generatedAt": "2026-10-20T06:21:32.664Z",
+  "generatedAt": "2026-10-20T15:16:28.617Z",
   "prices": {
     "0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.76677,
+      "usd": 0.811055,
       "decimals": 8,
-      "at": "2026-10-20T06:12:11.000Z",
+      "at": "2026-10-20T14:28:11.000Z",
       "source": "coingecko simple/price"
     },
     "0x07fd500c11216f0fe3095d0c4b8aa4d64a4e2e04f83758462f2b127255643615::thl_coin::THL": {
-      "usd": 0.00987704,
+      "usd": 0.0099915,
       "decimals": 8,
-      "at": "2026-10-20T06:12:22.000Z",
+      "at": "2026-10-20T14:28:11.000Z",
       "source": "coingecko simple/price"
     },
     "movement:0x000000000000000000000000000000000000000000000000000000000000000a": {
-      "usd": 0.00724061,
+      "usd": 0.00742775,
       "decimals": 8,
-      "at": "2026-10-20T06:12:22.000Z",
+      "at": "2026-10-20T14:28:11.000Z",
       "source": "coingecko simple/price"
     },
     "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC": {
-      "usd": 0.999982,
+      "usd": 0.999846,
       "decimals": 6,
-      "at": "2026-10-20T06:12:22.000Z",
+      "at": "2026-10-20T14:28:11.000Z",
       "source": "coingecko simple/price"
     },
     "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDT": {
-      "usd": 0.999314,
+      "usd": 0.999208,
       "decimals": 6,
-      "at": "2026-10-20T06:12:22.000Z",
+      "at": "2026-10-20T14:28:11.000Z",
       "source": "coingecko simple/price"
     },
     "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::WETH": {
-      "usd": 2393.39,
+      "usd": 2453.02,
       "decimals": 6,
-      "at": "2026-10-20T06:12:22.000Z",
+      "at": "2026-10-20T14:28:11.000Z",
       "source": "coingecko simple/price"
     },
     "0x159df6b7689437016108a019fd5bef736bac692b6d4a1f10c941f6fbb9a74ca6::oft::CakeOFT": {
-      "usd": 2.16,
+      "usd": 2.21,
       "decimals": 8,
-      "at": "2026-10-20T06:12:11.000Z",
+      "at": "2026-10-20T14:28:11.000Z",
       "source": "coingecko simple/price"
     },
     "0x8b107b816356295ea62750020edea701bfc6d11575953d0e146c20d7b9409300::oft::BTCbOFT": {
-      "usd": 81627,
+      "usd": 82891,
       "decimals": 8,
-      "at": "2026-10-20T06:12:22.000Z",
+      "at": "2026-10-20T14:28:11.000Z",
+      "source": "coingecko simple/price"
+    },
+    "0x5e156f1207d0ebfa19a9eeff00d62a282278fb8719f4fab3a586a0a2c0fffbea::coin::T": {
+      "usd": 0.999846,
+      "decimals": 6,
+      "at": "2026-10-20T14:28:11.000Z",
+      "source": "coingecko simple/price"
+    },
+    "0x6f986d146e4a90b828d8c12c14b6f4e003fdff11a8eecceceb63744363eaac01::mod_coin::MOD": {
+      "usd": 1,
+      "decimals": 8,
+      "at": "2026-10-20T14:28:11.000Z",
+      "source": "coingecko simple/price"
+    },
+    "0x821c94e69bc7ca058c913b7b5e6b0a5c9fd1523d58723a966fb8c1f5ea888105": {
+      "usd": 0.810759,
+      "decimals": 8,
+      "at": "2026-10-20T14:28:11.000Z",
+      "source": "coingecko simple/price"
+    },
+    "0xa259be733b6a759909f92815927fa213904df6540519568692caf0b068fe8e62": {
+      "usd": 0.809624,
+      "decimals": 8,
+      "at": "2026-10-20T14:28:11.000Z",
       "source": "coingecko simple/price"
     }
   },
   "priceErrors": [
     "quote for layerzero-bridged-wbtc-aptos older than 7 days"
   ],
-  "markets": {},
+  "markets": {
+    "0x821c94e69bc7ca058c913b7b5e6b0a5c9fd1523d58723a966fb8c1f5ea888105": {
+      "1": {
+        "verdict": "usable",
+        "ratio": 0.999848697690207,
+        "quotedAt": "2026-10-20T14:29:26.203Z"
+      },
+      "3": {
+        "verdict": "usable",
+        "ratio": 0.9998473810771816,
+        "quotedAt": "2026-10-20T14:29:26.207Z"
+      },
+      "10": {
+        "verdict": "usable",
+        "ratio": 0.9998426569520749,
+        "quotedAt": "2026-10-20T14:29:26.678Z"
+      },
+      "30": {
+        "verdict": "usable",
+        "ratio": 0.9998281093289348,
+        "quotedAt": "2026-10-20T14:29:26.673Z"
+      },
+      "100": {
+        "verdict": "usable",
+        "ratio": 0.999768234950842,
+        "quotedAt": "2026-10-20T14:29:27.134Z"
+      },
+      "300": {
+        "verdict": "usable",
+        "ratio": 0.9996251315955798,
+        "quotedAt": "2026-10-20T14:29:27.133Z"
+      },
+      "1000": {
+        "verdict": "usable",
+        "ratio": 0.9990573870370049,
+        "quotedAt": "2026-10-20T14:29:27.133Z"
+      },
+      "0.1": {
+        "verdict": "usable",
+        "ratio": 0.999849305980233,
+        "quotedAt": "2026-10-20T14:29:26.172Z"
+      },
+      "0.3": {
+        "verdict": "usable",
+        "ratio": 0.9998491437692322,
+        "quotedAt": "2026-10-20T14:29:26.174Z"
+      }
+    },
+    "0x42556039b88593e768c97ab1a3ab0c6a17230825769304482dff8fdebe4c002b": {
+      "1": {
+        "verdict": "usable",
+        "ratio": 0.9973604891443427,
+        "quotedAt": "2026-10-20T14:29:27.162Z"
+      },
+      "3": {
+        "verdict": "usable",
+        "ratio": 0.9949262048890849,
+        "quotedAt": "2026-10-20T14:29:27.197Z"
+      },
+      "10": {
+        "verdict": "usable",
+        "ratio": 0.9935000538880111,
+        "quotedAt": "2026-10-20T14:29:27.196Z"
+      },
+      "30": {
+        "verdict": "usable",
+        "ratio": 0.9925000163354244,
+        "quotedAt": "2026-10-20T14:29:27.576Z"
+      },
+      "100": {
+        "verdict": "usable",
+        "ratio": 0.9901129884673562,
+        "quotedAt": "2026-10-20T14:29:27.576Z"
+      },
+      "300": {
+        "verdict": "usable",
+        "ratio": 0.9849159076700137,
+        "quotedAt": "2026-10-20T14:29:27.618Z"
+      },
+      "1000": {
+        "verdict": "usable",
+        "ratio": 0.9710048228628287,
+        "quotedAt": "2026-10-20T14:29:27.618Z"
+      },
+      "0.1": {
+        "verdict": "usable",
+        "ratio": 0.9998288268279808,
+        "quotedAt": "2026-10-20T14:29:27.139Z"
+      },
+      "0.3": {
+        "verdict": "usable",
+        "ratio": 0.9992191590974376,
+        "quotedAt": "2026-10-20T14:29:27.158Z"
+      }
+    }
+  },
   "sources": [
     {
       "id": "native-delegation",
@@ -1921,7 +2040,7 @@
       "title": "kAPT / stkAPT still held after Kofi's wind-down",
       "summary": "Kofi is winding down. kAPT and stkAPT can still be redeemed for APT through a withdrawal ticket. Counted only if no market pays close to redemption value.",
       "category": "closed_app",
-      "inclusionRule": "Stranded receipt: protocol wound down and redemption needs an owner action; counted only when no usable market exists (not checked: no quote provider).",
+      "inclusionRule": "Stranded receipt: protocol wound down, redemption needs an owner action, and no market pays at least 80% of redemption value (Panora quote).",
       "protocolStatus": {
         "state": "wound_down",
         "evidence": "config::is_winddown became true at version 6,429,705,721 (multisig transaction); deposits and staking paused.",
@@ -1941,44 +2060,44 @@
         "scope": "primary stores holding Kofi kAPT or stkAPT (current_fungible_asset_balances, amount > 0)",
         "enumeration": {
           "pages": 117,
-          "newCandidates": 8063,
+          "newCandidates": 0,
           "candidates": 8063,
-          "start": "2026-10-19T10:59:08.253Z",
-          "end": "2026-10-19T11:00:04.447Z"
+          "start": "2026-10-20T14:28:28.323Z",
+          "end": "2026-10-20T14:29:24.971Z"
         },
         "verification": {
           "read": 8063,
           "incomplete": 0,
           "notReread": 0,
-          "start": "2026-10-19T11:00:05.017Z",
-          "ledgerFrom": "7678292810",
-          "end": "2026-10-19T11:05:32.364Z",
-          "ledgerTo": "7678348224"
+          "start": "2026-10-20T14:29:25.698Z",
+          "ledgerFrom": "7694520373",
+          "end": "2026-10-20T14:29:35.416Z",
+          "ledgerTo": "7694522783"
         },
         "completeness": "complete",
         "degradedReasons": [],
         "errors": [],
         "watermarkBefore": {
-          "version": "7678283864",
-          "timestamp": "2026-10-19T10:59:06.166753Z"
+          "version": "7694507569",
+          "timestamp": "2026-10-20T14:28:27.2329Z"
         },
         "watermarkAfter": {
-          "version": "7678292633",
-          "timestamp": "2026-10-19T11:00:03.884154Z"
+          "version": "7694519935",
+          "timestamp": "2026-10-20T14:29:23.634553Z"
         },
         "sanity": {
           "check": "receipts found in user primary stores <= token supply",
           "ok": true,
-          "detail": "kAPT 7409509757527 of 8315003801946 supply (89.11%); stkAPT 4786564275817 of 4797431239035 supply (99.77%)"
+          "detail": "kAPT 0 of 8315003801946 supply (0.00%); stkAPT 0 of 4795572789542 supply (0.00%)"
         }
       },
-      "lastSuccessAt": "2026-10-19T11:05:32.364Z",
+      "lastSuccessAt": "2026-10-20T14:29:35.416Z",
       "totals": {
         "face": {
-          "positions": 11619,
-          "owners": 8063,
+          "positions": 0,
+          "owners": 0,
           "usd": 0,
-          "unpriced": 11619,
+          "unpriced": 0,
           "ownersMin10": 0
         },
         "byStatus": {
@@ -2004,11 +2123,11 @@
             "ownersMin10": 0
           },
           "unknown": {
-            "positions": 11619,
-            "owners": 8063,
-            "usd": 97530.13878383728,
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
             "unpriced": 0,
-            "ownersMin10": 78
+            "ownersMin10": 0
           }
         },
         "aged": {
@@ -2094,7 +2213,14 @@
           "unpriced": 0,
           "ownersMin10": 0
         },
-        "headlineTopOwnerShare": 0
+        "headlineTopOwnerShare": 0,
+        "unverified": {
+          "positions": 0,
+          "owners": 0,
+          "usd": 0,
+          "unpriced": 0,
+          "ownersMin10": 0
+        }
       },
       "sizeBands": [
         {
@@ -3402,6 +3528,225 @@
       ]
     },
     {
+      "id": "echelon-frozen-markets",
+      "chain": "aptos",
+      "title": "Echelon supply left in frozen markets",
+      "summary": "Echelon froze some of its Aptos lending markets: no new borrowing. Supply you left there earns little or nothing and waits on Echelon winding the market down. Counted only for suppliers without Echelon debt.",
+      "category": "closed_app",
+      "inclusionRule": "R2: Echelon froze the market (collateral factor 0, borrow cap 0), so the supply sits nearly idle until a wind-down; the freeze is the effective date (issue #10, option (b)). R4: suppliers with any Echelon debt are left out. Both decided 2026-10-20.",
+      "protocolStatus": {
+        "state": "deprecated",
+        "evidence": "21 of 30 markets frozen on chain (collateral factor 0, borrow cap 0); the freeze dates come from Echelon's admin transactions, 2025-05-03 to 2026-10-04. Aptos Foundation: Echelon \"helped sunset bridge-wrapped assets\".",
+        "checkedAt": "2026-10-20"
+      },
+      "howTo": [
+        "Withdraw in the Echelon app (Aptos), or",
+        "call 0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::withdraw_all<coin type>(market) for a Coin market, or 0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::withdraw_all_fa(market) for a fungible-asset market, from the supplying account.",
+        "Holding THL, Wormhole WETH, STONE, SBTC or a Thala LPT on Echelon (no valid price) blocks every other withdrawal: withdraw that first."
+      ],
+      "officialUrl": "https://app.echelon.market",
+      "headlineAgeBases": [
+        "protocol_closure"
+      ],
+      "run": {
+        "processor": "user_transaction_processor",
+        "scope": "senders of 0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::supply, 0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::withdraw, 0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::withdraw_all, 0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::supply_fa, 0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::withdraw_fa, 0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::withdraw_all_fa, 0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::borrow from version 7694000000, 0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::borrow_fa from version 7694000000, 0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::repay from version 7694000000, 0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::repay_all from version 7694000000, 0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::repay_fa from version 7694000000, 0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::repay_all_fa from version 7694000000 entry calls (calls made by other contracts excluded)",
+        "enumeration": {
+          "pages": 9701,
+          "newCandidates": 129661,
+          "candidates": 129661,
+          "start": "2026-10-20T14:29:35.973Z",
+          "end": "2026-10-20T15:04:15.225Z",
+          "cursor": "{\"0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::supply\":\"7694608026\",\"0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::withdraw\":\"7694658093\",\"0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::withdraw_all\":\"7681888566\",\"0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::supply_fa\":\"7692418806\",\"0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::withdraw_fa\":\"7688299520\",\"0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::withdraw_all_fa\":\"7691318889\",\"0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::borrow\":\"7694000000\",\"0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::borrow_fa\":\"7694648344\",\"0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::repay\":\"7694000000\",\"0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::repay_all\":\"7694000000\",\"0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::repay_fa\":\"7694672486\",\"0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba::scripts::repay_all_fa\":\"7694000000\"}"
+        },
+        "verification": {
+          "read": 50662,
+          "incomplete": 2,
+          "notReread": 0,
+          "start": "2026-10-20T15:04:16.641Z",
+          "ledgerFrom": "7694987166",
+          "end": "2026-10-20T15:16:23.782Z"
+        },
+        "completeness": "degraded",
+        "degradedReasons": [
+          "run failed: Error: Request cap 100000 reached",
+          "2 owners read incompletely; their previous positions are kept"
+        ],
+        "errors": [
+          "Error: Request cap 100000 reached"
+        ],
+        "watermarkBefore": {
+          "version": "7694522484",
+          "timestamp": "2026-10-20T14:29:33.997828Z"
+        },
+        "watermarkAfter": {
+          "version": "7694986538",
+          "timestamp": "2026-10-20T15:04:13.348884Z"
+        },
+        "sanity": {
+          "check": "sanity",
+          "ok": null,
+          "detail": "Error: Request cap 100000 reached"
+        }
+      },
+      "totals": {
+        "face": {
+          "positions": 12906,
+          "owners": 12536,
+          "usd": 53331.86802178815,
+          "unpriced": 10221,
+          "ownersMin10": 115
+        },
+        "byStatus": {
+          "recoverable": {
+            "positions": 12906,
+            "owners": 12536,
+            "usd": 50006.67084431939,
+            "unpriced": 10221,
+            "ownersMin10": 111
+          },
+          "team_gated": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "blocked": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "aged": {
+          "ge30": {
+            "positions": 12906,
+            "owners": 12536,
+            "usd": 50006.67084431939,
+            "unpriced": 10221,
+            "ownersMin10": 111
+          },
+          "ge90": {
+            "positions": 12906,
+            "owners": 12536,
+            "usd": 50006.67084431939,
+            "unpriced": 10221,
+            "ownersMin10": 111
+          },
+          "ge180": {
+            "positions": 12896,
+            "owners": 12528,
+            "usd": 49918.69626439213,
+            "unpriced": 10221,
+            "ownersMin10": 110
+          }
+        },
+        "agedEstimated": {
+          "ge30": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge90": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "ge180": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "byAgeBasis": {
+          "onchain_maturity": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "protocol_closure": {
+            "positions": 12906,
+            "owners": 12536,
+            "usd": 50006.67084431939,
+            "unpriced": 10221,
+            "ownersMin10": 111
+          },
+          "position_interaction": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          },
+          "unknown": {
+            "positions": 0,
+            "owners": 0,
+            "usd": 0,
+            "unpriced": 0,
+            "ownersMin10": 0
+          }
+        },
+        "headline": {
+          "positions": 12906,
+          "owners": 12536,
+          "usd": 50006.67084431939,
+          "unpriced": 10221,
+          "ownersMin10": 111
+        },
+        "headlineTopOwnerShare": 0.8651493103890532,
+        "unverified": {
+          "positions": 0,
+          "owners": 0,
+          "usd": 0,
+          "unpriced": 0,
+          "ownersMin10": 0
+        }
+      },
+      "sizeBands": [
+        {
+          "upTo": 1,
+          "positions": 2489
+        },
+        {
+          "upTo": 10,
+          "positions": 82
+        },
+        {
+          "upTo": 100,
+          "positions": 93
+        },
+        {
+          "upTo": 1000,
+          "positions": 19
+        },
+        {
+          "upTo": 10000,
+          "positions": 0
+        },
+        {
+          "upTo": null,
+          "positions": 2
+        }
+      ]
+    },
+    {
       "id": "movement-native-delegation",
       "chain": "movement",
       "title": "Unstaked MOVE never withdrawn",
@@ -4030,11 +4375,11 @@
     }
   ],
   "global": {
-    "headlineUsd": 10009141.8016044,
-    "headlineOwners": 76352,
-    "headlineOwnersMin10": 7979,
-    "recoverableUsd": 15854984.410663681,
-    "requests": 45809,
+    "headlineUsd": 10059148.47244872,
+    "headlineOwners": 88613,
+    "headlineOwnersMin10": 9141,
+    "recoverableUsd": 15904991.081508001,
+    "requests": 100000,
     "requestCap": 100000
   }
 }
