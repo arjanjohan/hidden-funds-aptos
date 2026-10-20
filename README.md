@@ -30,6 +30,7 @@ Sources (evidence for each in [docs/sources.md](docs/sources.md)):
 | `canopy-ended-rewards` | Movement | Canopy staking rewards from reward periods that ended, never claimed |
 
 - **Dashboard:** weekly aggregate snapshot per source. Only totals are published, never addresses.
+- **Protocol coverage** (`/coverage`): every Aptos and Movement protocol we know of (DefiLlama's list plus a few it misses) with its status: counted, dormant, needs a decision, blocked, too small, nothing left behind, not checked yet, or out of scope. The list is `src/shared/protocols.ts`; tests keep it in sync with the sources.
 - **Check:** paste addresses. Your browser reads Aptos mainnet directly; the addresses are not sent to this site.
 
 What counts, how it is aged and how totals are computed: [docs/left-behind.md](docs/left-behind.md). Measurements behind each source: [docs/phase0-report.md](docs/phase0-report.md) and [docs/sources.md](docs/sources.md).

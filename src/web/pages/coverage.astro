@@ -88,7 +88,12 @@ const chainName = { aptos: 'Aptos', movement: 'Movement' } as const;
   .toggle { display: inline-flex; background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 3px; margin: 8px 0 20px; }
   .toggle button { font: inherit; font-size: 14px; border: 0; background: transparent; color: var(--muted); padding: 6px 14px; border-radius: 8px; cursor: pointer; }
   .toggle button[aria-pressed="true"] { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+  .summary { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
   .summary a.card { text-decoration: none; color: inherit; }
+  table { table-layout: fixed; }
+  th:first-child { width: 30%; }
+  th:last-child { width: 7.5em; }
+  td:last-child { white-space: nowrap; }
   .links { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 13px; }
   section { margin-top: 32px; }
 </style>
