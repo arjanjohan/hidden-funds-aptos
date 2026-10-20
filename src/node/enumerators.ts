@@ -704,6 +704,8 @@ const ECONIA_FUNCTIONS: EntryFunction[] = [
     ['market', 'place_market_order_user_entry'], ['market', 'place_limit_order_passive_advance_user_entry'],
     ['market', 'change_order_size_user'], ['market', 'cancel_order_user'], ['market', 'cancel_all_orders_user']]
     .map(([module, name]) => ({ contract: ECONIA, module, name, fromVersion: ECONIA_CHANGES_FROM })),
+  ...['place_limit_order_user_entry_without_deposit', 'place_market_order_user_entry_without_deposit', 'cancel_all_orders']
+    .map(name => ({ contract: KANA_ECONIA_WRAPPER, module: 'wrapper', name, fromVersion: ECONIA_CHANGES_FROM })),
 ];
 
 const econiaSenders = entrySenders('econia-idle-accounts', ECONIA_FUNCTIONS, noContractTotal);
