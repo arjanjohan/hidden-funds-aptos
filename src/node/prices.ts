@@ -1,7 +1,8 @@
 // Identity-bound USD prices. A quote older than 7 days is not a price.
 import { PRICE_MAX_AGE_SECS, type PriceBook } from '../shared/accounting.ts';
 import { APT, MOVE } from '../shared/sources/delegation.ts';
-import { WH_USDC } from '../shared/sources/echelon-sunset.ts';
+import { AMAPT_FA, MOD, WH_USDC } from '../shared/sources/echelon-frozen.ts';
+import { KAPT } from '../shared/sources/kofi-receipts.ts';
 import { BTCB, CAKE, LZ_BRIDGE } from '../shared/sources/layerzero-claimable.ts';
 import { THL } from '../shared/sources/thala-thl.ts';
 
@@ -18,6 +19,10 @@ const COINGECKO = [
   { asset: CAKE, id: 'pancakeswap-token', decimals: 8 },
   { asset: BTCB, id: 'bitcoin-avalanche-bridged-btc-b', decimals: 8 },
   { asset: WH_USDC, id: 'usd-coin-wormhole-from-ethereum', decimals: 6 },
+  { asset: MOD, id: 'move-dollar', decimals: 8 },
+  { asset: KAPT, id: 'kofi-aptos', decimals: 8 },
+  // CoinGecko lists the amAPT coin; this is its paired fungible asset. stAPT has an id, but its quote is months old.
+  { asset: AMAPT_FA, id: 'amnis-aptos', decimals: 8 },
 ];
 
 export async function fetchPrices(nowSecs: number): Promise<{ prices: PriceBook; errors: string[] }> {

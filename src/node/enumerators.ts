@@ -2,7 +2,7 @@
 import { mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
-import { ECHELON, SUNSET_MARKETS } from '../shared/sources/echelon-sunset.ts';
+import { ECHELON, FROZEN_MARKETS } from '../shared/sources/echelon-frozen.ts';
 import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
 import { CAKE, type ClaimableHint, claimableHandle, LZ_COINS } from '../shared/sources/layerzero-claimable.ts';
@@ -586,16 +586,16 @@ export const pancakeFarmEnumerator = entrySenders('pancake-farm-ended-rewards', 
     return { check: 'pending CAKE found <= CAKE held by MasterChef', ok: found <= cakeLeft, detail: `${found} of ${cakeLeft} (${pct(found, cakeLeft)})` };
   });
 
-// Echelon suppliers at any time: a frozen market still accepts supply, so a late supplier counts too. Withdrawals mark a
-// supplier changed. Suppliers with nothing in the sunset markets are read once (zero: 'never').
-export const echelonSunsetEnumerator = entrySenders('echelon-sunset-markets', [
-  { contract: ECHELON, module: 'scripts', name: 'supply' },
-  { contract: ECHELON, module: 'scripts', name: 'withdraw' },
-  { contract: ECHELON, module: 'scripts', name: 'withdraw_all' }],
+// Echelon suppliers at any time, Coin and fungible-asset markets: a frozen market still accepts supply, so a late
+// supplier counts too. Withdrawals and repayments mark a supplier changed (a supplier in debt counts once it repays).
+// Suppliers with nothing counted are read once (zero: 'never').
+export const echelonFrozenEnumerator = entrySenders('echelon-frozen-markets',
+  ['supply', 'withdraw', 'withdraw_all', 'repay', 'repay_all', 'supply_fa', 'withdraw_fa', 'withdraw_all_fa', 'repay_fa', 'repay_all_fa']
+    .map(name => ({ contract: ECHELON, module: 'scripts', name })),
   async (chain, ledger, positions) => {
     const parts: string[] = [];
     let ok = true;
-    for (const m of SUNSET_MARKETS) {
+    for (const m of FROZEN_MARKETS) {
       const [[shares], [num, den]] = await Promise.all([
         chain.view(`${ECHELON}::lending::market_total_shares`, [m.market], [], ledger.version),
         chain.view(`${ECHELON}::lending::exchange_rate`, [m.market], [], ledger.version),
@@ -605,7 +605,8 @@ export const echelonSunsetEnumerator = entrySenders('echelon-sunset-markets', [
       ok &&= found <= supplied;
       parts.push(`${m.label} ${pct(found, supplied)} of supply found`);
     }
-    // Coverage below 100% is supply held by contracts that never call scripts::supply themselves (vaults, strategies).
+    // Coverage stays below 100%: suppliers in debt are left out, and so is supply held by contracts that never call
+    // scripts::supply* themselves (vaults, strategies).
     return { check: 'supply found per market <= market supply (shares x exchange rate); coverage shown', ok, detail: parts.join('; ') };
   });
 
@@ -623,4 +624,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonSunsetEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator];

@@ -20,7 +20,7 @@ Sources (evidence for each in [docs/sources.md](docs/sources.md)):
 | `merkle-vemkl` | Aptos | Merkle Trade staked MKL never unlocked (unlock works any time since the wind-down) |
 | `pancake-syrup-ended` | Aptos | CAKE still staked in PancakeSwap syrup pools that ended in 2023-2024 |
 | `pancake-farm-ended-rewards` | Aptos | CAKE and APT that PancakeSwap farms paid until emissions ended in March 2025, never harvested |
-| `echelon-sunset-markets` | Aptos | Supply left in Echelon's sunset markets for bridged USDC, USDT and WETH (frozen May 2025) |
+| `echelon-frozen-markets` | Aptos | Supply left in the 21 Echelon lending markets that Echelon froze (May 2025 to October 2026), by suppliers without Echelon debt |
 | `topaz-bids` | Aptos | APT still escrowed in expired bids on Topaz, an NFT marketplace that closed in August 2024 |
 | `layerzero-claimable` | Aptos | Tokens bridged in through LayerZero (lzUSDC, lzUSDT, lzWETH, lzWBTC, lzUSDD, CAKE, BTC.b) that arrived but were never claimed |
 | `movement-native-delegation` | Movement | Unstaked MOVE whose lockup ended, never withdrawn |
