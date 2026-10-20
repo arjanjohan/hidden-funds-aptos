@@ -8,7 +8,7 @@ import type { Memo, Position, SourceDef } from '../shared/types.ts';
 const DAY_MS = 86_400_000;
 /** Longest time a known position goes without a re-read. Monthly owners are normally re-read every 28 days (see
  *  `spread`); 35 days is the hard limit while they settle into their week. */
-export const AGE_LIMIT_MS = { every_run: 0, weekly: 7 * DAY_MS, monthly: 35 * DAY_MS } as const;
+export const AGE_LIMIT_MS = { every_run: 0, weekly: 7 * DAY_MS, monthly: 35 * DAY_MS, never: Infinity } as const;
 
 /** Monthly re-reads are spread over 4 weekly runs: from day 21, an owner is due in the week matching a bucket taken
  *  from its address, so each run carries about a quarter of them instead of all at once. */

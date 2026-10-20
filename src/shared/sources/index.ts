@@ -8,6 +8,7 @@ import { kofiWithdrawals } from './kofi-withdrawals.ts';
 import { layerzeroClaimable } from './layerzero-claimable.ts';
 import { merkleMklp } from './merkle-mklp.ts';
 import { merkleVemkl } from './merkle-vemkl.ts';
+import { pancakeFarmEndedRewards } from './pancake-farm.ts';
 import { pancakeSyrupEnded } from './pancake-syrup.ts';
 import { thalaVestingMatured, thalaVethlExpired } from './thala-thl.ts';
 import { thalaUnstake } from './thala-unstake.ts';
@@ -15,5 +16,5 @@ import { topazBids } from './topaz-bids.ts';
 import { tortugaTickets } from './tortuga-tickets.ts';
 import { trufinUnlocks } from './trufin-unlocks.ts';
 
-export const SOURCES: SourceDef<any>[] = [delegation, delegationInactiveValidator, thalaUnstake, kofiWithdrawals, tortugaTickets, amnisWithdrawals, thalaVethlExpired, thalaVestingMatured, trufinUnlocks, kofiReceipts, merkleMklp, merkleVemkl, layerzeroClaimable, pancakeSyrupEnded, topazBids,
+export const SOURCES: SourceDef<any>[] = [delegation, delegationInactiveValidator, thalaUnstake, kofiWithdrawals, tortugaTickets, amnisWithdrawals, thalaVethlExpired, thalaVestingMatured, trufinUnlocks, kofiReceipts, merkleMklp, merkleVemkl, layerzeroClaimable, pancakeSyrupEnded, pancakeFarmEndedRewards, topazBids,
   movementDelegation, movementInactiveValidator, canopyEndedRewards];

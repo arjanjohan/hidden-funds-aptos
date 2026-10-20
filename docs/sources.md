@@ -187,7 +187,6 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Echelon farming rewards (Aptos):** 5 of 7 reward programs have ended: USDC 2025-08-23, Amnis amAPT 2025-10-13, Kofi kAPT 2026-02-21, Goblin stAPT 2026-04-12, Thala sthAPT 2026-08-17. Unclaimed amounts are bounded by what the package holds to pay them: 3,540 USDC and 95 kAPT (~$3.6K). Reading every Echelon supplier for that is not worth it. Skipped.
 - **Echelon farming rewards (Movement):** the only reward ("Move Coin") last ran 2026-05-18 → 06-02, so every unclaimed reward is from an ended period. But Echelon holds only 296K MOVE (~$2.1K) to pay them, which caps the total. Too small for a new enumerator (stakers are senders of Echelon's `scripts::supply*`).
 - **Meridian farming (Movement):** staked LP is live principal; the extra rewards are MOVE. Not sized further.
-- **PancakeSwap (Aptos) MasterChef farms:** CAKE emissions ended 2025-03-16 (`end_timestamp`; every pool's alloc point is 0). The CAKE single-stake pool is empty. The other 28 pools hold LP, which is live liquidity (R4). Only the unclaimed CAKE rewards and APT incentive count, and they are bounded by what MasterChef still holds: 5,771 CAKE (~$12.5K) and 12,988 APT (~$9.9K). 10 of 10 sampled farmers had already withdrawn. Finding the rest means reading ~30K depositors (60–100K requests) for at most ~$22K. Deferred.
 - **AUX Exchange:** the team ceased development on 2023-03-17 (status update in its GitHub repo), but aux.exchange still loads. Its 69 AMM pools hold ~2,400 APT plus small stablecoin and meme-coin reserves (~$5K in total), and the CLOB vault took only 2,796 deposits ever. LP stays withdrawable and the site is up, so it is not stranded. Skipped.
 - **Mirage Protocol (Aptos and Movement, mUSD vaults):** the team reportedly announced its closure (Cryptorank, pointing to mirage.money/vaults). DefiLlama shows ~$714 of TVL left. Skipped.
 - **Yuzu (Movement):** the only whitelisted reward token is MOVE; incentives are worth too little to track.
@@ -309,6 +308,20 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Enumeration size (anonymous indexer, 2026-10-19):** 32,900 deposits by 14,589 depositors up to version 444,552,000, when the last CAKE pool ended. Later deposits only went to the Gui Inu pools. The first run reads 6 `UserInfo` per depositor (~88K requests), so it needs its own run; later runs read only the pools each depositor was found in.
 - **Sample (the earliest 400 depositors):** 40 still hold CAKE (10%), 1,720 CAKE in total, median 1.5 CAKE, 13 of 40 with ≥ $10. That suggests ~1,500 stakers across all depositors; the sample leans to the early pools.
 - **Published (CI run, 2026-10-19):** complete. **$130.3K** of CAKE, 3,781 stakers, 377 with ≥ $10; the largest holds 28%. 7,675 positions: 3,844 stakes plus 3,831 pending rewards in unpriced tokens. Sanity: stake found per pool = 99.98–100% of each pool's `total_staked_token`. First run: ~93.8K requests (330 indexer pages, 14,589 depositors).
+
+## pancake-farm-ended-rewards
+
+- **What:** PancakeSwap (Aptos) farm rewards never harvested. MasterChef (`0x7968…::masterchef`) stopped CAKE emissions on 2025-03-16 (`end_timestamp`; every pool's alloc point is 0). The CAKE a staked LP earned until then, and the APT incentive paid with it, wait in MasterChef until the farmer harvests.
+  - Only the rewards count. The staked LP is live liquidity (R4).
+- **Read:** the farmer's `PoolUserInfo` (pids and a `UserInfo` table), then per staked pool:
+  - pending CAKE = `amount × acc_cake_per_share / 1e12 − reward_debt` (`derived_math`; `pending_cake` is public but not a view). The 1e12 precision checks out: farmers who harvested after the end come out at exactly 0.
+  - the APT incentive from the `get_pending_apt<LP>` view.
+  - A reward MasterChef cannot pay (more than its CAKE or APT balance) is `blocked` (`reward_unfunded`).
+- **Recovery:** `masterchef::withdraw<LP>(0)` harvests and leaves the LP staked. Simulated: it paid exactly the computed 78,858 raw CAKE and the 33,565 raw APT from `get_pending_apt`.
+- **Enumeration:** senders of `masterchef::deposit` up to version 2,484,045,000 (the end of emissions); a later deposit harvests.
+- **Size:** bounded by what MasterChef holds: 5,771 CAKE (~$12.5K) and 12,988 APT (~$9.9K).
+  - Sample (394 depositors across its history, 2026-10-19): 57 (14%) have rewards, 57.5 CAKE + 111.3 APT. Scaled to an estimated ~25K depositors, that's roughly 3,600 CAKE and 7,000 APT (~$13K).
+- **Cost:** ~3.9 requests per depositor, so the first run is ~100K requests and needs its own run. Nothing accrues after the end, so an owner with nothing pending is never re-read (`zero: 'never'`); owners with rewards are re-read monthly.
 
 ## topaz-bids
 

@@ -62,6 +62,22 @@ describe('runSource', () => {
     expect(run.degradedReasons.join()).toMatch(/incompletely/);
   });
 
+  it('stops at the request cap even when the source catches the reader error', async () => {
+    const capHit = { hit: false };
+    let reads = 0;
+    const capped: ChainReader = { ...chain(), view: async () => { throw new RequestCapReached('cap'); } };
+    const def: SourceDef = { ...source(async () => ({ positions: [], complete: true, errors: [], ledgerVersion: '1' })),
+      read: async (ctx, owner) => {
+        reads++;
+        try { await ctx.chain.view('0x1::a::b', [owner]); return { positions: [], complete: true, errors: [], ledgerVersion: '1' }; }
+        catch (err) { return { positions: [], complete: false, errors: [String(err)], ledgerVersion: '1' }; }
+      } };
+    const { run } = await runSource(def, enumerator([addr(1), addr(2), addr(3), addr(4), addr(5), addr(6), addr(7), addr(8), addr(9), addr('a1')]), new State(':memory:'), capped, capHit);
+    expect(capHit.hit).toBe(true);
+    expect(reads).toBeLessThan(10);
+    expect(run.degradedReasons.join()).toMatch(/request cap/);
+  });
+
   it('stops at the request cap and says so', async () => {
     const capHit = { hit: false };
     const { run } = await runSource(source(async () => { throw new RequestCapReached('cap'); }), enumerator([addr(1), addr(2)]),
@@ -101,6 +117,16 @@ describe('state', () => {
     expect(due).toContain(addr(1));      // non-zero
     expect(due).not.toContain(addr(2));  // zero, read just now
     expect(due).toContain(addr(3));      // never read
+  });
+
+  it('never re-reads a zero owner of a never-refresh source unless the enumerator reports it', () => {
+    const state = new State(':memory:');
+    const def = { ...source(async () => { throw new Error(); }), refresh: { nonZero: 'monthly', zero: 'never' } } as SourceDef;
+    state.upsertCandidates('t', [{ owner: addr(1) }], '2026-01-01T00:00:00Z');
+    state.recordRead('t', addr(1), [], true, '2026-01-01T00:00:00Z');
+    expect(state.due(def, Date.parse('2027-01-01T00:00:00Z'), new Set())).toEqual([]);
+    state.upsertCandidates('t', [{ owner: addr(1) }], '2027-01-01T00:00:00Z', true);
+    expect(state.due(def, Date.parse('2027-01-01T00:00:00Z'), new Set()).map(d => d.owner)).toEqual([addr(1)]);
   });
 
   it('spreads monthly re-reads over four weekly runs and reads everyone within 35 days', () => {
