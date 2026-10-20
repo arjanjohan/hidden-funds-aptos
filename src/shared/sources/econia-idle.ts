@@ -9,6 +9,8 @@ import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
 import { APT } from './delegation.ts';
 
 export const ECONIA = '0xc0deb00c405f84c85dc13442e305df75d1288100cdd82675695f6148c7ece51c';
+/** Kana Labs' Econia trading wrapper: registers and deposits into the caller's own (custodian 0) market accounts. */
+export const KANA_ECONIA_WRAPPER = '0x9538c839fe490ccfaf32ad9f7491b5e84e610ff6edc110ff883f06ebde82463d';
 const SOURCE = 'econia-idle-accounts';
 /** End of the day Econia Labs archived the repository (the banner gives the date only), so the age is never overstated. */
 export const ECONIA_ARCHIVED_AT = '2025-09-08T23:59:59Z';
@@ -51,6 +53,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
           grossClaim: value, expectedPayout: value, payoutBasis: 'view',
           status: 'recoverable', blockers: [],
           confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
+          // Arguments are (market id, amount): simulated; the reverse order aborts.
           steps: [{ function: `${ECONIA}::user::withdraw_to_coinstore<${coin}>`, arguments: [a.market_id, amount.toString()], prerequisites: [], expectedOutputs: value }],
         });
       }
