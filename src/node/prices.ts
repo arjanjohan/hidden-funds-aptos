@@ -1,10 +1,13 @@
 // Identity-bound USD prices. A quote older than 7 days is not a price.
 import { PRICE_MAX_AGE_SECS, type PriceBook } from '../shared/accounting.ts';
+import { AMNIS } from '../shared/sources/amnis-withdrawals.ts';
 import { APT, MOVE } from '../shared/sources/delegation.ts';
-import { AMAPT_FA, MOD, WH_USDC } from '../shared/sources/echelon-frozen.ts';
+import { AMAPT_FA, MOD, STAPT, STHAPT, WH_USDC } from '../shared/sources/echelon-frozen.ts';
 import { KAPT } from '../shared/sources/kofi-receipts.ts';
 import { BTCB, CAKE, LZ_BRIDGE } from '../shared/sources/layerzero-claimable.ts';
 import { THL } from '../shared/sources/thala-thl.ts';
+import { THALA_LSD } from '../shared/sources/thala-unstake.ts';
+import type { ChainReader } from '../shared/types.ts';
 
 const COINGECKO = [
   { asset: APT, id: 'aptos', decimals: 8 },
@@ -21,11 +24,11 @@ const COINGECKO = [
   { asset: WH_USDC, id: 'usd-coin-wormhole-from-ethereum', decimals: 6 },
   { asset: MOD, id: 'move-dollar', decimals: 8 },
   { asset: KAPT, id: 'kofi-aptos', decimals: 8 },
-  // CoinGecko lists the amAPT coin; this is its paired fungible asset. stAPT has an id, but its quote is months old.
+  // CoinGecko lists the amAPT coin; this is its paired fungible asset.
   { asset: AMAPT_FA, id: 'amnis-aptos', decimals: 8 },
 ];
 
-export async function fetchPrices(nowSecs: number): Promise<{ prices: PriceBook; errors: string[] }> {
+export async function fetchPrices(nowSecs: number, aptos: ChainReader): Promise<{ prices: PriceBook; errors: string[] }> {
   const prices: PriceBook = {};
   const errors: string[] = [];
   try {
@@ -43,5 +46,27 @@ export async function fetchPrices(nowSecs: number): Promise<{ prices: PriceBook;
   } catch (err) {
     errors.push(`coingecko: ${String(err).slice(0, 200)}`);
   }
+  if (prices[APT]) await redemptionPrices(prices, errors, aptos);
   return { prices, errors };
+}
+
+/** Staked-APT receipts whose market quote is stale (stAPT's last CoinGecko quote is from 2026-09-03; sthAPT has no
+ *  verified id), valued at redemption: the on-chain exchange rate x the APT quote, dated like that quote.
+ *  - stAPT unstakes to amAPT at stapt_price (1e8 scale); amAPT redeems 1:1 for APT (simulated, amnis-withdrawals).
+ *  - sthAPT unstakes to thAPT at thAPT_sthAPT_exchange_rate (thAPT staked / sthAPT supply); thAPT redeems for APT
+ *    less unstake_APT_fee_bps. */
+async function redemptionPrices(prices: PriceBook, errors: string[], aptos: ChainReader) {
+  const apt = prices[APT];
+  try {
+    const [[stApt], [thApt, sthApt], [feeBps]] = await Promise.all([
+      aptos.view(`${AMNIS}::stapt_token::stapt_price`, []),
+      aptos.view(`${THALA_LSD}::staking::thAPT_sthAPT_exchange_rate`, []),
+      aptos.view(`${THALA_LSD}::staking::unstake_APT_fee_bps`, []),
+    ]);
+    prices[STAPT] = { usd: apt.usd * Number(stApt) / 1e8, decimals: 8, at: apt.at, source: 'derived: Amnis stapt_price x APT (coingecko)' };
+    prices[STHAPT] = { usd: apt.usd * Number(thApt) / Number(sthApt) * (1 - Number(feeBps) / 10_000), decimals: 8, at: apt.at,
+      source: 'derived: Thala thAPT_sthAPT_exchange_rate less unstake_APT_fee_bps x APT (coingecko)' };
+  } catch (err) {
+    errors.push(`staked-APT redemption rates: ${String(err).slice(0, 200)}`);
+  }
 }

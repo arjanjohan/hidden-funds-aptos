@@ -142,7 +142,7 @@ async function main() {
   const previous: Snapshot | undefined = existsSync(OUT) ? JSON.parse(readFileSync(OUT, 'utf8')) : undefined;
   const capHit = { hit: false };
   const now = Math.floor(Date.now() / 1000);
-  const { prices, errors: priceErrors } = await fetchPrices(now);
+  const { prices, errors: priceErrors } = await fetchPrices(now, chains.aptos);
   // Market test for receipt tokens; without a key, receipt verdicts stay unknown.
   const panora = process.env.PANORA_API_KEY ? panoraProvider(process.env.PANORA_API_KEY, prices[APT]?.usd ?? null) : undefined;
 
