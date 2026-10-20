@@ -7,11 +7,19 @@ import { iso, positionIds } from '../accounting.ts';
 import { normalizeAddress, once } from '../chain.ts';
 import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
 import { APT } from './delegation.ts';
+import { WH_USDC } from './echelon-frozen.ts';
+import { LZ_BRIDGE } from './layerzero-claimable.ts';
 
 export const ECONIA = '0xc0deb00c405f84c85dc13442e305df75d1288100cdd82675695f6148c7ece51c';
 /** Kana Labs' Econia trading wrapper: registers and deposits into the caller's own (custodian 0) market accounts. */
 export const KANA_ECONIA_WRAPPER = '0x9538c839fe490ccfaf32ad9f7491b5e84e610ff6edc110ff883f06ebde82463d';
 const SOURCE = 'econia-idle-accounts';
+/** Econia's coin markets (ids 1 to 13; from 14 on every market has a generic base: Kana perps, then Fliq questions). */
+export const ECONIA_COIN_MARKETS = Array.from({ length: 13 }, (_, i) => String(i + 1));
+export const GUI = '0xe4ccb6d39136469f376242c31b34d10515c8eaaa38092f804db8e08a8f53c5b2::assets_v1::EchoCoin002';
+export const EDOG = '0x5e975e7f36f2658d4cf146142899c659464a3e0d90f0f4d5f8b2447173c06ef6::EDOG::EDOG';
+/** Every coin those markets trade, as recorded in positions (registry, 2026-10-20). */
+export const ECONIA_COINS = [APT, WH_USDC, `${LZ_BRIDGE}::asset::USDC`, `${LZ_BRIDGE}::asset::USDT`, `${LZ_BRIDGE}::asset::WETH`, GUI, EDOG];
 /** End of the day Econia Labs archived the repository (the banner gives the date only), so the age is never overstated. */
 export const ECONIA_ARCHIVED_AT = '2025-09-08T23:59:59Z';
 const APT_COIN = `${normalizeAddress('0x1')}::aptos_coin::AptosCoin`;

@@ -4,7 +4,7 @@ import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-with
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
 import { AAVE, type AaveHint, aaveReserves, findFreeze } from '../shared/sources/aave-frozen.ts';
 import { ECHELON, FROZEN_MARKETS } from '../shared/sources/echelon-frozen.ts';
-import { ECONIA, KANA_ECONIA_WRAPPER } from '../shared/sources/econia-idle.ts';
+import { ECONIA, ECONIA_COIN_MARKETS, KANA_ECONIA_WRAPPER } from '../shared/sources/econia-idle.ts';
 import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
 import { CAKE, type ClaimableHint, claimableHandle, LZ_COINS } from '../shared/sources/layerzero-claimable.ts';
@@ -692,9 +692,11 @@ const noContractTotal: Enumerator['sanity'] = async () =>
 // registered are out of scope, and custodian accounts are not counted). Another integration that registers accounts
 // through its own entry functions is missed until it is listed here. Deposits, withdrawals and orders mark an owner
 // changed; those only matter after an owner's first read, which comes after this source was added (2026-10-20), so
-// their scan starts there.
+// their scan starts there. A fill of a resting order is sent by the taker, so makers are taken from the coin markets'
+// open orders each run: current makers and last run's are re-read (an account with open orders does not count, and the
+// one whose order filled is read again in the run after).
 const ECONIA_CHANGES_FROM = 7_696_900_000;
-export const econiaIdleEnumerator = entrySenders('econia-idle-accounts', [
+const ECONIA_FUNCTIONS: EntryFunction[] = [
   ...['register_market_account', 'register_market_account_generic_base'].map(name => ({ contract: ECONIA, module: 'user', name })),
   ...['deposit_and_register_base', 'deposit_and_register_quote', 'place_limit_order_user_entry', 'place_market_order_user_entry']
     .map(name => ({ contract: KANA_ECONIA_WRAPPER, module: 'wrapper', name })),
@@ -702,7 +704,27 @@ export const econiaIdleEnumerator = entrySenders('econia-idle-accounts', [
     ['market', 'place_market_order_user_entry'], ['market', 'place_limit_order_passive_advance_user_entry'],
     ['market', 'change_order_size_user'], ['market', 'cancel_order_user'], ['market', 'cancel_all_orders_user']]
     .map(([module, name]) => ({ contract: ECONIA, module, name, fromVersion: ECONIA_CHANGES_FROM })),
-], noContractTotal);
+];
+
+const econiaSenders = entrySenders('econia-idle-accounts', ECONIA_FUNCTIONS, noContractTotal);
+export const econiaIdleEnumerator: Enumerator = {
+  ...econiaSenders,
+  scope: `${econiaSenders.scope}; plus owner-controlled makers with open orders in coin markets ${ECONIA_COIN_MARKETS[0]}-${ECONIA_COIN_MARKETS.at(-1)}`,
+  async run(chain, cursor) {
+    let stored: { s?: string; m?: string[] } = {};
+    try { stored = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: rescan */ }
+    if (typeof stored !== 'object' || stored === null) stored = {};
+    const sent = await senders(chain, ECONIA_FUNCTIONS, stored.s);
+    const makers = new Set<string>();
+    for (const market of ECONIA_COIN_MARKETS) {
+      const [orders] = await chain.view(`${ECONIA}::market::get_open_orders_all`, [market]);
+      for (const o of [...orders.asks, ...orders.bids]) if (o.custodian_id === '0') makers.add(normalizeAddress(o.user));
+    }
+    const owners = new Set([...sent.candidates.map(c => c.owner), ...makers, ...(stored.m ?? [])]);
+    return { candidates: [...owners].map(owner => ({ owner })), cursor: JSON.stringify({ s: sent.cursor, m: [...makers].sort() }),
+      pages: sent.pages + ECONIA_COIN_MARKETS.length, incremental: true };
+  },
+};
 
 export const thalaVethlEnumerator = entrySenders('thala-vethl-expired',
   [{ contract: THALA_VE, module: 'scripts', name: 'lock' }, { contract: THALA_VEST, module: 'farming_vesting', name: 'convert_to_vethl' }],

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RequestCapReached } from '../src/node/client.ts';
-import { aaveFrozenEnumerator, type Enumerator } from '../src/node/enumerators.ts';
+import { aaveFrozenEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
 import { fetchPrices } from '../src/node/prices.ts';
 import { keepPrevious, runSource } from '../src/node/snapshot.ts';
 import { State } from '../src/node/state.ts';
@@ -330,5 +330,23 @@ describe('aave enumerator', () => {
     const r = await aaveFrozenEnumerator.run(aave(true, { archive: false }), undefined);
     expect(r.candidates[0].hint).toMatchObject({ f: { [addr('e1')]: null } });
     expect(JSON.parse(r.cursor!)).toEqual({ f: {} });
+  });
+});
+
+describe('econia enumerator', () => {
+  // Owner 1 rests an ask in market 7 (owner-controlled); owner 9's order is a custodian's and is ignored.
+  const econia = (makers: number[]) => fakeChain({
+    gql: () => ({ user_transactions: [] }),
+    view: (_fn, args) => [{ asks: args[0] === '7' ? makers.map(n => ({ user: addr(n), custodian_id: '0' })) : [], bids: args[0] === '7' ? [{ user: addr(9), custodian_id: '6' }] : [] }],
+  });
+
+  it('re-reads makers with open orders, and last run\'s makers once more after their orders are gone', async () => {
+    const first = await econiaIdleEnumerator.run(econia([1]), undefined);
+    expect(first.candidates).toEqual([{ owner: addr(1) }]);
+    expect(first.incremental).toBe(true);
+    // The order filled (the taker sent that transaction): owner 1 is no longer a maker but is read once more.
+    const second = await econiaIdleEnumerator.run(econia([]), first.cursor);
+    expect(second.candidates).toEqual([{ owner: addr(1) }]);
+    expect((await econiaIdleEnumerator.run(econia([]), second.cursor)).candidates).toEqual([]);
   });
 });

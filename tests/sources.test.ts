@@ -4,7 +4,8 @@ import { AAVE, aaveFrozenReserves, AAVE_UNFROZEN_AT, USDC } from '../src/shared/
 import { canopyEndedRewards } from '../src/shared/sources/canopy-rewards.ts';
 import { APT, delegation, MOVE, movementDelegation } from '../src/shared/sources/delegation.ts';
 import { echelonFrozenMarkets, FROZEN_MARKETS } from '../src/shared/sources/echelon-frozen.ts';
-import { ECONIA, ECONIA_ARCHIVED_AT, econiaIdleAccounts } from '../src/shared/sources/econia-idle.ts';
+import { ECONIA, ECONIA_ARCHIVED_AT, ECONIA_COINS, econiaIdleAccounts } from '../src/shared/sources/econia-idle.ts';
+import { ASSETS } from '../src/shared/assets.ts';
 import { delegationInactiveValidator } from '../src/shared/sources/delegation-inactive.ts';
 import { KAPT, kofiReceipts, STKAPT } from '../src/shared/sources/kofi-receipts.ts';
 import { MARKET_MAX_AGE_SECS } from '../src/shared/market.ts';
@@ -810,6 +811,10 @@ describe('econia idle accounts', () => {
     expect(r.positions.map(p => [p.asset, p.expectedPayout[0].raw])).toEqual([[APT, '200000000'], [LZUSDC, '5000445704']]);
     expect(r.positions[0]).toMatchObject({ locator: 'market-7', claimableSince: ECONIA_ARCHIVED_AT, ageBasis: 'protocol_closure', status: 'recoverable',
       steps: [{ function: `${ECONIA}::user::withdraw_to_coinstore<${addr(1)}::aptos_coin::AptosCoin>`, arguments: ['7', '200000000'] }] });
+  });
+
+  it('has display metadata (decimals) for every coin the coin markets trade', () => {
+    expect(ECONIA_COINS.filter(c => !ASSETS[c])).toEqual([]);
   });
 
   it('leaves out accounts with open orders, custodian accounts, a generic base and empty sides', async () => {
