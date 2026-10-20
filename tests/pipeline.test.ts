@@ -92,11 +92,14 @@ describe('market evidence', () => {
     const now = Date.parse('2026-10-20T00:00:00Z') / 1000;
     const kofi = { ...source(async () => { throw new Error(); }), id: 'k', usesMarketQuotes: true } as SourceDef;
     const plain = { ...source(async () => { throw new Error(); }), id: 'p' } as SourceDef;
-    const prev = (end: string) => ({ run: { verification: { end } } }) as any;
-    expect(keepPrevious(plain, prev('2026-09-01T00:00:00Z'), 'x', now)).toBe(true);
-    expect(keepPrevious(kofi, prev('2026-10-18T00:00:00Z'), 'x', now)).toBe(true);
-    expect(keepPrevious(kofi, prev('2026-10-01T00:00:00Z'), 'x', now)).toBe(false);
-    expect(keepPrevious(kofi, undefined, 'x', now)).toBe(false);
+    const prev = { run: { verification: { end: '2026-10-19T00:00:00Z' } } } as any;
+    const quotes = (...at: string[]) => ({ kapt: Object.fromEntries(at.map((t, i) => [String(i), { verdict: 'usable' as const, quotedAt: t }])) });
+    expect(keepPrevious(plain, prev, 'x', now)).toBe(true);
+    expect(keepPrevious(kofi, prev, 'x', now, quotes('2026-10-18T00:00:00Z', '2026-10-17T00:00:00Z'))).toBe(true);
+    // The run ended recently, but one quote it relied on is older than 7 days: decided by the quote, not the run.
+    expect(keepPrevious(kofi, prev, 'x', now, quotes('2026-10-18T00:00:00Z', '2026-10-12T00:00:00Z'))).toBe(false);
+    expect(keepPrevious(kofi, prev, 'x', now, {})).toBe(false);
+    expect(keepPrevious(kofi, undefined, 'x', now, quotes('2026-10-18T00:00:00Z'))).toBe(false);
   });
 
   it('reports a run whose receipt positions have no market quote as degraded', async () => {

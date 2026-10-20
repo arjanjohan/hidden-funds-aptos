@@ -13,7 +13,7 @@ import { ENUMERATORS, type Enumerator } from './enumerators.ts';
 import type { Snapshot, SnapshotSource, SourceRun } from '../shared/snapshot.ts';
 import { fetchPrices } from './prices.ts';
 import { panoraProvider } from './panora.ts';
-import { freshMarkets, MARKET_MAX_AGE_SECS, type MarketProvider } from '../shared/market.ts';
+import { freshMarkets, MARKET_MAX_AGE_SECS, type MarketProvider, type MarketTable } from '../shared/market.ts';
 import { APT } from '../shared/sources/delegation.ts';
 import { AGE_LIMIT_MS, State } from './state.ts';
 
@@ -127,12 +127,13 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
 }
 
 /** In a run limited to one source (`--source`), whether another source's previous result can be copied unchanged.
- *  Not when its positions rest on market quotes that have expired since it last ran: then it is re-run too. */
-export function keepPrevious(def: SourceDef<any>, prev: SnapshotSource | undefined, only: string | undefined, nowSecs: number): boolean {
+ *  Not when its positions rest on market quotes and the oldest quote the previous snapshot published has expired
+ *  (quotes are taken during a run, before it ends): then it is re-run too. */
+export function keepPrevious(def: SourceDef<any>, prev: SnapshotSource | undefined, only: string | undefined, nowSecs: number, markets?: MarketTable): boolean {
   if (!only || def.id === only) return false;
   if (!def.usesMarketQuotes) return true;
-  const lastRun = prev?.run.verification.end ?? prev?.lastSuccessAt;
-  return !!lastRun && nowSecs - Date.parse(lastRun) / 1000 <= MARKET_MAX_AGE_SECS;
+  const quoted = Object.values(markets ?? {}).flatMap(b => Object.values(b).map(v => Date.parse(v.quotedAt) / 1000));
+  return !!prev && quoted.length > 0 && nowSecs - Math.min(...quoted) <= MARKET_MAX_AGE_SECS;
 }
 
 async function main() {
@@ -150,7 +151,7 @@ async function main() {
     const en = ENUMERATORS.find(e => e.sourceId === def.id);
     if (!en) throw new Error(`No enumerator for ${def.id}`);
     const prev = previous?.sources.find(s => s.id === def.id);
-    if (ONLY && def.id !== ONLY && keepPrevious(def, prev, ONLY, now)) { if (prev) sources.push(prev); continue; }
+    if (ONLY && def.id !== ONLY && keepPrevious(def, prev, ONLY, now, previous?.markets)) { if (prev) sources.push(prev); continue; }
     console.error(`${def.id}: start`);
     // The cap only limits keyed Aptos requests, so Movement sources still run after it is hit.
     const { run, ledger } = capHit.hit && def.chain === 'aptos'
