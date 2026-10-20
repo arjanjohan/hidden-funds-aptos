@@ -21,13 +21,14 @@ export const SUNSET_MARKETS = [
   { label: 'whWETH', market: '0x114ee519ffa1e8697784bd1a350822cb37601a1476289051b8295165597a4538', asset: WH_WETH, frozenAt: '2025-05-17T03:22:06Z' },
 ];
 
-/** A market's state: still frozen (a market Echelon reopened is live again and does not count), and its cash, which
- *  bounds what lenders can take out now. */
-function marketState(ctx: ReadContext, market: string): Promise<{ frozen: boolean; cash: bigint }> {
+/** A market's state: still frozen (a market Echelon reopened is live again and does not count), its cash (what
+ *  lenders can take out now) and its supply value (cash + borrows - reserve: what all lenders are owed). */
+function marketState(ctx: ReadContext, market: string): Promise<{ frozen: boolean; cash: bigint; supply: bigint }> {
   return once(ctx, `echelon-market:${market}:${ctx.ledger.version}`, async () => {
     const m = await ctx.chain.resource(market, `${ECHELON}::lending::Market`, ctx.ledger.version);
     if (!m) throw new Error(`Echelon market ${market} missing`);
-    return { frozen: m.collateral_factor_bps === '0' && m.borrow_cap === '0', cash: BigInt(m.total_cash) };
+    return { frozen: m.collateral_factor_bps === '0' && m.borrow_cap === '0', cash: BigInt(m.total_cash),
+      supply: BigInt(m.total_cash) + BigInt(m.total_liability) - BigInt(m.total_reserve) };
   });
 }
 
@@ -46,9 +47,11 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
         ctx.chain.view(`${ECHELON}::lending::account_withdrawable_coins`, [owner, m.market], [], version),
       ]);
       if (BigInt(coins) === 0n) return null;
-      // account_withdrawable_coins is a health limit (u64::MAX without debt), not a cash limit: the market's cash bounds
-      // what can leave now, and a shortfall leaves part (or all) of the supply waiting on borrowers.
-      const withdrawable = [BigInt(coins), BigInt(allowed), market.cash].reduce((a, b) => (b < a ? b : a));
+      // account_withdrawable_coins is a health limit (u64::MAX without debt), not a cash limit. The cash is shared by all
+      // lenders, so each is counted for its pro-rata share of it (coins x cash / supply) when the market is short: the
+      // payouts of all lenders together never exceed the cash. The rest waits on borrowers.
+      const share = market.cash >= market.supply || market.supply === 0n ? BigInt(coins) : BigInt(coins) * market.cash / market.supply;
+      const withdrawable = [BigInt(coins), BigInt(allowed), share].reduce((a, b) => (b < a ? b : a));
       const gross = [{ asset: m.asset, raw: String(coins) }];
       const payout = withdrawable > 0n ? [{ asset: m.asset, raw: withdrawable.toString() }] : [];
       return {

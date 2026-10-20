@@ -621,7 +621,8 @@ describe('echelon sunset markets', () => {
   const chain = (opts: { coins: string; withdrawable: string; frozen?: boolean; cash?: string }) => fakeChain({
     resource: (address, type) => {
       if (type.endsWith('::lending::Vault') && address === OWNER) return { collaterals: { data: [{ key: { inner: LZUSDC.market }, value: '5' }, { key: { inner: OTHER }, value: '9' }] }, liabilities: { data: [] } };
-      if (type.endsWith('::lending::Market')) return { collateral_factor_bps: opts.frozen === false ? '7000' : '0', borrow_cap: '0', total_cash: opts.cash ?? '99999999999' };
+      if (type.endsWith('::lending::Market')) return { collateral_factor_bps: opts.frozen === false ? '7000' : '0', borrow_cap: '0',
+        total_cash: opts.cash ?? '99999999999', total_liability: opts.cash === undefined ? '0' : '3000000', total_reserve: '0' };
       return null;
     },
     view: (fn) => {
@@ -639,10 +640,11 @@ describe('echelon sunset markets', () => {
     expect(r.positions[0].steps[0]).toMatchObject({ function: expect.stringContaining(`::scripts::withdraw_all<${LZUSDC.asset}>`), arguments: [LZUSDC.market] });
   });
 
-  it('pays at most the market\'s cash, and blocks when there is none', async () => {
-    // account_withdrawable_coins is u64::MAX for a lender without debt: only the cash limits the payout.
-    const partial = await echelonSunsetMarkets.read(context(chain({ coins: '1500000', withdrawable: '18446744073709551615', cash: '400000' })), OWNER);
-    expect(partial.positions[0]).toMatchObject({ status: 'recoverable', grossClaim: [{ raw: '1500000' }], expectedPayout: [{ raw: '400000' }] });
+  it('counts a lender\'s pro-rata share of a short market\'s cash, and blocks when there is none', async () => {
+    // account_withdrawable_coins is u64::MAX for a lender without debt. Cash 1M of 4M supply (3M borrowed): a lender
+    // owed 1.5M is counted for 1.5M x 1/4 = 375K, so all lenders together never exceed the 1M cash.
+    const partial = await echelonSunsetMarkets.read(context(chain({ coins: '1500000', withdrawable: '18446744073709551615', cash: '1000000' })), OWNER);
+    expect(partial.positions[0]).toMatchObject({ status: 'recoverable', grossClaim: [{ raw: '1500000' }], expectedPayout: [{ raw: '375000' }] });
     const none = await echelonSunsetMarkets.read(context(chain({ coins: '1500000', withdrawable: '18446744073709551615', cash: '0' })), OWNER);
     expect(none.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'insufficient_cash' }], expectedPayout: [] });
   });
