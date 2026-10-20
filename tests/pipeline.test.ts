@@ -4,11 +4,12 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RequestCapReached } from '../src/node/client.ts';
-import type { Enumerator } from '../src/node/enumerators.ts';
+import { aaveFrozenEnumerator, type Enumerator } from '../src/node/enumerators.ts';
 import { fetchPrices } from '../src/node/prices.ts';
 import { keepPrevious, runSource } from '../src/node/snapshot.ts';
 import { State } from '../src/node/state.ts';
 import { positionIds } from '../src/shared/accounting.ts';
+import { AAVE, AAVE_UNFROZEN_AT } from '../src/shared/sources/aave-frozen.ts';
 import { STAPT, STHAPT } from '../src/shared/sources/echelon-frozen.ts';
 import type { ChainReader, Position, ReadResult, SourceDef } from '../src/shared/types.ts';
 import { addr, fakeChain } from './fake-chain.ts';
@@ -280,5 +281,54 @@ describe('source version', () => {
     expect(reads).toBe(1);                              // monthly: not due again
     await runSource({ ...def, version: 2 }, enumerator([owner]), state, chain(), { hit: false });
     expect(reads).toBe(2);                              // new rules: due at once
+  });
+});
+
+describe('aave enumerator', () => {
+  const FREEZE = AAVE_UNFROZEN_AT + 500n;
+  const reserve = (n: number, frozen: boolean) => ({ underlying_asset: addr(`e${n}`), symbol: `R${n}`, a_token_address: addr(`a${n}`),
+    variable_debt_token_address: addr(`d${n}`), is_frozen: frozen, is_active: true, is_paused: false, available_liquidity: '1' });
+  // Each token's user table: 2 buckets; holders 1 and 2 in aToken a1, holder 2 owes on debt token d2.
+  const entries: Record<string, [number, string][][]> = {
+    [addr('a1')]: [[[1, '50']], [[2, '70'], [3, '0']]],
+    [addr('d1')]: [[], []],
+    [addr('d2')]: [[[2, '9']], []],
+  };
+  const aave = (frozen: boolean, opts: { missing?: boolean; archive?: boolean } = {}) => {
+    const c = fakeChain({
+      view: (fn) => fn.endsWith('::get_reserves_data') ? [[reserve(1, frozen), reserve(2, false)], {}] : [{ inner: addr('r1') }],
+      resource: (address) => ({ user_state: { num_buckets: '2', size: String(entries[address].flat().length + (opts.missing ? 1 : 0)), buckets: { inner: { handle: address } } } }),
+      tableItem: (handle, _k, _v, key) => entries[handle][Number(key)].map(([n, balance]) => ({ key: addr(n), value: { balance, additional_data: '0' } })),
+      // Frozen (bit 57) from version FREEZE on; without the archive, the freeze cannot be dated.
+      archiveResource: opts.archive === false ? undefined : (_a, _t, version) => ({ configuration: { data: (BigInt(version) >= FREEZE ? 1n << 57n : 0n).toString() } }),
+      gql: (_q, vars) => ({ user_transactions: vars.v === String(FREEZE) ? [{ timestamp: '2026-11-02T10:00:00' }] : [] }),
+    });
+    return Object.assign(c, { ledger: async () => ({ version: String(AAVE_UNFROZEN_AT + 1000n), timestampSecs: 1_800_000_000 }) });
+  };
+
+  it('costs one view while no reserve is frozen', async () => {
+    const c = aave(false);
+    expect(await aaveFrozenEnumerator.run(c, undefined)).toMatchObject({ candidates: [], pages: 1 });
+    expect(c.calls).toEqual([`view ${AAVE}::ui_pool_data_provider_v3::get_reserves_data`]);
+  });
+
+  it('lists holders of frozen aTokens with their scaled balances, debts and freeze time as the hint, and fails on a missing holder', async () => {
+    const r = await aaveFrozenEnumerator.run(aave(true), undefined);
+    const f = { [addr('e1')]: '2026-11-02T10:00:00.000Z' };
+    expect(r.candidates).toEqual([
+      { owner: addr(1), hint: { a: { [addr('e1')]: '50' }, d: {}, f } },
+      { owner: addr(2), hint: { a: { [addr('e1')]: '70' }, d: { [addr('e2')]: '9' }, f } },
+    ]);
+    // The freeze time is kept in the cursor: the next run does not search again.
+    const next = aave(true);
+    await aaveFrozenEnumerator.run(next, r.cursor);
+    expect(next.calls.filter(c => c.startsWith('archiveResource'))).toEqual([]);
+    await expect(aaveFrozenEnumerator.run(aave(true, { missing: true }), undefined)).rejects.toThrow(/read 3 of 4 holders/);
+  });
+
+  it('marks a freeze it cannot date as null, so the run that dates it changes the hints', async () => {
+    const r = await aaveFrozenEnumerator.run(aave(true, { archive: false }), undefined);
+    expect(r.candidates[0].hint).toMatchObject({ f: { [addr('e1')]: null } });
+    expect(JSON.parse(r.cursor!)).toEqual({ f: {} });
   });
 });

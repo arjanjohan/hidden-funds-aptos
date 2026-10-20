@@ -261,7 +261,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Recovery:** `managed_staking::unlock(token)`. Sample simulation: 10/10, paying exactly the expected MKL (and esMKL); 2 owners need gas.
 - **Re-read schedule:** monthly, or when the collection's owner list changes. The first run took 6.8K requests.
 
-- **Aave on Aptos:** an Aave governance proposal (ARFC, filed 2026-07-29) winds down the Aptos deployment by freezing every reserve. On 2026-10-19 (checked twice) all 4 Aptos reserves (USDt, APT, sUSDe, USDC) are still unfrozen and active with borrowing enabled, so it is not closed on chain yet. It becomes a source once the reserves freeze; the freeze is the effective date.
+- **Aave on Aptos:** see `aave-frozen-reserves` (dormant until a reserve freezes).
 - **Ditto (stAPT):** no closure notice; last social activity in Dec 2023. stAPT is backed by 45.7K APT (`DittoPool.total_aptos`). The delayed-unstake queue is empty: 13 requests ever, `total_pending_claim` 0, 0.22 APT in `claim_pool`. Redemption still works through `delayed_unstake` plus permissionless `update_ditto_state`/`distribute_unstaked_coins`, so stAPT is not stranded under R2.
 - **Cellana (veCELL):** CELL is quoted at $0.00006 (stale), so expired locks are worth nothing. Skipped.
 - **Celer cBridge tokens:** no closure evidence found; the peg bridge still mints.
@@ -354,6 +354,19 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - Before the debt rule the same sample counted 8.9K stAPT, 10.8K sthAPT and 17.4K THL: most frozen-market supply sits in accounts that borrow.
 - **Simulation (Geomi fullnode, unsigned, 2026-10-20):** per market the smallest, median and largest sampled position. All 26 direct withdrawals succeed and pay between the read payout and the claim (the claim when the cash covers it). All 6 positions that need THL out first abort with `ERR_ORACLE_INVALID_PRICE`, as expected; withdrawing the THL first succeeds and empties it from the vault.
 - **Cost:** ~1M supply and withdraw calls (supply ~370K, withdraw ~270K, supply_fa ~150K, the rest smaller), so the first run is ~10K indexer pages (~2.2 h at 0.8 s/page). Scanning the ~520K borrow and repay calls from the start would add ~5K pages for nothing. `distinct_on: sender` puts `supply` alone at ~114K distinct senders (300 senders cover the first 0.26% of the address space). Reads take ~1.5 requests per supplier, so the first full pass is ~200K+ requests: two to three runs at the 100K cap. Later runs read only suppliers with new calls.
+
+## aave-frozen-reserves (dormant)
+
+- **What:** supply left in Aave v3's Aptos reserves once Aave freezes them. An Aave governance proposal (ARFC, filed 2026-07-29) winds down the Aptos deployment by freezing every reserve. A frozen reserve takes no new supply or borrows; lenders can still withdraw.
+- **State (2026-10-20):** all 4 reserves (USDt, APT, sUSDe, USDC) are live, so the source counts nothing. Each run reads the reserve flags first (one view) and does nothing else while none is frozen. Supplied: ~456K APT (~6K borrowed), ~21K USDC, ~18.6K USDt, ~2K sUSDe.
+- **Rules (decided 2026-10-20, option A):** same as `echelon-frozen-markets`. A frozen reserve counts, aged from its freeze. A supplier with any Aave debt (`user_logic::get_user_account_data` total debt > 0) counts for nothing (R4).
+- **Freeze date:** the indexer's `events` table is deprecated, so the first version with the frozen bit (bit 57 of the reserve configuration) is found by binary search on the archive node, from version 7,694,000,000 (every reserve live), and dated by that transaction. ~30 archive reads once per reserve: the enumerator dates it, keeps the date in its cursor and passes it to each holder in the hint. If it cannot be dated, or the archive lookup fails, the amount still counts but the age is unknown, so the position stays out of the headline. The date is then null in the hint and retried each run; the run that dates it changes the hints, so its holders are re-read at once. Assumes a reserve stays frozen once frozen.
+- **Read:** `a_token_factory::balance_of(owner, aToken)` per frozen reserve. Payout = min(balance, pro-rata share of the reserve's cash: balance × available liquidity / aToken total supply). Paused or inactive reserves are `blocked`. The APT reserve pays fungible APT (0xa), the paired asset of the APT coin, so it is valued as APT.
+- **Recovery:** `supply_logic::withdraw(asset, 2^256 − 1, owner)` withdraws everything (simulated on a live reserve: paid exactly `balance_of`) while the reserve's cash covers the balance; the position still counts only the pro-rata share. When the cash is short of the balance, the step withdraws the pro-rata amount instead.
+- **Enumeration:** holders of frozen reserves' aTokens, from each aToken's `token_base` user table (a SmartTable) read bucket by bucket from the fullnode. The indexer's copy misses buckets (sUSDe: 0 of 5). A run fails unless every holder is read. Each holder's hint is its scaled balances in the frozen aTokens and in every debt token, so supply, withdrawals, borrows and repayments trigger a re-read, and accruing interest does not.
+- **Prices:** CoinGecko `tether`, `usd-coin`, `ethena-staked-usde`, each listed with this exact Aptos address; APT as APT.
+- **Rehearsal (2026-10-20, all reserves treated as frozen):** 921 holders, 385 requests to enumerate (95 also owe). Every tenth holder read: 93/93 complete, 94 positions. The 4 largest simulated withdrawals succeed and pay the full balance.
+- **Cost once frozen:** ~400 requests per run to enumerate, plus ~2 per changed holder.
 
 ## topaz-bids
 

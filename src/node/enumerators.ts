@@ -2,6 +2,7 @@
 import { mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
+import { AAVE, type AaveHint, aaveReserves, findFreeze } from '../shared/sources/aave-frozen.ts';
 import { ECHELON, FROZEN_MARKETS } from '../shared/sources/echelon-frozen.ts';
 import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
@@ -614,6 +615,75 @@ export const echelonFrozenEnumerator = entrySenders('echelon-frozen-markets', [
     return { check: 'supply found per market <= market supply (shares x exchange rate); coverage shown', ok, detail: parts.join('; ') };
   });
 
+/** Scaled balances in an Aave token (aToken or debt token): its token_base user table, a SmartTable read bucket by
+ *  bucket from the fullnode (the indexer's copy misses buckets). Fails unless every entry is read. */
+async function aaveScaledBalances(chain: ChainReader, token: string, version: string): Promise<{ balances: Map<string, bigint>; reads: number }> {
+  const table = (await chain.resource(token, `${AAVE}::token_base::TokenBaseState`, version)).user_state;
+  const buckets = await mapLimit([...Array(Number(table.num_buckets)).keys()], 8, i => chain.tableItem(table.buckets.inner.handle, 'u64',
+    `vector<0x1::smart_table::Entry<address,${AAVE}::token_base::UserState>>`, String(i), version));
+  const balances = new Map<string, bigint>();
+  for (const bucket of buckets) for (const e of bucket ?? []) balances.set(normalizeAddress(e.key), BigInt(e.value.balance));
+  if (balances.size !== Number(table.size)) throw new Error(`Aave token ${token}: read ${balances.size} of ${table.size} holders`);
+  return { balances, reads: buckets.length + 1 };
+}
+
+// Aave (Aptos): holders of frozen reserves' aTokens. Each holder's hint is its scaled balances in the frozen aTokens and
+// in every debt token, so a supply, withdrawal, borrow or repayment re-reads it, and accruing interest does not. It also
+// carries each frozen reserve's freeze time, dated once and kept in the cursor; a freeze that could not be dated yet is
+// null, so its holders are re-read in the run that dates it. While no reserve is frozen, a run costs one view.
+export const aaveFrozenEnumerator: Enumerator = {
+  sourceId: 'aave-frozen-reserves',
+  processor: null,
+  scope: `holders of frozen Aave reserves' aTokens (${AAVE}::token_base user tables, every bucket, read from the fullnode at the run's ledger version)`,
+  async run(chain, cursor) {
+    let dated: Record<string, string> = {};
+    try { dated = cursor ? JSON.parse(cursor).f ?? {} : {}; } catch { /* unreadable cursor: date again */ }
+    const ledger = await chain.ledger();
+    const ctx = { chain, ledger, memo: { get: async () => undefined, set: async () => {} }, scratch: new Map() };
+    const reserves = await aaveReserves(ctx);
+    const frozen = reserves.filter(r => r.frozen);
+    let pages = 1;
+    if (!frozen.length) return { candidates: [], cursor, pages };
+    for (const r of frozen) {
+      const at = dated[r.asset] ?? await findFreeze(chain, ledger.version, r);
+      if (at) dated[r.asset] = at;
+    }
+    const hints = new Map<string, AaveHint>();
+    for (const r of frozen) {
+      const t = await aaveScaledBalances(chain, r.aToken, ledger.version);
+      pages += t.reads;
+      for (const [owner, b] of t.balances) {
+        const hint = hints.get(owner);
+        if (b > 0n) hints.set(owner, { a: { ...hint?.a, [r.asset]: b.toString() }, d: {}, f: { ...hint?.f, [r.asset]: dated[r.asset] ?? null } });
+      }
+    }
+    for (const r of reserves) {
+      const t = await aaveScaledBalances(chain, r.debtToken, ledger.version);
+      pages += t.reads;
+      for (const [owner, b] of t.balances) {
+        const hint = hints.get(owner);
+        if (hint && b > 0n) hint.d[r.asset] = b.toString();
+      }
+    }
+    return { candidates: [...hints].map(([owner, hint]) => ({ owner, hint })), cursor: JSON.stringify({ f: dated }), pages };
+  },
+  async sanity(chain, ledger, positions) {
+    const ctx = { chain, ledger, memo: { get: async () => undefined, set: async () => {} }, scratch: new Map() };
+    const frozen = (await aaveReserves(ctx)).filter(r => r.frozen);
+    if (!frozen.length) return { check: 'none', ok: null, detail: 'no Aave reserve is frozen yet' };
+    const parts: string[] = [];
+    let ok = true;
+    for (const r of frozen) {
+      const [supply] = await chain.view(`${AAVE}::pool_data_provider::get_a_token_total_supply`, [r.asset], [], ledger.version);
+      const found = sumGross(positions.filter(p => p.locator === r.symbol));
+      ok &&= found <= BigInt(supply);
+      parts.push(`${r.symbol} ${pct(found, BigInt(supply))} of supply found`);
+    }
+    // Coverage stays below 100%: suppliers in debt are left out.
+    return { check: 'supply found per frozen reserve <= aToken total supply; coverage shown', ok, detail: parts.join('; ') };
+  },
+};
+
 const noContractTotal: Enumerator['sanity'] = async () =>
   ({ check: 'none', ok: null, detail: 'no contract total available: balances are stored per account' });
 
@@ -628,4 +698,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator];
