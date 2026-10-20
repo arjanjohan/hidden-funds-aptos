@@ -813,6 +813,14 @@ describe('econia idle accounts', () => {
       steps: [{ function: `${ECONIA}::user::withdraw_to_coinstore<${addr(1)}::aptos_coin::AptosCoin>`, arguments: ['7', '200000000'] }] });
   });
 
+  it('ages a balance that changed after the archive date from that change, never earlier', async () => {
+    const accounts = [account('7', { quote: '5' })];
+    const later = await econiaIdleAccounts.read(context(chain(accounts)), OWNER, { since: '2026-10-27T03:17:00.000Z' });
+    expect(later.positions[0].claimableSince).toBe('2026-10-27T03:17:00.000Z');
+    const earlier = await econiaIdleAccounts.read(context(chain(accounts)), OWNER, { since: '2025-01-01T00:00:00.000Z' });
+    expect(earlier.positions[0].claimableSince).toBe(ECONIA_ARCHIVED_AT);
+  });
+
   it('has display metadata (decimals) for every coin the coin markets trade', () => {
     expect(ECONIA_COINS.filter(c => !ASSETS[c])).toEqual([]);
   });
