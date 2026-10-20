@@ -1,9 +1,11 @@
 // Chain-wide candidate enumeration and source-level sanity checks (node-only: keyed indexer use).
+import { iso } from '../shared/accounting.ts';
 import { mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
 import { AAVE, type AaveHint, aaveReserves, findFreeze } from '../shared/sources/aave-frozen.ts';
 import { ECHELON, FROZEN_MARKETS } from '../shared/sources/echelon-frozen.ts';
+import { ECONIA, ECONIA_COIN_MARKETS, type EconiaHint, KANA_ECONIA_WRAPPER } from '../shared/sources/econia-idle.ts';
 import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
 import { CAKE, type ClaimableHint, claimableHandle, LZ_COINS } from '../shared/sources/layerzero-claimable.ts';
@@ -687,6 +689,69 @@ export const aaveFrozenEnumerator: Enumerator = {
 const noContractTotal: Enumerator['sanity'] = async () =>
   ({ check: 'none', ok: null, detail: 'no contract total available: balances are stored per account' });
 
+// Econia: owners who registered a market account themselves, directly or through Kana's wrapper (accounts a custodian
+// registered are out of scope, and custodian accounts are not counted). Another integration that registers accounts
+// through its own entry functions is missed until it is listed here. Deposits, withdrawals and orders mark an owner
+// changed; those only matter after an owner's first read, which comes after this source was added (2026-10-20), so
+// their scan starts there. A fill of a resting order is sent by the taker, so makers are taken from the coin markets'
+// open orders each run: current makers and last run's are re-read (an account with open orders does not count, and the
+// one whose order filled is read again in the run after). A changed owner's hint carries the run's time (owner-wide for
+// its own calls, per market for its resting orders), so a balance that became idle after the archive date is aged from
+// that run, never from the archive.
+const ECONIA_CHANGES_FROM = 7_696_900_000;
+const ECONIA_REGISTRATIONS: EntryFunction[] = [
+  ...['register_market_account', 'register_market_account_generic_base'].map(name => ({ contract: ECONIA, module: 'user', name })),
+  ...['deposit_and_register_base', 'deposit_and_register_quote', 'place_limit_order_user_entry', 'place_market_order_user_entry']
+    .map(name => ({ contract: KANA_ECONIA_WRAPPER, module: 'wrapper', name })),
+];
+const ECONIA_CHANGES: EntryFunction[] = [
+  ...[['user', 'deposit_from_coinstore'], ['user', 'withdraw_to_coinstore'], ['market', 'place_limit_order_user_entry'],
+    ['market', 'place_market_order_user_entry'], ['market', 'place_limit_order_passive_advance_user_entry'],
+    ['market', 'change_order_size_user'], ['market', 'cancel_order_user'], ['market', 'cancel_all_orders_user']]
+    .map(([module, name]) => ({ contract: ECONIA, module, name, fromVersion: ECONIA_CHANGES_FROM })),
+  ...['place_limit_order_user_entry', 'place_market_order_user_entry', 'place_limit_order_user_entry_without_deposit',
+    'place_market_order_user_entry_without_deposit', 'cancel_all_orders', 'deposit_and_register_base', 'deposit_and_register_quote']
+    .map(name => ({ contract: KANA_ECONIA_WRAPPER, module: 'wrapper', name, fromVersion: ECONIA_CHANGES_FROM })),
+];
+
+const econiaSenders = entrySenders('econia-idle-accounts', [...ECONIA_REGISTRATIONS, ...ECONIA_CHANGES], noContractTotal);
+export const econiaIdleEnumerator: Enumerator = {
+  ...econiaSenders,
+  scope: `${econiaSenders.scope}; plus owner-controlled makers with open orders in coin markets ${ECONIA_COIN_MARKETS[0]}-${ECONIA_COIN_MARKETS.at(-1)}`,
+  async run(chain, cursor) {
+    let stored: { r?: string; c?: string; m?: Record<string, string[]> } = {};
+    try { stored = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: rescan */ }
+    if (typeof stored !== 'object' || stored === null) stored = {};
+    const ledger = await chain.ledger();
+    const registered = await senders(chain, ECONIA_REGISTRATIONS, stored.r);
+    const changed = await senders(chain, ECONIA_CHANGES, stored.c);
+    // Makers by owner, with the markets they rest orders in: now, and last run (whose orders may have filled since).
+    const makers: Record<string, string[]> = {};
+    for (const market of ECONIA_COIN_MARKETS) {
+      const [orders] = await chain.view(`${ECONIA}::market::get_open_orders_all`, [market]);
+      for (const o of [...orders.asks, ...orders.bids]) {
+        if (o.custodian_id !== '0') continue;
+        const owner = normalizeAddress(o.user);
+        makers[owner] = [...new Set([...(makers[owner] ?? []), market])];
+      }
+    }
+    const previous = typeof stored.m === 'object' && stored.m !== null && !Array.isArray(stored.m) ? stored.m : {};
+    const since = iso(ledger.timestampSecs);
+    // The owner's own calls date all of its balances (the indexer does not say which market a call touched); a maker's
+    // order dates only the market it rests in.
+    const hints = new Map<string, EconiaHint>();
+    for (const c of changed.candidates) hints.set(c.owner, { since });
+    for (const [owner, markets] of [...Object.entries(previous), ...Object.entries(makers)]) {
+      const hint = hints.get(owner) ?? {};
+      hints.set(owner, { ...hint, markets: { ...hint.markets, ...Object.fromEntries(markets.map(m => [m, since])) } });
+    }
+    const owners = new Set([...registered.candidates.map(c => c.owner), ...hints.keys()]);
+    return { candidates: [...owners].map(owner => (hints.has(owner) ? { owner, hint: hints.get(owner) } : { owner })),
+      cursor: JSON.stringify({ r: registered.cursor, c: changed.cursor, m: makers }),
+      pages: registered.pages + changed.pages + ECONIA_COIN_MARKETS.length, incremental: true };
+  },
+};
+
 export const thalaVethlEnumerator = entrySenders('thala-vethl-expired',
   [{ contract: THALA_VE, module: 'scripts', name: 'lock' }, { contract: THALA_VEST, module: 'farming_vesting', name: 'convert_to_vethl' }],
   noContractTotal);
@@ -698,4 +763,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator];

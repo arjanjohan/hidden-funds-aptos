@@ -4,6 +4,8 @@ import { AAVE, aaveFrozenReserves, AAVE_UNFROZEN_AT, USDC } from '../src/shared/
 import { canopyEndedRewards } from '../src/shared/sources/canopy-rewards.ts';
 import { APT, delegation, MOVE, movementDelegation } from '../src/shared/sources/delegation.ts';
 import { echelonFrozenMarkets, FROZEN_MARKETS } from '../src/shared/sources/echelon-frozen.ts';
+import { ECONIA, ECONIA_ARCHIVED_AT, ECONIA_COINS, econiaIdleAccounts } from '../src/shared/sources/econia-idle.ts';
+import { ASSETS } from '../src/shared/assets.ts';
 import { delegationInactiveValidator } from '../src/shared/sources/delegation-inactive.ts';
 import { KAPT, kofiReceipts, STKAPT } from '../src/shared/sources/kofi-receipts.ts';
 import { MARKET_MAX_AGE_SECS } from '../src/shared/market.ts';
@@ -786,5 +788,54 @@ describe('aave frozen reserves', () => {
     const noArchive = fakeChain({ view: (fn, args, t) => base.view(fn, args, t), archiveResource: () => { throw new Error('archive: HTTP 503'); } });
     expect(await aaveFrozenReserves.read(context(noArchive, LEDGER), OWNER)).toMatchObject({ complete: true,
       positions: [{ ageBasis: 'unknown', expectedPayout: [{ raw: '400000' }] }] });
+  });
+});
+
+describe('econia idle accounts', () => {
+  const LZUSDC = LZ_COINS.find(c => c.display.includes('USDC'))!.coin;
+  const coin = (t: string) => { const [package_address, module_name, type_name] = t.split('::'); return { package_address, module_name, type_name }; };
+  const markets: Record<string, unknown> = {
+    7: { base_name_generic: '', base_type: coin('0x1::aptos_coin::AptosCoin'), quote_type: coin(LZUSDC) },
+    8: { base_name_generic: '', base_type: coin('0x1::aptos_coin::AptosCoin'), quote_type: coin(LZUSDC) },
+    12: { base_name_generic: 'YT_9', base_type: coin('0x1::string::String'), quote_type: coin(LZUSDC) },
+  };
+  const account = (market: string, o: { custodian?: string; asks?: unknown[]; base?: string; quote?: string } = {}) => ({ market_id: market,
+    custodian_id: o.custodian ?? '0', asks: o.asks ?? [], bids: [], base_available: o.base ?? '0', quote_available: o.quote ?? '0' });
+  const chain = (accounts: unknown[]) => fakeChain({ view: (fn, args) => {
+    if (fn.endsWith('::user::get_market_accounts')) return [accounts];
+    if (fn.endsWith('::registry::get_market_info')) return [markets[args[0] as string]];
+    throw new Error(fn);
+  } });
+
+  it('lists the idle base and quote of an account the owner controls, aged from the archive date', async () => {
+    const r = await econiaIdleAccounts.read(context(chain([account('7', { base: '200000000', quote: '5000445704' })])), OWNER);
+    expect(r.positions.map(p => [p.asset, p.expectedPayout[0].raw])).toEqual([[APT, '200000000'], [LZUSDC, '5000445704']]);
+    expect(r.positions[0]).toMatchObject({ locator: 'market-7', claimableSince: ECONIA_ARCHIVED_AT, ageBasis: 'protocol_closure', status: 'recoverable',
+      steps: [{ function: `${ECONIA}::user::withdraw_to_coinstore<${addr(1)}::aptos_coin::AptosCoin>`, arguments: ['7', '200000000'] }] });
+  });
+
+  it('ages a balance that changed after the archive date from that change, never earlier', async () => {
+    const accounts = [account('7', { quote: '5' })];
+    const later = await econiaIdleAccounts.read(context(chain(accounts)), OWNER, { since: '2026-10-27T03:17:00.000Z' });
+    expect(later.positions[0].claimableSince).toBe('2026-10-27T03:17:00.000Z');
+    const earlier = await econiaIdleAccounts.read(context(chain(accounts)), OWNER, { since: '2025-01-01T00:00:00.000Z' });
+    expect(earlier.positions[0].claimableSince).toBe(ECONIA_ARCHIVED_AT);
+    // An order in market 8 dates market 8 only.
+    const two = [account('7', { quote: '5' }), account('8', { quote: '6' })];
+    const scoped = await econiaIdleAccounts.read(context(chain(two)), OWNER, { markets: { 8: '2026-10-27T03:17:00.000Z' } });
+    expect(scoped.positions.map(p => [p.locator, p.claimableSince])).toEqual([['market-7', ECONIA_ARCHIVED_AT], ['market-8', '2026-10-27T03:17:00.000Z']]);
+  });
+
+  it('has display metadata (decimals) for every coin the coin markets trade', () => {
+    expect(ECONIA_COINS.filter(c => !ASSETS[c])).toEqual([]);
+  });
+
+  it('leaves out accounts with open orders, custodian accounts, a generic base and empty sides', async () => {
+    const r = await econiaIdleAccounts.read(context(chain([
+      account('7', { base: '5', asks: [{}] }),
+      account('7', { quote: '5', custodian: '6' }),
+      account('12', { base: '5', quote: '7' }),
+    ])), OWNER);
+    expect(r.positions.map(p => [p.locator, p.asset, p.expectedPayout[0].raw])).toEqual([['market-12', LZUSDC, '7']]);
   });
 });
