@@ -884,8 +884,11 @@ describe('auro closed positions', () => {
   it('ages a position topped up or repaid after the shutdown from that deposit or repayment', async () => {
     const after = await auroClosedPositions.read(context(chain({ deposited: '1780000000' })), OWNER, { tokens: [NFT] });
     expect(after.positions[0].claimableSince).toBe(new Date(1_780_000_000 * 1000).toISOString());
-    const repaid = await auroClosedPositions.read(context(chain()), OWNER, { tokens: [NFT], repaidAt: '2026-05-07T16:32:48.000Z' });
+    const repaid = await auroClosedPositions.read(context(chain()), OWNER, { tokens: [NFT], changed: { [NFT]: '2026-05-07T16:32:48.000Z' } });
     expect(repaid.positions[0].claimableSince).toBe('2026-05-07T16:32:48.000Z');
+    // A change to another of the owner's positions does not re-date this one.
+    const other = await auroClosedPositions.read(context(chain()), OWNER, { tokens: [NFT], changed: { [addr('f9')]: '2026-05-07T16:32:48.000Z' } });
+    expect(other.positions[0].claimableSince).toBe(AURO_CLOSED_AT);
   });
 
   it('leaves out positions with debt and position NFTs that moved', async () => {
