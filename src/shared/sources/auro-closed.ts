@@ -81,7 +81,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: AuroHint): Prom
         // simulated); a full one does not. So a position can be withdrawn only whole, and only while the pool covers it.
         const blockers = [
           ...(p.paused ? [{ code: 'paused', detail: 'Auro paused this pool.' }] : []),
-          ...(received > p.available ? [{ code: 'insufficient_cash', detail: 'The pool holds less than this position; a partial withdrawal needs a fresh Pyth price, which no longer updates on Aptos.' }] : []),
+          ...(requested > p.available ? [{ code: 'insufficient_cash', detail: 'The pool holds less than this position; a partial withdrawal needs a fresh Pyth price, which no longer updates on Aptos.' }] : []),
         ];
         const locator = `${token}/${normalizeAddress(d.key.inner)}`;
         return {
