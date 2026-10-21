@@ -172,8 +172,9 @@ export const animeswapClosedLp: SourceDef<AnimeswapHint> = {
     checkedAt: '2026-10-21',
     effectiveAt: ANIMESWAP_CLOSED_AT,
   },
-  // Swaps (aggregators still route through the pools) move every holder's payout without changing their LP.
-  refresh: { nonZero: 'every_run', zero: 'monthly' },
+  // ~5,800 holders, mostly dust. A holder's own LP change re-reads it through the hint; swaps (aggregators still route
+  // through the pools) only shift the split between the two sides, so the rest is re-read monthly.
+  refresh: { nonZero: 'monthly', zero: 'monthly' },
   headlineAgeBases: ['protocol_closure'],
   howTo: [
     `Call ${ANIMESWAP}::AnimeSwapPoolV1::remove_liquidity_entry<X, Y>(liquidity, minimum X, minimum Y) from the account holding the LP, with the pool's coin types in the LP type's order.`,

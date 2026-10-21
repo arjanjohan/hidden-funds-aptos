@@ -418,6 +418,23 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Rehearsal (full, 2026-10-21):** 229 debt-free positions of 209 owners, all reads complete. On the books: 4,696 stAPT, 5,459 stkAPT, 485 kAPT, 164 amAPT, ~9 USDt, 0.4 USDC. Counted: 4,693 stAPT, 2,005 stkAPT, 484 kAPT, 164 amAPT (about $6.6K). Simulations, per token the smallest, median and largest: 15 of 15 recoverable positions paid exactly their claim, and the one blocked position aborted (`EINSUFFICIENT_BALANCE`).
 - **Cost:** ~715 requests a run.
 
+## animeswap-closed-lp
+
+- **What:** liquidity left in AnimeSwap V1 pools (Aptos AMM) after its frontend went away.
+- **Status (checked 2026-10-21):** closed under the closed-frontend rule (decided 2026-10-21). animeswap.org and app.animeswap.org have no address record, though the domain was renewed on 2026-09-24 (its name servers still answer). Wayback's captures show the app served unchanged until at least 2026-08; DefiLlama marks AnimeSwap dead. No closure notice was found, so the effective date is the day it was found down: 2026-10-21 23:59:59 UTC.
+- **Contract still works:** pools are not paused (`AdminData.is_pause = false`), and aggregators still route swaps through them (the APT/USDC pool last traded 2026-10-20). Removal (`burn`) does not check the pause flag, only the pool's reentrancy lock.
+- **Positions:** LP is a Coin, `0x7969…2cbf::LPCoinV1::LPCoin<X, Y>`, held in a CoinStore or its paired fungible-asset store; `coin::balance` reads both. One position per side of each LP, so the priced side counts when the other coin has no price; one removal pays both.
+- **Payout:** as `burn` computes it. The DAO fee is first minted in LP when √(reserve x × reserve y) grew since `k_last` (fee on, `dao_fee` 5): supply × (√k − √k_last) / (√k × 5 + √k_last). Then each side pays LP × reserve / supply, rounded down, where supply is `coin::supply` (the Coin and its paired fungible asset; `CoinInfo` alone misses migrated LP). Removal aborts when either side rounds to zero: such LP is `blocked` (`below_minimum`).
+- **Recovery:** `AnimeSwapPoolV1::remove_liquidity_entry<X, Y>(liquidity, min X, min Y)`, with minimums 1% below the computed payout.
+- **Age:** from the later of 2026-10-21 23:59:59 UTC and the LP store's last change (the indexer's `last_transaction_timestamp`): the pools still take liquidity, so LP added or received after the closure is aged from then.
+- **Enumeration:** all 340 pairs from `PairInfo.pair_list`, then every store holding each LP coin (`current_fungible_asset_balances`, filed under the coin type also after migration). The pool account (`0x7969…2cbf`) is left out: it holds the DAO fee minted in LP (4.5% of APT/USDC), the protocol's own, with no signer.
+- **Value:** pools hold ~$7.9K in all (APT at $0.82, stable sides at $1); 20 pools hold 99% of it, APT/USDC alone $4.4K.
+- **Rehearsal (2026-10-21, anonymous API, the 20 largest pools):**
+  - Indexer: 6,782 holdings of 5,762 owners, ~$5.9K on their priced sides (APT, lzUSDC, lzUSDT, whUSDC). 83 owners hold ≥ $10, 3 hold ≥ $100 (largest ~$270).
+  - On chain, through the source, for the 60 largest owners: 190 positions, all `recoverable`, all reads complete; $2,561 counted against the indexer's $2,567 estimate.
+  - Simulated removal for 6 of them (smallest to largest): 6 of 6 succeeded and paid exactly the computed amounts (`BurnEvent`), DAO fee mint included.
+- **Cost:** ~400 indexer pages a run to enumerate (one query per pair, plus pages; APT/USDC alone 34). Holders are re-read monthly, or when their LP changes (the hint carries each store's last change): a first full read is ~6K owners × ~2 requests.
+
 ## topaz-bids
 
 - **What:** APT escrowed in expired Topaz NFT bids. Topaz ceased operations on 2024-08-21 (homepage notice; aptos.dev lists it as deprecated). A bid's APT stays in Topaz's tables, also after its deadline, until the bidder cancels.
