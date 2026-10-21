@@ -94,6 +94,9 @@ export const econiaIdleAccounts: SourceDef<EconiaHint> = {
     evidence: 'github.com/econia-labs/econia: "This repository was archived by the owner on Sep 8, 2025." Last limit order 2025-07-25, last market order 2025-09-01, last deposit 2025-07-24; only withdrawals since (checked 2026-10-20). PitchBook lists Econia Labs as out of business.',
     checkedAt: '2026-10-20',
   },
+  // Version 2 (2026-10-21): coins in open orders count. Stored owners are all re-read once, so one whose balance was
+  // only in orders (stored as nothing) is picked up.
+  version: 2,
   refresh: { nonZero: 'monthly', zero: 'never' },
   headlineAgeBases: ['protocol_closure'],
   howTo: [
