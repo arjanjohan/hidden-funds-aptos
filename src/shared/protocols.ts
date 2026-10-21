@@ -167,7 +167,8 @@ export const PROTOCOLS: ProtocolEntry[] = [
   { id: 'arche-protocol', name: 'Arche Protocol (MSD)', chains: [...M], category: 'CDP', status: 'blocked', checkedAt: '2026-10-20',
     reason: '501.6K MOVE (~$3.7K) of collateral; its views abort on a stale Pyth price, so positions could only show as "may not work".', defillama: 'arche-protocol', dead: 'yes' },
 
-  // Too small by DefiLlama's TVL (2026-10-21): what a protocol still holds bounds what can be left in it.
+  // Not checked yet, with DefiLlama's TVL (2026-10-21) as a hint for priority only: TVL is what the adapter counts,
+  // not a ceiling on what a protocol owes (claim tables and ended rewards can sit outside it).
   ...([
     ['poly-network', 'Poly Network', A, 'Bridge', '2024-09-30', 0],
     ['thetis-perps', 'Thetis Perps', A, 'Derivatives', 'yes', 1284],
@@ -186,8 +187,8 @@ export const PROTOCOLS: ProtocolEntry[] = [
     ['mosquitos-finance', 'Mosquitos Finance', A, 'Yield', '2023-03-09', 0],
     ['lotto-run', 'Lotto Run', A, 'Yield Lottery', 'yes', 12],
   ] as [string, string, readonly ('aptos' | 'movement')[], string, string | undefined, number][]).map(([id, name, chains, category, dead, tvl]): ProtocolEntry => ({
-    id, name, chains: [...chains], category, status: 'too_small', checkedAt: '2026-10-21',
-    reason: `DefiLlama TVL $${tvl.toLocaleString('en-US')}: at most that is left in it, below what is worth a source.`,
+    id, name, chains: [...chains], category, status: 'not_checked',
+    reason: `Not checked yet (DefiLlama TVL $${tvl.toLocaleString('en-US')} on 2026-10-21).`,
     defillama: id === 'interest-protocol' ? 'interest-curve' : id, ...(dead ? { dead } : {}),
   })),
 
