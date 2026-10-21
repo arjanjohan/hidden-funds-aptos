@@ -919,9 +919,9 @@ describe('auro closed positions', () => {
     // The DAO holds 400 of the 1,000 on the books: 250 x 0.4 = 100 counted; 250 > 400 is false, so it can be withdrawn whole.
     const short = await auroClosedPositions.read(context(chain({ held: '400' })), OWNER, { tokens: [NFT] });
     expect(short.positions[0]).toMatchObject({ status: 'recoverable', expectedPayout: [{ raw: '100' }], steps: [{ expectedOutputs: [{ raw: '250' }] }] });
-    // Holding 200 < 250: only a partial withdrawal could pay, and that needs a fresh Pyth price.
+    // Holding 200 < 250: only a partial withdrawal could pay, and that needs a fresh Pyth price; nothing is payable now.
     const blocked = await auroClosedPositions.read(context(chain({ held: '200' })), OWNER, { tokens: [NFT] });
-    expect(blocked.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'insufficient_cash' }], expectedPayout: [{ raw: '50' }] });
+    expect(blocked.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'insufficient_cash' }], grossClaim: [{ raw: '250' }], expectedPayout: [] });
     // 201 shares are 251.25 coins: the full withdrawal requests 252 and pays 251, so a pool holding 251 cannot pay it.
     const rounded = await auroClosedPositions.read(context(chain({ shares: '201', held: '251' })), OWNER, { tokens: [NFT] });
     expect(rounded.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'insufficient_cash' }], steps: [{ arguments: [NFT, '252'] }] });

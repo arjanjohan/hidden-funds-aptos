@@ -1,9 +1,9 @@
 // Chain-wide candidate enumeration and source-level sanity checks (node-only: keyed indexer use).
 import { iso } from '../shared/accounting.ts';
-import { mapLimit, normalizeAddress, transactionTime } from '../shared/chain.ts';
+import { mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
 import { ANIMESWAP, ANIMESWAP_POOLS, animeswapLps, assetOf as animeswapAsset, pairOf } from '../shared/sources/animeswap-closed.ts';
-import { AURO_COLLECTION, AURO_ROUTER } from '../shared/sources/auro-closed.ts';
+import { AURO_CLOSED_AT, AURO_COLLECTION, AURO_ROUTER } from '../shared/sources/auro-closed.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
 import { AAVE, type AaveHint, aaveReserves, findFreeze } from '../shared/sources/aave-frozen.ts';
 import { ECHELON, FROZEN_MARKETS } from '../shared/sources/echelon-frozen.ts';
@@ -217,48 +217,76 @@ export const amnisWithdrawalsEnumerator = collectionOwners('amnis-withdrawals', 
   });
 
 // Auro: current owners of CDP position NFTs. Every owner is re-read every run (the source's refresh), so withdrawals,
-// repayments and changes to the pools' reserves are picked up without on-chain change events. A position that still
-// had debt at the shutdown qualifies only once repaid, so it is aged from its last change after the shutdown: owners who
-// called repay_entry since then (scanned incrementally; liquidations need a Pyth price, which stopped on 2026-04-30) have
-// each of their positions' last post-shutdown transaction looked up, and the hint carries it per position.
+// repayments and changes to the pools' reserves are picked up without on-chain change events. A position is aged from
+// its last change after the shutdown, which the hint carries per position:
+// - an ownership change (the ownership row's last transaction): a position acquired after the shutdown;
+// - a repayment: one that still had debt at the shutdown qualifies only once repaid. repay_entry calls are scanned
+//   incrementally (liquidations need a Pyth price, which stopped on 2026-04-30), and the positions each one touched
+//   are taken from account_transactions at its version, so a repayment by anyone dates that position only.
 const AURO_CLOSED_VERSION = 5_067_106_504;   // first version of 2026-05-01
+const AURO_TOKENS_QUERY = `query($c:String!,$after:String!){ current_token_ownerships_v2(where:{current_token_data:{collection_id:{_eq:$c}},
+  amount:{_gt:"0"}, token_data_id:{_gt:$after}}, order_by:{token_data_id:asc}, limit:${PAGE}){ token_data_id owner_address last_transaction_timestamp } }`;
 const AURO_REPAY_QUERY = `query($a:bigint!){ user_transactions(where:{entry_function_contract_address:{_eq:"${AURO_ROUTER}"},
   entry_function_module_name:{_eq:"auro_router"}, entry_function_function_name:{_eq:"repay_entry"}, version:{_gt:$a}},
-  order_by:{version:asc}, limit:${PAGE}){ version sender } }`;
-const POSITION_CHANGE_QUERY = `query($p:String!,$v:bigint!){ account_transactions(where:{account_address:{_eq:$p}, transaction_version:{_gt:$v}},
-  order_by:{transaction_version:desc}, limit:1){ transaction_version } }`;
-const auroOwners = collectionOwners('auro-closed-positions', AURO_COLLECTION,
-  async () => ({ check: 'none', ok: null, detail: 'no contract total: the pools\' books overstate what the DAO account holds (stkAPT ~37%)' }));
+  order_by:{version:asc}, limit:${PAGE}){ version timestamp } }`;
+const TOUCHED_QUERY = `query($v:[bigint!]!,$after:String!){ account_transactions(where:{transaction_version:{_in:$v}, account_address:{_gt:$after}},
+  order_by:{account_address:asc}, limit:${PAGE}){ account_address transaction_version } }`;
 export const auroClosedEnumerator: Enumerator = {
-  ...auroOwners,
+  sourceId: 'auro-closed-positions',
+  processor: 'token_v2_processor',
   alsoProcessors: ['user_transaction_processor', 'account_transactions_processor'],
-  scope: `${auroOwners.scope}; plus senders of ${AURO_ROUTER}::auro_router::repay_entry after the shutdown, and their positions' last transactions`,
+  scope: `current owners of tokens in collection ${AURO_COLLECTION} (current_token_ownerships_v2, amount > 0); plus ${AURO_ROUTER}::auro_router::repay_entry calls after the shutdown and the accounts each touched`,
   async run(chain, cursor) {
-    let stored: { v?: string; repaid?: string[] } = {};
+    let stored: { v?: string; repaid?: Record<string, string> } = {};
     try { stored = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: rescan */ }
     if (typeof stored !== 'object' || stored === null) stored = {};
-    const holders = await auroOwners.run(chain, undefined);
-    const repaid = new Set(Array.isArray(stored.repaid) ? stored.repaid : []);
-    let after = stored.v ?? String(AURO_CLOSED_VERSION), pages = holders.pages;
+    // Every account a repayment touched, with the latest such repayment's time; positions are found among them below.
+    const repaid: Record<string, string> = stored.repaid && typeof stored.repaid === 'object' && !Array.isArray(stored.repaid) ? { ...stored.repaid } : {};
+    let after = stored.v ?? String(AURO_CLOSED_VERSION), pages = 0;
     for (;;) {
       const page = (await chain.gql(AURO_REPAY_QUERY, { a: after })).user_transactions;
       pages++;
-      for (const t of page) repaid.add(normalizeAddress(t.sender));
-      if (page.length) after = String(page[page.length - 1].version);
+      if (page.length) {
+        const at = new Map<string, string>(page.map((t: any) => [String(t.version), new Date(t.timestamp + 'Z').toISOString()]));
+        let from = '';
+        for (;;) {
+          const rows = (await chain.gql(TOUCHED_QUERY, { v: [...at.keys()], after: from })).account_transactions;
+          pages++;
+          for (const r of rows) {
+            const account = normalizeAddress(r.account_address), time = at.get(String(r.transaction_version))!;
+            if (!repaid[account] || time > repaid[account]) repaid[account] = time;
+          }
+          if (rows.length < PAGE) break;
+          from = rows[rows.length - 1].account_address;
+        }
+        after = String(page[page.length - 1].version);
+      }
       if (page.length < PAGE) break;
     }
-    const candidates = await mapLimit(holders.candidates, 4, async c => {
-      if (!repaid.has(c.owner)) return c;
-      const changed: Record<string, string> = {};
-      for (const token of (c.hint as { tokens: string[] }).tokens) {
-        const [last] = (await chain.gql(POSITION_CHANGE_QUERY, { p: token, v: String(AURO_CLOSED_VERSION) })).account_transactions;
-        pages++;
-        const secs = last ? await transactionTime(chain, last.transaction_version) : null;
-        if (secs !== null) changed[token] = iso(secs);
+    const owners = new Map<string, { tokens: string[]; changed: Record<string, string> }>();
+    let from = '';
+    for (;;) {
+      const page = (await chain.gql(AURO_TOKENS_QUERY, { c: AURO_COLLECTION, after: from })).current_token_ownerships_v2;
+      pages++;
+      for (const t of page) {
+        const owner = normalizeAddress(t.owner_address), token = normalizeAddress(t.token_data_id);
+        const o = owners.get(owner) ?? { tokens: [], changed: {} };
+        o.tokens.push(token);
+        const moved = new Date(t.last_transaction_timestamp + 'Z').toISOString();
+        const latest = [moved > AURO_CLOSED_AT ? moved : undefined, repaid[token]].filter((d): d is string => !!d).sort().pop();
+        if (latest) o.changed[token] = latest;
+        owners.set(owner, o);
       }
-      return { owner: c.owner, hint: { ...(c.hint as object), changed } };
-    });
-    return { candidates, cursor: JSON.stringify({ v: after, repaid: [...repaid].sort() }), pages };
+      if (page.length < PAGE) break;
+      from = page[page.length - 1].token_data_id;
+    }
+    const candidates = [...owners].map(([owner, o]) => ({ owner, hint: { tokens: o.tokens.sort(), ...(Object.keys(o.changed).length ? { changed: o.changed } : {}) } }));
+    // Kept whole (a few accounts per repayment, which are rare): a position the ownership index has not caught up on
+    // still finds its date in a later run.
+    return { candidates, cursor: JSON.stringify({ v: after, repaid }), pages };
+  },
+  async sanity() {
+    return { check: 'none', ok: null, detail: 'no contract total: the pools\' books overstate what the DAO account holds (stkAPT ~37%)' };
   },
 };
 
