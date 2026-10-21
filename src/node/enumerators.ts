@@ -36,6 +36,8 @@ export interface Enumerator {
   sourceId: string;
   /** Indexer processor whose watermark bounds the enumeration; null when only the fullnode is read. */
   processor: string | null;
+  /** Other processors whose tables the enumeration reads; any of them lagging degrades the run like `processor`. */
+  alsoProcessors?: string[];
   /** Named enumeration scope; "complete" means complete within this, never chain-wide. */
   scope: string;
   run(chain: ChainReader, cursor: string | undefined): Promise<Enumeration>;
@@ -228,6 +230,7 @@ const auroOwners = collectionOwners('auro-closed-positions', AURO_COLLECTION,
   async () => ({ check: 'none', ok: null, detail: 'no contract total: the pools\' books overstate what the DAO account holds (stkAPT ~37%)' }));
 export const auroClosedEnumerator: Enumerator = {
   ...auroOwners,
+  alsoProcessors: ['user_transaction_processor', 'account_transactions_processor'],
   scope: `${auroOwners.scope}; plus senders of ${AURO_ROUTER}::auro_router::repay_entry after the shutdown, and their positions' last transactions`,
   async run(chain, cursor) {
     let stored: { v?: string; repaid?: string[] } = {};

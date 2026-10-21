@@ -35,8 +35,8 @@ const enumerator = (owners: string[], fail = false): Enumerator => ({
   run: async () => { if (fail) throw new Error('indexer 503'); return { candidates: owners.map(owner => ({ owner })), pages: 1 }; },
 });
 
-const chain = (watermark = freshWatermark, authKey?: string): ChainReader => fakeChain({
-  gql: () => watermark(),
+const chain = (watermark: (q: string, v: Record<string, unknown>) => unknown = freshWatermark, authKey?: string): ChainReader => fakeChain({
+  gql: (q, v) => watermark(q, v),
   resource: () => null,
   account: (address: string) => ({ authentication_key: authKey ?? address, sequence_number: '1' }),
 });
@@ -52,6 +52,14 @@ describe('runSource', () => {
     const { run } = await runSource(source(async () => ({ positions: [], complete: true, errors: [], ledgerVersion: '1' })),
       enumerator([addr(1)]), new State(':memory:'), chain(stale), { hit: false });
     expect(run.degradedReasons.join()).toMatch(/behind/);
+  });
+
+  it('reports a lagging second processor the enumeration reads as degraded', async () => {
+    const mixed = (_q: string, v: Record<string, unknown>) => ({ processor_status: [{ last_success_version: 1,
+      last_transaction_timestamp: v?.p === 'q' ? '2026-01-01T00:00:00' : new Date().toISOString().slice(0, -1) }] });
+    const { run } = await runSource(source(async () => ({ positions: [], complete: true, errors: [], ledgerVersion: '1' })),
+      { ...enumerator([addr(1)]), alsoProcessors: ['q'] }, new State(':memory:'), chain(mixed), { hit: false });
+    expect(run.degradedReasons).toEqual([expect.stringMatching(/^indexer q is \d+ min behind$/)]);
   });
 
   it('keeps previous positions when a revalidation read is incomplete', async () => {
