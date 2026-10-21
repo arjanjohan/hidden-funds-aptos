@@ -404,10 +404,11 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Read:** the position's `ObjectCore` owner must be the wallet. The amount comes from share accounting: shares × (reserves + debt − fees) / total shares, which is the amount a full withdrawal pays.
 - **Reserves are short:** every pool keeps its reserves with the DAO account `0xafe4…`, as the fungible asset recorded in `LendingPool.fungible_asset` (Auro wraps a coin pool's coin in its own asset). Most pools hold 99.9% of their books. The stkAPT pool holds 2,061 of 5,611 stkAPT (~37%); the DAO also holds a Kofi withdrawal manager, so part is probably in Kofi's unstake queue. Each position is counted for its pro-rata share of what the pool really holds.
 - **Recovery:** `auro_router::withdraw_coin_entry<coin>(position, amount)` for a coin pool, `withdraw_entry(position, amount)` for a fungible-asset pool, with the exact full amount (rounded up so it burns every share). A partial withdrawal checks the position's health with a Pyth price that no longer updates, so it aborts (simulated). A position larger than what its pool holds is therefore `blocked` (`insufficient_cash`): today, one stkAPT position of 5,131 stkAPT.
-- **Enumeration:** current owners of the collection (4 indexer pages, 298 owners). Zero owners (positions with debt) are re-read monthly, so a repaid position is picked up.
-- **Prices:** stAPT and stkAPT at redemption (on-chain rate × APT; stkAPT uses Kofi's `get_exchange_rate`), kAPT and amAPT from CoinGecko (amAPT's coin type maps to `amnis-aptos`), USDt and USDC from CoinGecko.
+- **Age:** from the later of 2026-04-30 23:59:59 UTC and the position's own `last_deposited_times`, since the contract still takes deposits.
+- **Enumeration:** current owners of the collection (4 indexer pages, 298 owners). Withdrawals, repayments and the pools' shared reserves change positions without changing who holds the NFTs, so every owner is re-read every run (~715 requests).
+- **Prices:** stAPT and stkAPT at redemption (on-chain rate × APT; stkAPT uses Kofi's `get_exchange_rate` less its withdrawal fee, 0 bps today), kAPT and amAPT from CoinGecko (amAPT's coin type maps to `amnis-aptos`), USDt and USDC from CoinGecko.
 - **Rehearsal (full, 2026-10-21):** 229 debt-free positions of 209 owners, all reads complete. On the books: 4,696 stAPT, 5,459 stkAPT, 485 kAPT, 164 amAPT, ~9 USDt, 0.4 USDC. Counted: 4,693 stAPT, 2,005 stkAPT, 484 kAPT, 164 amAPT (about $6.6K). Simulations, per token the smallest, median and largest: 15 of 15 recoverable positions paid exactly their claim, and the one blocked position aborted (`EINSUFFICIENT_BALANCE`).
-- **Cost:** ~715 requests a full pass; monthly afterwards.
+- **Cost:** ~715 requests a run.
 
 ## topaz-bids
 

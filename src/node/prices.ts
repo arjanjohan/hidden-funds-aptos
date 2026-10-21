@@ -74,9 +74,15 @@ async function redemptionPrices(prices: PriceBook, errors: string[], aptos: Chai
     }
   };
   await Promise.all([
-    // stkAPT unstakes to kAPT at Kofi's exchange rate (1e8 scale); kAPT redeems 1:1 for APT (kofi-withdrawals).
-    derive(STKAPT, 'stkAPT', 'derived: Kofi get_exchange_rate x APT (coingecko)', async () =>
-      Number((await aptos.view(`${KOFI}::rewards_manager::get_exchange_rate`, []))[0]) / 1e8),
+    // stkAPT unstakes to kAPT at Kofi's exchange rate (1e8 scale); kAPT redeems 1:1 for APT less Kofi's withdrawal fee
+    // (basis points; 0 on 2026-10-21).
+    derive(STKAPT, 'stkAPT', 'derived: Kofi get_exchange_rate less get_withdrawal_fee x APT (coingecko)', async () => {
+      const [[rate], [feeBps]] = await Promise.all([
+        aptos.view(`${KOFI}::rewards_manager::get_exchange_rate`, []),
+        aptos.view(`${KOFI}::config::get_withdrawal_fee`, []),
+      ]);
+      return Number(rate) / 1e8 * (1 - Number(feeBps) / 10_000);
+    }),
     derive(STAPT, 'stAPT', 'derived: Amnis stapt_price x APT (coingecko)', async () =>
       Number((await aptos.view(`${AMNIS}::stapt_token::stapt_price`, []))[0]) / 1e8),
     derive(STHAPT, 'sthAPT', 'derived: Thala thAPT_sthAPT_exchange_rate less unstake_APT_fee_bps x APT (coingecko)', async () => {

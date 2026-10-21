@@ -848,13 +848,14 @@ describe('econia idle accounts', () => {
 
 describe('auro closed positions', () => {
   const NFT = addr('f1'), POOL = addr('f2'), STAPT_COIN = '0x111ae3e5bc816a5e63c2da97d0aa3886519e0cd5e4b046659fa35796bd11542a::stapt_token::StakedApt';
-  type Opts = { debt?: boolean; held?: string; owner?: string; token?: string };
+  type Opts = { debt?: boolean; held?: string; owner?: string; token?: string; deposited?: string };
   // Pool books: 1,000 supplied over 800 shares; the position holds 200 shares (250 coins).
   const chain = (o: Opts = {}) => fakeChain({
     resource: (address, type) => {
       if (address === NFT && type === '0x1::object::ObjectCore') return { owner: o.owner ?? OWNER };
       if (address === NFT && type.endsWith('::lending_pool::UserPosition')) return {
-        deposit_shares: { data: [{ key: { inner: POOL }, value: '200' }] }, debt_shares: { data: o.debt ? [{ key: { inner: POOL }, value: '1' }] : [] } };
+        deposit_shares: { data: [{ key: { inner: POOL }, value: '200' }] }, debt_shares: { data: o.debt ? [{ key: { inner: POOL }, value: '1' }] : [] },
+        last_deposited_times: o.deposited ?? '1762830676' };
       if (address === POOL && type.endsWith('::lending_pool::State')) return { total_reserves_amount: '1000', total_debt_amount: '0', total_fees: '0', total_supply_shares: '800', is_paused: false };
       if (address === POOL && type.endsWith('::lending_pool::LendingPool')) return { token: o.token ?? STAPT_COIN, fungible_asset: { inner: addr('a8') } };
       return null;
@@ -876,6 +877,11 @@ describe('auro closed positions', () => {
     // A fungible-asset pool uses withdraw_entry; the check page finds the position NFTs itself.
     const fa = await auroClosedPositions.read(context(chain({ token: addr('a7') })), OWNER);
     expect(fa.positions[0].steps[0].function).toBe(`${AURO_ROUTER}::auro_router::withdraw_entry`);
+  });
+
+  it('ages a position topped up after the shutdown from that deposit', async () => {
+    const after = await auroClosedPositions.read(context(chain({ deposited: '1780000000' })), OWNER, { tokens: [NFT] });
+    expect(after.positions[0].claimableSince).toBe(new Date(1_780_000_000 * 1000).toISOString());
   });
 
   it('leaves out positions with debt and position NFTs that moved', async () => {
