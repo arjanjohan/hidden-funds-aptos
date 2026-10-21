@@ -155,7 +155,7 @@ export const PROTOCOLS: ProtocolEntry[] = [
   { id: 'goblin', name: 'Goblin', chains: [...A], category: 'Yield Aggregator', status: 'not_left_behind', checkedAt: '2026-10-20',
     reason: 'No closure notice found (vaults run on Hyperion).', defillama: 'goblin' },
   { id: 'animeswap', name: 'AnimeSwap', chains: [...A], category: 'Dexs', status: 'not_checked',
-    reason: 'No closure notice found (2026-10-20), but DefiLlama marks it dead; on-chain activity not checked yet.', defillama: 'animeswap', dead: 'yes' },
+    reason: 'Frontend gone: animeswap.org and app.animeswap.org have no address record (2026-10-21; Wayback shows the app served until at least 2026-08), so LP counts under the closed-frontend rule from that date. 340 pools hold ~4,243 APT on their APT sides (~$7K in all); the pool account itself holds 53% of the largest pool\'s LP, and indexer LP balances are stale (they sum to 10x the supply), so holders need on-chain reads. Not built yet.', defillama: 'animeswap', dead: 'yes' },
   { id: 'abel-finance', name: 'ABEL Finance', chains: [...A], category: 'Lending', status: 'not_left_behind', checkedAt: '2026-10-21',
     reason: 'Still used despite DefiLlama\'s dead flag: mints, borrows and redemptions until 2026-10-17, liquidations 2026-10-16.', defillama: 'abel-finance', dead: 'yes' },
   { id: 'meso-finance', name: 'Meso Finance', chains: [...A], category: 'Lending', status: 'not_left_behind', checkedAt: '2026-10-20',
@@ -167,18 +167,28 @@ export const PROTOCOLS: ProtocolEntry[] = [
   { id: 'arche-protocol', name: 'Arche Protocol (MSD)', chains: [...M], category: 'CDP', status: 'not_checked',
     reason: 'No closure evidence yet (DefiLlama flags it dead). 501.6K MOVE (~$3.7K) of collateral; its summary view aborts on a stale Pyth price (2026-10-20).', defillama: 'arche-protocol', dead: 'yes' },
 
+  { id: 'mole', name: 'Mole', chains: [...A], category: 'Yield', status: 'not_checked', defillama: 'mole',
+    reason: 'Frontend down (app.mole.fi empty in Wayback\'s 2026-10-20 capture, no response 2026-10-21) and its GitHub repo deleted; no notice found, so closure dates from 2026-10-20. Lending vaults are nearly empty (~51 APT, ~400 USDC; interest last accrued 2024). DefiLlama\'s $203K counts worker LP counters above 100% of their pool\'s supply; the one plausible holding is ~3.7% of PancakeSwap APT/USDC (~$15K), before excluding positions with debt. Whether closing a position needs a stopped Pyth price is not checked.' },
+  { id: 'aptoswap', name: 'Aptoswap', chains: [...A], category: 'Dexs', status: 'not_left_behind', checkedAt: '2026-10-21', defillama: 'aptoswap', dead: 'yes',
+    reason: 'Live despite DefiLlama\'s dead flag: aptoswap.net is up and its APT pool last traded 2026-10-20.' },
+  { id: 'mosaic-amm', name: 'Mosaic', chains: [...M], category: 'Dexs', status: 'not_left_behind', checkedAt: '2026-10-21', defillama: 'mosaic-amm',
+    reason: 'Frontend up (app.mosaic.ag) and no closure evidence; DefiLlama TVL $3.5K.' },
+  { id: 'interest-protocol', name: 'Interest Protocol (Curve, DEX)', chains: [...M], category: 'Dexs', status: 'too_small', checkedAt: '2026-10-21', defillama: 'interest-curve',
+    reason: 'Frontend up, and its 11 pools hold ~1.5 MOVE plus dust (lens::getAllPools).' },
+  { id: 'thetis-perps', name: 'Thetis Perps', chains: [...A], category: 'Derivatives', status: 'not_checked', defillama: 'thetis-perps', dead: 'yes',
+    reason: 'Frontend gone (thetis.market parked for sale, 2026-10-21); holdings not sized (DefiLlama TVL $1.3K).' },
+  { id: 'aptoslaunch', name: 'AptosLaunch', chains: [...A], category: 'Launchpad', status: 'not_checked', defillama: 'aptoslaunch', dead: 'yes',
+    reason: 'Frontend gone (aptoslaunch.io redirects to an unrelated site, 2026-10-21); staking pools not sized (DefiLlama TVL $2.5K).' },
+
   // Not checked yet, with DefiLlama's TVL (2026-10-21) as a hint for priority only: TVL is what the adapter counts,
   // not a ceiling on what a protocol owes (claim tables and ended rewards can sit outside it).
   ...([
     ['poly-network', 'Poly Network', A, 'Bridge', '2024-09-30', 0],
-    ['thetis-perps', 'Thetis Perps', A, 'Derivatives', 'yes', 1284],
     ['agdex', 'AGDEX', A, 'Derivatives', undefined, 86],
     ['obric', 'Obric', A, 'Dexs', undefined, 1487],
     ['bridgers', 'Bridgers', A, 'Dexs', undefined, 688],
-    ['interest-protocol', 'Interest Protocol (Curve, DEX)', M, 'Dexs', undefined, 51],
     ['jujube-finance', 'Jujube Finance', A, 'Dexs', 'yes', 29],
     ['atodex', 'AtoDEX', A, 'Dexs', 'yes', 0],
-    ['aptoslaunch', 'AptosLaunch', A, 'Launchpad', 'yes', 2456],
     ['movepump', 'MovePump', A, 'Launchpad', 'yes', 617],
     ['movegpt', 'MoveGPT', A, 'Launchpad', '2026-03-05', 0],
     ['bluemove-staking', 'BlueMove Staking', A, 'NFT Marketplace', 'yes', 0],
@@ -189,7 +199,7 @@ export const PROTOCOLS: ProtocolEntry[] = [
   ] as [string, string, readonly ('aptos' | 'movement')[], string, string | undefined, number][]).map(([id, name, chains, category, dead, tvl]): ProtocolEntry => ({
     id, name, chains: [...chains], category, status: 'not_checked',
     reason: `Not checked yet (DefiLlama TVL $${tvl.toLocaleString('en-US')} on 2026-10-21).`,
-    defillama: id === 'interest-protocol' ? 'interest-curve' : id, ...(dead ? { dead } : {}),
+    defillama: id, ...(dead ? { dead } : {}),
   })),
 
   // Not checked yet (DefiLlama, 2026-10-20)
@@ -199,22 +209,19 @@ export const PROTOCOLS: ProtocolEntry[] = [
     ['tsunamix', 'TsunamiX (Tsunami Finance)', A, 'Derivatives', 'yes'],
     ['liquidswap', 'LiquidSwap', A, 'Dexs'],
     ['cetus-clmm', 'Cetus CLMM', A, 'Dexs'],
-    ['aptoswap', 'Aptoswap', A, 'Dexs', 'yes'],
     ['houstonswap', 'HoustonSwap', A, 'Dexs', 'yes'],
     ['baptswap', 'BaptSwap (V1, V2, V2.1)', A, 'Dexs', 'yes'],
     ['sushi-aptos', 'Sushi (Aptos)', A, 'Dexs'],
-    ['mosaic-amm', 'Mosaic', M, 'Dexs'],
     ['movefast', 'MoveFast', A, 'Launchpad'],
     ['goapt', 'GoAPT', A, 'Liquid Staking'],
     ['collex', 'Collex', A, 'Physical TCG', 'yes'],
     ['kaio', 'KAIO', A, 'RWA'],
     ['propbase', 'Propbase', A, 'RWA'],
     ['newrlrwa', 'NewrlRWA', A, 'RWA'],
-    ['mole', 'Mole', A, 'Yield'],
     ['eternal-finance', 'Eternal Finance', A, 'Yield'],
     ['moneyfi-v1', 'MoneyFi', A, 'Yield Aggregator'],
   ] as [string, string, readonly ('aptos' | 'movement')[], string, string?][]).map(([id, name, chains, category, dead]): ProtocolEntry => ({
-    id, name, chains: [...chains], category, status: 'not_checked', reason: 'Not checked yet.', defillama: id === 'baptswap' ? 'baptswap-v2.1' : id === 'interest-protocol' ? 'interest-curve' : id, ...(dead ? { dead } : {}),
+    id, name, chains: [...chains], category, status: 'not_checked', reason: 'Not checked yet.', defillama: id === 'baptswap' ? 'baptswap-v2.1' : id, ...(dead ? { dead } : {}),
   })),
 
   // Out of scope: custodial exchanges DefiLlama lists with Aptos reserves
