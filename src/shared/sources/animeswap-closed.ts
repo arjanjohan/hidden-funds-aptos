@@ -140,14 +140,15 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: AnimeswapHint):
       const step = { function: `${ANIMESWAP}::AnimeSwapPoolV1::remove_liquidity_entry<${x}, ${y}>`,
         arguments: [liquidity.toString(), (ax * (10_000n - SLIPPAGE_BPS) / 10_000n).toString(), (ay * (10_000n - SLIPPAGE_BPS) / 10_000n).toString()],
         prerequisites: [], expectedOutputs: outputs };
-      // One position per side, so a priced side still counts when the other coin has no price; one removal pays both.
-      return outputs.filter(o => o.raw !== '0').map((o): Position => ({
+      // One position per side, so a priced side still counts when the other coin has no price. One removal pays both,
+      // so only the first side carries the step: shown twice, it would tell the owner to burn the same LP twice.
+      return outputs.filter(o => o.raw !== '0').map((o, i): Position => ({
         ...positionIds(SOURCE, owner, lp, 'principal', o.asset), source: SOURCE, owner, locator: lp, positionKind: 'principal', asset: o.asset,
         claimableSince: since, ageBasis: 'protocol_closure',
         provenance: { reader: '0x1::coin::balance', ledgerVersion: version },
         grossClaim: [o], expectedPayout: blockers.length ? [] : [o], payoutBasis: 'derived',
         status: blockers.length ? 'blocked' : 'recoverable', blockers,
-        confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs), steps: [step],
+        confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs), steps: i === 0 ? [step] : [],
       }));
     } catch (err) {
       failed++;

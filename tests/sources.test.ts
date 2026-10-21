@@ -966,6 +966,8 @@ describe('animeswap closed lp', () => {
     expect(r.positions[0]).toMatchObject({ status: 'recoverable', claimableSince: ANIMESWAP_CLOSED_AT, ageBasis: 'protocol_closure', locator: LP,
       steps: [{ function: `${ANIMESWAP}::AnimeSwapPoolV1::remove_liquidity_entry<0x1::aptos_coin::AptosCoin, ${USDC_COIN}>`, arguments: ['100', '99000', '198000'] }] });
     expect(new Set(r.positions.map(p => p.parentId)).size).toBe(1);
+    // One removal pays both sides: the step is listed once.
+    expect(r.positions[1].steps).toEqual([]);
     // LP added or received after the shutdown is aged from that change.
     const later = await animeswapClosedLp.read(context(chain()), OWNER, { lps: { [LP]: '2026-12-01T00:00:00.000Z' } });
     expect(later.positions[0].claimableSince).toBe('2026-12-01T00:00:00.000Z');
