@@ -4,7 +4,7 @@ import { snapshot, STALE_AFTER_MS } from '../lib/data.ts';
 interface Props { title: string; description?: string }
 const { title, description = 'Find APT and MOVE you left behind: unstaked but never withdrawn, unstake requests never claimed, bridge transfers never collected, stakes in pools that ended.' } = Astro.props;
 const path = Astro.url.pathname;
-const REPO = 'https://github.com/arjanjohan/hidden-funds-aptos';
+import { REPO } from '../lib/site.ts';
 ---
 <!doctype html>
 <html lang="en">
@@ -48,8 +48,8 @@ const REPO = 'https://github.com/arjanjohan/hidden-funds-aptos';
           <div>
             <h3>The data</h3>
             <a href="/#cases">What we find</a>
-            <a href={`${REPO}/blob/main/docs/left-behind.md`}>How we count</a>
-            <a href={`${REPO}/blob/main/docs/sources.md`}>Sources and evidence</a>
+            <a href="/how-we-count">How we count</a>
+            <a href="/sources">Sources and evidence</a>
             <a href="/coverage">Protocol coverage</a>
           </div>
           <div>
@@ -145,4 +145,19 @@ const REPO = 'https://github.com/arjanjohan/hidden-funds-aptos';
   .button.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); }
   .button.ghost:hover { background: var(--soft); }
   code { font-size: 13px; overflow-wrap: anywhere; }
+
+  /* Rendered markdown (docs pages). */
+  /* Text keeps a readable measure; tables may use the full width. */
+  .prose > :not(table, .table, .doc) { max-width: 780px; }
+  .prose h2 { margin: 44px 0 10px; scroll-margin-top: 76px; }
+  .prose h3 { font-size: 17px; margin: 28px 0 8px; scroll-margin-top: 76px; }
+  .prose ul, .prose ol { padding-left: 22px; }
+  .prose li { margin: 4px 0; }
+  .prose li > ul { margin: 4px 0; }
+  .prose table { display: block; overflow-x: auto; margin: 12px 0; }
+  .prose code { background: var(--soft); padding: 1px 5px; border-radius: 5px; }
+  .prose td code, .prose th code { white-space: nowrap; overflow-wrap: normal; }
+  .prose blockquote { border-left: 3px solid var(--line); margin: 12px 0; padding-left: 14px; color: var(--muted); }
+  .prose .source-note { margin-top: 48px; font-size: 14px; }
+  .prose .doc > :not(table) { max-width: 780px; }
 </style>
