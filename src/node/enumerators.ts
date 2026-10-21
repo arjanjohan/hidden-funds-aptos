@@ -2,6 +2,7 @@
 import { iso } from '../shared/accounting.ts';
 import { mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
+import { AURO_COLLECTION } from '../shared/sources/auro-closed.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
 import { AAVE, type AaveHint, aaveReserves, findFreeze } from '../shared/sources/aave-frozen.ts';
 import { ECHELON, FROZEN_MARKETS } from '../shared/sources/echelon-frozen.ts';
@@ -211,6 +212,11 @@ export const amnisWithdrawalsEnumerator = collectionOwners('amnis-withdrawals', 
     return { check: 'matured withdrawal tokens found <= withdrawal::total_pending_withdrawal (all open tokens)', ok: matured <= total,
       detail: `matured ${matured} of ${total} pending (${pct(matured, total)})` };
   });
+
+// Auro: current owners of CDP position NFTs. Positions with debt are read too (they count once repaid, which the monthly
+// re-read of zero owners picks up).
+export const auroClosedEnumerator = collectionOwners('auro-closed-positions', AURO_COLLECTION,
+  async () => ({ check: 'none', ok: null, detail: 'no contract total: the pools\' books overstate what the DAO account holds (stkAPT ~37%)' }));
 
 // Every delegation pool, then the active-stake delegators of pools whose validator is inactive.
 const inactiveValidatorEnumeratorFor = (sourceId: string): Enumerator => ({
@@ -765,4 +771,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator, auroClosedEnumerator];

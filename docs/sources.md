@@ -195,7 +195,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Fliq (Aptos prediction markets):** winnings on a settled question that were never redeemed are an ended position (R2), and `connector::redeem` needs no operator. But the collateral wrapper's account holds 4,200 USDt in total (2026-10-20). That backs every open position, free collateral and unredeemed winning together, so unredeemed winnings are only a part of ~$4.2K. Skipped.
 - **Joule:** live. Withdrawals need fresh Pyth price updates, which require a paid Pyth key; that is a cost of using it, not a closure.
 - **No closure notice found (web search, 2026-10-20):** AnimeSwap, Abel Finance, BlueMove (its Sei marketplace closed in 2023; Aptos was not affected).
-- **Auro Finance (Aptos CDP):** closed. The team's notice (on X) told users to withdraw all funds before April 30, 2026, and permanently shut down the website by the end of April, because Pyth deprecated its push feeds on Aptos. auro.finance and app.auro.finance no longer resolve; the last archived capture of the app is from 2025-12-04. Under the closed-frontend rule, debt-free collateral counts, aged from 2026-04-30. Source not built yet.
+- **Auro Finance (Aptos CDP):** closed; now a source (`auro-closed-positions`).
 - **DefiLlama "dead" flags (checked 2026-10-20):**
   - ABEL Finance (~$206K TVL) is still used: mints, borrows and redemptions until 2026-10-17 (checked 2026-10-21).
   - Meso Finance is still used: deposits until 2026-09-23, withdrawals until 2026-09-14, every pool unpaused and accruing interest.
@@ -395,6 +395,19 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Size (Phase 0, 2026-10-18):** 25,354 idle owner-controlled accounts. Market 7 (APT/lzUSDC) holds nearly all of it: 25,012 accounts, 3,329 APT and 29,076 lzUSDC (~$31.6K, ~$1.25 per account; it looks like campaign farming). The other 9 markets hold a few dollars each, plus Echo's unpriced EchoCoin002.
 - **Rehearsal (2026-10-20):** 104 owners (the 3 largest plus every 250th): 104/104 reads complete, 128 positions. 12 of 12 withdrawals simulated with the generated steps succeed and pay exactly the counted amount. Before building, 19 of 19 direct simulations across 10 markets also succeeded.
 - **Cost:** first run ~522 indexer pages + ~48.8K views + an owner-kind lookup per owner with value (~25K): ~75K requests. Later runs read only owners with new calls.
+
+## auro-closed-positions
+
+- **What:** collateral left in debt-free Auro Finance CDP positions after the team shut the website down.
+- **Status (checked 2026-10-21):** closed under the closed-frontend rule (decided 2026-10-21). The team's notice on X told users to "withdraw all funds before April 30" (2026) and to expect the website to be "permanently shut down by the end of April", because Pyth deprecated its push feeds on Aptos. auro.finance and app.auro.finance no longer resolve; the last archived capture of the app is from 2025-12-04. Aged from 2026-04-30 23:59:59 UTC.
+- **Positions:** NFTs in Auro's CDP collection (`0x0bc8…`); each holds a `lending_pool::UserPosition` with deposit and debt shares. A position with any debt does not count (R4); its rewards cannot be claimed either (the claim aborts on a stale Pyth price) and are left out.
+- **Read:** the position's `ObjectCore` owner must be the wallet. The amount comes from share accounting: shares × (reserves + debt − fees) / total shares, which is the amount a full withdrawal pays.
+- **Reserves are short:** every pool keeps its reserves with the DAO account `0xafe4…`, as the fungible asset recorded in `LendingPool.fungible_asset` (Auro wraps a coin pool's coin in its own asset). Most pools hold 99.9% of their books. The stkAPT pool holds 2,061 of 5,611 stkAPT (~37%); the DAO also holds a Kofi withdrawal manager, so part is probably in Kofi's unstake queue. Each position is counted for its pro-rata share of what the pool really holds.
+- **Recovery:** `auro_router::withdraw_coin_entry<coin>(position, amount)` for a coin pool, `withdraw_entry(position, amount)` for a fungible-asset pool, with the exact full amount (rounded up so it burns every share). A partial withdrawal checks the position's health with a Pyth price that no longer updates, so it aborts (simulated). A position larger than what its pool holds is therefore `blocked` (`insufficient_cash`): today, one stkAPT position of 5,131 stkAPT.
+- **Enumeration:** current owners of the collection (4 indexer pages, 298 owners). Zero owners (positions with debt) are re-read monthly, so a repaid position is picked up.
+- **Prices:** stAPT and stkAPT at redemption (on-chain rate × APT; stkAPT uses Kofi's `get_exchange_rate`), kAPT and amAPT from CoinGecko (amAPT's coin type maps to `amnis-aptos`), USDt and USDC from CoinGecko.
+- **Rehearsal (full, 2026-10-21):** 229 debt-free positions of 209 owners, all reads complete. On the books: 4,696 stAPT, 5,459 stkAPT, 485 kAPT, 164 amAPT, ~9 USDt, 0.4 USDC. Counted: 4,693 stAPT, 2,005 stkAPT, 484 kAPT, 164 amAPT (about $6.6K). Simulations, per token the smallest, median and largest: 15 of 15 recoverable positions paid exactly their claim, and the one blocked position aborted (`EINSUFFICIENT_BALANCE`).
+- **Cost:** ~715 requests a full pass; monthly afterwards.
 
 ## topaz-bids
 

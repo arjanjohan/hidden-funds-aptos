@@ -3,6 +3,7 @@ import { ownerKind } from '../src/shared/owners.ts';
 import { AAVE, aaveFrozenReserves, AAVE_UNFROZEN_AT, USDC } from '../src/shared/sources/aave-frozen.ts';
 import { canopyEndedRewards } from '../src/shared/sources/canopy-rewards.ts';
 import { APT, delegation, MOVE, movementDelegation } from '../src/shared/sources/delegation.ts';
+import { AURO_CLOSED_AT, AURO_DAO, AURO_ROUTER, auroClosedPositions } from '../src/shared/sources/auro-closed.ts';
 import { echelonFrozenMarkets, FROZEN_MARKETS } from '../src/shared/sources/echelon-frozen.ts';
 import { ECONIA, ECONIA_ARCHIVED_AT, ECONIA_COINS, econiaIdleAccounts } from '../src/shared/sources/econia-idle.ts';
 import { ASSETS } from '../src/shared/assets.ts';
@@ -842,5 +843,52 @@ describe('econia idle accounts', () => {
       account('12', { base: '5', quote: '7' }),
     ])), OWNER);
     expect(r.positions.map(p => [p.locator, p.asset, p.expectedPayout[0].raw])).toEqual([['market-12', LZUSDC, '7']]);
+  });
+});
+
+describe('auro closed positions', () => {
+  const NFT = addr('f1'), POOL = addr('f2'), STAPT_COIN = '0x111ae3e5bc816a5e63c2da97d0aa3886519e0cd5e4b046659fa35796bd11542a::stapt_token::StakedApt';
+  type Opts = { debt?: boolean; held?: string; owner?: string; token?: string };
+  // Pool books: 1,000 supplied over 800 shares; the position holds 200 shares (250 coins).
+  const chain = (o: Opts = {}) => fakeChain({
+    resource: (address, type) => {
+      if (address === NFT && type === '0x1::object::ObjectCore') return { owner: o.owner ?? OWNER };
+      if (address === NFT && type.endsWith('::lending_pool::UserPosition')) return {
+        deposit_shares: { data: [{ key: { inner: POOL }, value: '200' }] }, debt_shares: { data: o.debt ? [{ key: { inner: POOL }, value: '1' }] : [] } };
+      if (address === POOL && type.endsWith('::lending_pool::State')) return { total_reserves_amount: '1000', total_debt_amount: '0', total_fees: '0', total_supply_shares: '800', is_paused: false };
+      if (address === POOL && type.endsWith('::lending_pool::LendingPool')) return { token: o.token ?? STAPT_COIN, fungible_asset: { inner: addr('a8') } };
+      return null;
+    },
+    view: (fn, args) => {
+      // The DAO's balance of the pool's held asset (Auro wraps a coin pool's coin in its own fungible asset).
+      if (fn === '0x1::primary_fungible_store::balance' && args[0] === AURO_DAO && args[1] === addr('a8')) return [o.held ?? '1000'];
+      throw new Error(fn);
+    },
+    gql: () => ({ current_token_ownerships_v2: [{ token_data_id: NFT }] }),
+  });
+
+  it('counts a debt-free position from the shutdown date, withdrawn whole with the exact share amount', async () => {
+    const r = await auroClosedPositions.read(context(chain()), OWNER, { tokens: [NFT] });
+    expect(r.positions).toHaveLength(1);
+    expect(r.positions[0]).toMatchObject({ asset: STAPT_COIN, status: 'recoverable', claimableSince: AURO_CLOSED_AT, ageBasis: 'protocol_closure',
+      grossClaim: [{ raw: '250' }], expectedPayout: [{ raw: '250' }],
+      steps: [{ function: `${AURO_ROUTER}::auro_router::withdraw_coin_entry<${STAPT_COIN}>`, arguments: [NFT, '250'] }] });
+    // A fungible-asset pool uses withdraw_entry; the check page finds the position NFTs itself.
+    const fa = await auroClosedPositions.read(context(chain({ token: addr('a7') })), OWNER);
+    expect(fa.positions[0].steps[0].function).toBe(`${AURO_ROUTER}::auro_router::withdraw_entry`);
+  });
+
+  it('leaves out positions with debt and position NFTs that moved', async () => {
+    expect((await auroClosedPositions.read(context(chain({ debt: true })), OWNER, { tokens: [NFT] })).positions).toEqual([]);
+    expect((await auroClosedPositions.read(context(chain({ owner: addr('e9') })), OWNER, { tokens: [NFT] })).positions).toEqual([]);
+  });
+
+  it('counts the pro-rata share of what the pool really holds, and blocks a position the pool cannot pay whole', async () => {
+    // The DAO holds 400 of the 1,000 on the books: 250 x 0.4 = 100 counted; 250 > 400 is false, so it can be withdrawn whole.
+    const short = await auroClosedPositions.read(context(chain({ held: '400' })), OWNER, { tokens: [NFT] });
+    expect(short.positions[0]).toMatchObject({ status: 'recoverable', expectedPayout: [{ raw: '100' }], steps: [{ expectedOutputs: [{ raw: '250' }] }] });
+    // Holding 200 < 250: only a partial withdrawal could pay, and that needs a fresh Pyth price.
+    const blocked = await auroClosedPositions.read(context(chain({ held: '200' })), OWNER, { tokens: [NFT] });
+    expect(blocked.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'insufficient_cash' }], expectedPayout: [{ raw: '50' }] });
   });
 });

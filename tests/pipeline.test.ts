@@ -11,6 +11,7 @@ import { State } from '../src/node/state.ts';
 import { positionIds } from '../src/shared/accounting.ts';
 import { AAVE, AAVE_UNFROZEN_AT } from '../src/shared/sources/aave-frozen.ts';
 import { STAPT, STHAPT } from '../src/shared/sources/echelon-frozen.ts';
+import { STKAPT } from '../src/shared/sources/kofi-receipts.ts';
 import type { ChainReader, Position, ReadResult, SourceDef } from '../src/shared/types.ts';
 import { addr, fakeChain } from './fake-chain.ts';
 
@@ -225,12 +226,13 @@ describe('state changes', () => {
 
 describe('prices', () => {
   afterEach(() => vi.unstubAllGlobals());
-  // stAPT: 1.2171 amAPT each; sthAPT: 1.25 thAPT each, less a 0.15% unstake fee.
+  // stAPT: 1.2171 amAPT each; sthAPT: 1.25 thAPT each, less a 0.15% unstake fee; stkAPT: 1.04 kAPT each.
   const rates = (fail: false | 'all' | 'thala' = false) => fakeChain({ view: (fn) => {
     if (fail === 'all' || (fail === 'thala' && fn.includes('::staking::'))) throw new Error('view: HTTP 500');
     if (fn.endsWith('::stapt_price')) return ['121710000'];
     if (fn.endsWith('::thAPT_sthAPT_exchange_rate')) return ['125', '100'];
     if (fn.endsWith('::unstake_APT_fee_bps')) return ['15'];
+    if (fn.endsWith('::rewards_manager::get_exchange_rate')) return ['104000000'];
     throw new Error(fn);
   } });
 
@@ -248,13 +250,14 @@ describe('prices', () => {
     expect(errors[0]).toMatch(/older than 7 days/);
   });
 
-  it('values stAPT and sthAPT at redemption from on-chain rates and the APT quote, dated like that quote', async () => {
+  it('values stAPT, sthAPT and stkAPT at redemption from on-chain rates and the APT quote, dated like that quote', async () => {
     vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ aptos: { usd: 2, last_updated_at: 1_800_000_000 - 60 } })));
     const { prices } = await fetchPrices(1_800_000_000, rates());
     const at = new Date((1_800_000_000 - 60) * 1000).toISOString();
     expect(prices[STAPT]).toMatchObject({ decimals: 8, at, source: expect.stringMatching(/^derived/) });
     expect(prices[STAPT].usd).toBeCloseTo(2 * 1.2171);
     expect(prices[STHAPT].usd).toBeCloseTo(2 * 1.25 * 0.9985);
+    expect(prices[STKAPT].usd).toBeCloseTo(2 * 1.04);
     // A failed rate read leaves that receipt unpriced, with an error, and the other priced; no APT quote means nothing
     // to derive from.
     const failed = await fetchPrices(1_800_000_000, rates('all'));

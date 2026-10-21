@@ -142,8 +142,8 @@ export const PROTOCOLS: ProtocolEntry[] = [
   // No closure evidence found (checked, nothing ended)
   { id: 'thala-cdp', name: 'Thala CDP (MOD)', chains: [...A], category: 'CDP', status: 'not_left_behind', checkedAt: '2026-10-19',
     reason: 'No closure notice found.', defillama: 'thala-cdp' },
-  { id: 'auro-finance', name: 'Auro Finance', chains: [...A], category: 'CDP', status: 'not_checked',
-    reason: 'Closed: website shut down by 2026-04-30 (team notice: withdraw all funds before April 30). Debt-free CDP collateral counts under the closed-frontend rule (decided 2026-10-21); source not built yet.', defillama: 'auro-finance' },
+  { id: 'auro-finance', name: 'Auro Finance', chains: [...A], category: 'CDP', status: 'implemented', checkedAt: '2026-10-21',
+    reason: 'Website shut down by 2026-04-30 (team notice): collateral left in debt-free positions.', sources: ['auro-closed-positions'], defillama: 'auro-finance' },
   { id: 'echo', name: 'Echo (lending, liquid staking, strategy)', chains: [...A], category: 'Lending', status: 'not_left_behind', checkedAt: '2026-10-19',
     reason: 'No closure or withdrawal notice found.', defillama: 'echo-lending' },
   { id: 'souffl3', name: 'Souffl3', chains: [...A], category: 'NFT Marketplace', status: 'not_left_behind', checkedAt: '2026-10-19',
