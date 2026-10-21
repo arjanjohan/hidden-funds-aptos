@@ -16,8 +16,10 @@ const SOURCE = 'topaz-bids';
 /** A bidder whose indexed bids total less than this (0.25 APT, about $1) is not verified on chain: listed as
  *  indexer_only, which keeps them out of every total. Most bids are dust. */
 export const TOPAZ_VERIFY_MIN = 25_000_000n;
-export const TOPAZ_CLOSED_AT = '2024-08-21T00:00:00Z';
-/** Each module's MarketplaceData.nonce at the shutdown (version 1,642,611,992): bid ids below it were placed before. */
+/** End of the day Topaz's notice names (it gives a date only). */
+export const TOPAZ_CLOSED_AT = '2024-08-21T23:59:59Z';
+/** Each module's MarketplaceData.nonce at version 1,642,611,992 (the shutdown day): bid ids below it were placed before;
+ *  bids placed later that day have higher ids, so their age stays unknown. */
 export const TOPAZ_NONCE_AT_CLOSE = { c: 312_038n, a: 271_091n };
 
 export const TOPAZ_KINDS = {
@@ -140,7 +142,7 @@ export const topazBids: SourceDef<TopazHint> = {
     state: 'closed',
     evidence: 'Topaz announced it ceased operations on 2024-08-21 (homepage notice; aptos.dev lists Topaz as deprecated). The contract still accepts cancels.',
     checkedAt: '2026-10-19',
-    effectiveAt: '2024-08-21T00:00:00Z',
+    effectiveAt: TOPAZ_CLOSED_AT,
   },
   refresh: { nonZero: 'monthly', zero: 'monthly' },
   // Version 2 (2026-10-21): open bids count. Stored bidders are all re-read once.

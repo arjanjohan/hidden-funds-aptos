@@ -818,8 +818,9 @@ const noContractTotal: Enumerator['sanity'] = async () =>
 // changed; those only matter after an owner's first read, which comes after this source was added (2026-10-20), so
 // their scan starts there. A fill of a resting order is sent by the taker, so makers are taken from the coin markets'
 // open orders each run: current makers and last run's are re-read (a fill moves coins between base and quote, and the
-// account whose order filled is read again in the run after). An owner's own call puts the run's time in its hint, so a
-// balance it changed after the archive date is aged from that run, never from the archive.
+// account whose order filled is read again in the run after). An owner's own call, or a change to its open orders it did
+// not make (a fill, whole or partial), puts the run's time in its hint, so a balance that changed after the archive date
+// is aged from the run that saw it, never from the archive.
 const ECONIA_CHANGES_FROM = 7_696_900_000;
 const ECONIA_REGISTRATIONS: EntryFunction[] = [
   ...['register_market_account', 'register_market_account_generic_base'].map(name => ({ contract: ECONIA, module: 'user', name })),
@@ -841,27 +842,34 @@ export const econiaIdleEnumerator: Enumerator = {
   ...econiaSenders,
   scope: `${econiaSenders.scope}; plus owner-controlled makers with open orders in coin markets ${ECONIA_COIN_MARKETS[0]}-${ECONIA_COIN_MARKETS.at(-1)}`,
   async run(chain, cursor) {
-    let stored: { r?: string; c?: string; m?: string[] } = {};
+    let stored: { r?: string; c?: string; m?: Record<string, string> } = {};
     try { stored = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: rescan */ }
     if (typeof stored !== 'object' || stored === null) stored = {};
     const ledger = await chain.ledger();
     const registered = await senders(chain, ECONIA_REGISTRATIONS, stored.r);
     const changed = await senders(chain, ECONIA_CHANGES, stored.c);
-    // Makers now, and last run's (whose orders may have filled since): a fill changes their totals' coins.
-    const makers = new Set<string>();
+    // Each maker's open orders now (market, order id, remaining size), and last run's: an order that filled, in whole
+    // or in part, moved coins between base and quote.
+    const orders = new Map<string, string[]>();
     for (const market of ECONIA_COIN_MARKETS) {
-      const [orders] = await chain.view(`${ECONIA}::market::get_open_orders_all`, [market]);
-      for (const o of [...orders.asks, ...orders.bids]) if (o.custodian_id === '0') makers.add(normalizeAddress(o.user));
+      const [open] = await chain.view(`${ECONIA}::market::get_open_orders_all`, [market]);
+      for (const o of [...open.asks, ...open.bids]) if (o.custodian_id === '0') {
+        const maker = normalizeAddress(o.user);
+        orders.set(maker, [...(orders.get(maker) ?? []), `${o.market_id}:${o.order_id}:${o.remaining_size}`]);
+      }
     }
-    const previous = Array.isArray(stored.m) ? stored.m : [];
-    // The owner's own calls date its balances from this run; a fill does not (coins in an order count from the archive
-    // date, like idle ones). Every candidate carries a hint (empty when nothing of its own changed): a read without one
-    // is the check page's, which cannot tell whether a balance changed after the archive date.
+    const makers = Object.fromEntries([...orders].map(([maker, list]) => [maker, list.sort().join(',')]));
+    const previous: Record<string, string> = stored.m && typeof stored.m === 'object' && !Array.isArray(stored.m) ? stored.m : {};
+    // The owner's own calls, and changes to its orders since last run, date its balances from this run. Every candidate
+    // carries a hint (empty when nothing changed): a read without one is the check page's, which cannot tell whether a
+    // balance changed after the archive date.
     const since = iso(ledger.timestampSecs);
     const acted = new Set(changed.candidates.map(c => c.owner));
-    const owners = new Set([...registered.candidates.map(c => c.owner), ...acted, ...makers, ...previous]);
-    return { candidates: [...owners].map(owner => ({ owner, hint: acted.has(owner) ? { since } : {} })),
-      cursor: JSON.stringify({ r: registered.cursor, c: changed.cursor, m: [...makers].sort() }),
+    const filled = Object.keys(previous).filter(maker => previous[maker] !== (makers[maker] ?? ''));
+    const dated = new Set([...acted, ...filled]);
+    const owners = new Set([...registered.candidates.map(c => c.owner), ...acted, ...Object.keys(makers), ...Object.keys(previous)]);
+    return { candidates: [...owners].map(owner => ({ owner, hint: dated.has(owner) ? { since } : {} })),
+      cursor: JSON.stringify({ r: registered.cursor, c: changed.cursor, m: makers }),
       pages: registered.pages + changed.pages + ECONIA_COIN_MARKETS.length, incremental: true };
   },
 };
