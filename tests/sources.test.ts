@@ -866,13 +866,13 @@ describe('econia accounts', () => {
 
 describe('auro closed positions', () => {
   const NFT = addr('f1'), POOL = addr('f2'), STAPT_COIN = '0x111ae3e5bc816a5e63c2da97d0aa3886519e0cd5e4b046659fa35796bd11542a::stapt_token::StakedApt';
-  type Opts = { debt?: boolean; held?: string; owner?: string; token?: string; deposited?: string };
+  type Opts = { debt?: boolean; held?: string; owner?: string; token?: string; deposited?: string; shares?: string };
   // Pool books: 1,000 supplied over 800 shares; the position holds 200 shares (250 coins).
   const chain = (o: Opts = {}) => fakeChain({
     resource: (address, type) => {
       if (address === NFT && type === '0x1::object::ObjectCore') return { owner: o.owner ?? OWNER };
       if (address === NFT && type.endsWith('::lending_pool::UserPosition')) return {
-        deposit_shares: { data: [{ key: { inner: POOL }, value: '200' }] }, debt_shares: { data: o.debt ? [{ key: { inner: POOL }, value: '1' }] : [] },
+        deposit_shares: { data: [{ key: { inner: POOL }, value: o.shares ?? '200' }] }, debt_shares: { data: o.debt ? [{ key: { inner: POOL }, value: '1' }] : [] },
         last_deposited_times: o.deposited ?? '1762830676' };
       if (address === POOL && type.endsWith('::lending_pool::State')) return { total_reserves_amount: '1000', total_debt_amount: '0', total_fees: '0', total_supply_shares: '800', is_paused: false };
       if (address === POOL && type.endsWith('::lending_pool::LendingPool')) return { token: o.token ?? STAPT_COIN, fungible_asset: { inner: addr('a8') } };
@@ -921,5 +921,8 @@ describe('auro closed positions', () => {
     // Holding 200 < 250: only a partial withdrawal could pay, and that needs a fresh Pyth price.
     const blocked = await auroClosedPositions.read(context(chain({ held: '200' })), OWNER, { tokens: [NFT] });
     expect(blocked.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'insufficient_cash' }], expectedPayout: [{ raw: '50' }] });
+    // 201 shares are 251.25 coins: the full withdrawal requests 252 and pays 251, so a pool holding 251 cannot pay it.
+    const rounded = await auroClosedPositions.read(context(chain({ shares: '201', held: '251' })), OWNER, { tokens: [NFT] });
+    expect(rounded.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'insufficient_cash' }], steps: [{ arguments: [NFT, '252'] }] });
   });
 });
