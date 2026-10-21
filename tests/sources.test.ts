@@ -1022,6 +1022,7 @@ describe('earnium closed lp', () => {
       ['liquidity_stake_pool::unstake', [POOL, '400']],
       ['router::remove_liquidity_entry', [APT, KAPT, 'false', '500', '990', '1485', OWNER]],
     ]);
+    expect(r.positions[1].steps).toEqual([]);
     // An owner who acted after the closure is aged from that run.
     const later = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '100', staked: '0', unlock: '0' } })), OWNER, { since: '2026-12-01T00:00:00.000Z' });
     expect(later.positions[0].claimableSince).toBe('2026-12-01T00:00:00.000Z');

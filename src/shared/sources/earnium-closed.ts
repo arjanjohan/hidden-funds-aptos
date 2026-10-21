@@ -94,14 +94,16 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: EarniumHint): P
         ];
         const blockers = part.blocked ? [{ code: 'locked', detail: `Staked with a lock until ${iso(Number(lockedUntil)).slice(0, 10)}.` }] : [];
         const locator = part.blocked ? `${h.pool}/locked` : h.pool;
-        // One position per side, so a priced side still counts when the other asset has no price; one removal pays both.
+        // One position per side, so a priced side still counts when the other asset has no price. One removal pays both,
+        // so only the first side carries the steps: shown twice, they would tell the owner to remove the same LP twice.
+        let first = true;
         for (const o of outputs) if (o.raw !== '0') positions.push({
           ...positionIds(SOURCE, owner, locator, 'principal', o.asset), source: SOURCE, owner, locator, positionKind: 'principal', asset: o.asset,
           claimableSince: since, ageBasis: 'protocol_closure',
           provenance: { reader: `${EARNIUM}::liquidity_stake_pool::user_info`, ledgerVersion: version },
           grossClaim: [o], expectedPayout: part.blocked ? [] : [o], payoutBasis: 'view',
           status: part.blocked ? 'blocked' : 'recoverable', blockers,
-          confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs), steps,
+          confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs), steps: first ? (first = false, steps) : [],
         });
       }
       return positions;
