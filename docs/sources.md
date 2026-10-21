@@ -195,6 +195,12 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Fliq (Aptos prediction markets):** winnings on a settled question that were never redeemed are an ended position (R2), and `connector::redeem` needs no operator. But the collateral wrapper's account holds 4,200 USDt in total (2026-10-20). That backs every open position, free collateral and unredeemed winning together, so unredeemed winnings are only a part of ~$4.2K. Skipped.
 - **Joule:** live. Withdrawals need fresh Pyth price updates, which require a paid Pyth key; that is a cost of using it, not a closure.
 - **No closure notice found (web search, 2026-10-20):** Auro Finance (Aptos CDP), AnimeSwap, Abel Finance, BlueMove (its Sei marketplace closed in 2023; Aptos was not affected).
+- **DefiLlama "dead" flags (checked 2026-10-20):**
+  - ABEL Finance (~$206K TVL) is still used: mints, borrows and redemptions until 2026-10-17 (checked 2026-10-21).
+  - Meso Finance is still used: deposits until 2026-09-23, withdrawals until 2026-09-14, every pool unpaused and accruing interest.
+  - Emojicoin.fun: Econia Labs archived its repository on 2025-08-29, but its markets still trade (swaps and liquidity changes on 2026-10-20), so tokens and LP are live.
+  - Earnium: no closure notice; the last liquidity change was on 2026-04-17. LP in an AMM that still works is live liquidity (R4).
+  - Arche Protocol (Movement, MSD stablecoin): 501.6K MOVE (~$3.7K) of collateral, and its summary view aborts on a stale Pyth price. Blocked, and too small to add.
 - **Argo, Laminar Markets:** no closure notice found (Laminar was merged into Econia in 2023).
 - **Amnis AMI vesting** (`0xbc99…::token_vesting`, buckets airdrop / KOL / seed / private / team / …): vested AMI that claimers never took (e.g. the KOL bucket, 156 claimers, fully vested 2025-12-23) would count. But AMI trades at $0.00084 (market cap ~$515K), so even millions of unclaimed AMI are worth a few thousand dollars. Skipped. The AMI lock pools from the June 2025 campaign were not found on chain.
 - **ThalaSwap v1:** no deprecation notice and still trading, so v1 LP is live liquidity (R4).
