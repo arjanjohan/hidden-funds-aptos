@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RequestCapReached } from '../src/node/client.ts';
-import { aaveFrozenEnumerator, auroClosedEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
+import { aaveFrozenEnumerator, animeswapClosedEnumerator, auroClosedEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
+import { ANIMESWAP_POOLS } from '../src/shared/sources/animeswap-closed.ts';
 import { fetchPrices } from '../src/node/prices.ts';
 import { keepPrevious, runSource } from '../src/node/snapshot.ts';
 import { State } from '../src/node/state.ts';
@@ -391,5 +392,23 @@ describe('auro enumerator', () => {
     expect(JSON.parse(r.cursor!)).toEqual({ v: '5100000000', repaid: [addr(1)] });
     // The repayer is remembered across runs.
     expect((await auroClosedEnumerator.run(c, r.cursor)).candidates[0].hint).toMatchObject({ changed: { [addr('f1')]: '2026-05-07T16:32:48.000Z' } });
+  });
+});
+
+describe('animeswap enumerator', () => {
+  it('lists every pool\'s LP holders with each store\'s last change, leaving out the pool account', async () => {
+    const hex = (t: string) => '0x' + Buffer.from(t).toString('hex');
+    const lps = ['LPCoin<0x1::aptos_coin::AptosCoin, 0x2::c::D>', 'LPCoin<0x3::e::F, 0x4::g::H>'];
+    const c = fakeChain({
+      resource: () => ({ pair_list: lps.map(t => ({ lp_coin: { account_address: ANIMESWAP_POOLS, module_name: hex('LPCoinV1'), struct_name: hex(t) } })) }),
+      gql: (_q, vars) => ({ current_fungible_asset_balances: vars.a === `${ANIMESWAP_POOLS}::LPCoinV1::${lps[0]}` ? [
+        { owner_address: addr(1), storage_id: addr('a1'), last_transaction_timestamp: '2024-01-02T03:04:05' },
+        { owner_address: ANIMESWAP_POOLS, storage_id: addr('a2'), last_transaction_timestamp: '2024-01-02T03:04:05' },
+      ] : vars.a === `${ANIMESWAP_POOLS}::LPCoinV1::${lps[1]}` ? [{ owner_address: addr(1), storage_id: addr('a3'), last_transaction_timestamp: '2025-02-03T04:05:06' }] : [] }),
+    });
+    const r = await animeswapClosedEnumerator.run(c, undefined);
+    expect(r.candidates).toEqual([{ owner: addr(1), hint: { lps: {
+      [`${ANIMESWAP_POOLS}::LPCoinV1::${lps[0]}`]: '2024-01-02T03:04:05.000Z', [`${ANIMESWAP_POOLS}::LPCoinV1::${lps[1]}`]: '2025-02-03T04:05:06.000Z' } } }]);
+    expect(r.pages).toBe(3);
   });
 });

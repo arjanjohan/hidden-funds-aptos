@@ -3,6 +3,7 @@ import { ownerKind } from '../src/shared/owners.ts';
 import { AAVE, aaveFrozenReserves, AAVE_UNFROZEN_AT, USDC } from '../src/shared/sources/aave-frozen.ts';
 import { canopyEndedRewards } from '../src/shared/sources/canopy-rewards.ts';
 import { APT, delegation, MOVE, movementDelegation } from '../src/shared/sources/delegation.ts';
+import { ANIMESWAP, ANIMESWAP_CLOSED_AT, ANIMESWAP_POOLS, animeswapClosedLp, isqrt, pairOf } from '../src/shared/sources/animeswap-closed.ts';
 import { AURO_CLOSED_AT, AURO_DAO, AURO_ROUTER, auroClosedPositions } from '../src/shared/sources/auro-closed.ts';
 import { echelonFrozenMarkets, FROZEN_MARKETS } from '../src/shared/sources/echelon-frozen.ts';
 import { ECONIA, ECONIA_ARCHIVED_AT, ECONIA_COINS, econiaIdleAccounts } from '../src/shared/sources/econia-idle.ts';
@@ -924,5 +925,64 @@ describe('auro closed positions', () => {
     // 201 shares are 251.25 coins: the full withdrawal requests 252 and pays 251, so a pool holding 251 cannot pay it.
     const rounded = await auroClosedPositions.read(context(chain({ shares: '201', held: '251' })), OWNER, { tokens: [NFT] });
     expect(rounded.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'insufficient_cash' }], steps: [{ arguments: [NFT, '252'] }] });
+  });
+});
+
+describe('animeswap closed lp', () => {
+  const USDC_COIN = '0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC';
+  const LP = `${ANIMESWAP_POOLS}::LPCoinV1::LPCoin<0x1::aptos_coin::AptosCoin, ${USDC_COIN}>`;
+  type Opts = { held?: string; reserveX?: string; kLast?: string; feeOn?: boolean };
+  // Pool books: 1,000,000 APT units and 2,000,000 USDC units over 1,000 LP; the owner holds 100 LP.
+  const chain = (o: Opts = {}) => fakeChain({
+    resource: (address, type) => {
+      if (address !== ANIMESWAP_POOLS) return null;
+      if (type.endsWith('::AnimeSwapPoolV1::AdminData')) return { dao_fee_on: o.feeOn ?? true, dao_fee: 5 };
+      if (type === `${ANIMESWAP}::AnimeSwapPoolV1::LiquidityPool<0x1::aptos_coin::AptosCoin, ${USDC_COIN}>`) {
+        const x = o.reserveX ?? '1000000';
+        return { coin_x_reserve: { value: x }, coin_y_reserve: { value: '2000000' }, k_last: o.kLast ?? String(BigInt(x) * 2_000_000n), locked: false };
+      }
+      return null;
+    },
+    view: (fn, args, typeArgs) => {
+      if (fn === '0x1::coin::balance' && args[0] === OWNER && typeArgs[0] === LP) return [o.held ?? '100'];
+      if (fn === '0x1::coin::supply' && typeArgs[0] === LP) return [{ vec: ['1000'] }];
+      throw new Error(fn);
+    },
+    gql: () => ({ current_fungible_asset_balances: [{ asset_type: LP, storage_id: addr('5'), last_transaction_timestamp: '2024-01-02T03:04:05' }] }),
+  });
+
+  it('splits a pair type at its top-level comma and takes integer square roots like the contract', () => {
+    expect(pairOf(`${ANIMESWAP_POOLS}::LPCoinV1::LPCoin<0x1::a::B<0x2::c::D, 0x3::e::F>, 0x4::g::H>`)).toEqual(['0x1::a::B<0x2::c::D, 0x3::e::F>', '0x4::g::H']);
+    expect([0n, 1n, 3n, 4n, 15n, 16n, 2_000_000_000_000n].map(isqrt)).toEqual([0n, 1n, 1n, 2n, 3n, 4n, 1_414_213n]);
+  });
+
+  it('counts each side of the LP at its removal payout, from the closure date, with a 1% minimum', async () => {
+    const r = await animeswapClosedLp.read(context(chain()), OWNER, { lps: { [LP]: '2024-01-02T03:04:05.000Z' } });
+    expect(r.complete).toBe(true);
+    expect(r.positions.map(p => [p.asset, p.expectedPayout[0].raw])).toEqual([[APT, '100000'], [USDC_COIN, '200000']]);
+    expect(r.positions[0]).toMatchObject({ status: 'recoverable', claimableSince: ANIMESWAP_CLOSED_AT, ageBasis: 'protocol_closure', locator: LP,
+      steps: [{ function: `${ANIMESWAP}::AnimeSwapPoolV1::remove_liquidity_entry<0x1::aptos_coin::AptosCoin, ${USDC_COIN}>`, arguments: ['100', '99000', '198000'] }] });
+    expect(new Set(r.positions.map(p => p.parentId)).size).toBe(1);
+    // LP added or received after the shutdown is aged from that change.
+    const later = await animeswapClosedLp.read(context(chain()), OWNER, { lps: { [LP]: '2026-12-01T00:00:00.000Z' } });
+    expect(later.positions[0].claimableSince).toBe('2026-12-01T00:00:00.000Z');
+  });
+
+  it('mints the DAO fee in LP first when the pool grew since the last mint', async () => {
+    // root k 1,414,213 vs 1,000,000: fee LP = 1000 x 414,213 / (1,414,213 x 5 + 1,000,000) = 51, so 100 of 1,051 LP.
+    const r = await animeswapClosedLp.read(context(chain({ kLast: '1000000000000' })), OWNER, { lps: { [LP]: '2024-01-02T03:04:05.000Z' } });
+    expect(r.positions.map(p => p.expectedPayout[0].raw)).toEqual(['95147', '190294']);
+    const off = await animeswapClosedLp.read(context(chain({ kLast: '1000000000000', feeOn: false })), OWNER, { lps: { [LP]: '2024-01-02T03:04:05.000Z' } });
+    expect(off.positions.map(p => p.expectedPayout[0].raw)).toEqual(['100000', '200000']);
+  });
+
+  it('blocks LP too small to remove, and finds the LP from the indexer without a hint', async () => {
+    // 100 x 5 / 1000 rounds to 0 APT: burn aborts.
+    const dust = await animeswapClosedLp.read(context(chain({ reserveX: '5' })), OWNER, { lps: { [LP]: '2024-01-02T03:04:05.000Z' } });
+    expect(dust.positions).toHaveLength(1);
+    expect(dust.positions[0]).toMatchObject({ asset: USDC_COIN, status: 'blocked', blockers: [{ code: 'below_minimum' }], expectedPayout: [] });
+    const checked = await animeswapClosedLp.read(context(chain()), OWNER);
+    expect(checked.positions.map(p => p.claimableSince)).toEqual([ANIMESWAP_CLOSED_AT, ANIMESWAP_CLOSED_AT]);
+    expect((await animeswapClosedLp.read(context(chain({ held: '0' })), OWNER, { lps: { [LP]: '2024-01-02T03:04:05.000Z' } })).positions).toEqual([]);
   });
 });
