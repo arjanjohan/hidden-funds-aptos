@@ -792,7 +792,7 @@ describe('aave frozen reserves', () => {
   });
 });
 
-describe('econia idle accounts', () => {
+describe('econia accounts', () => {
   const LZUSDC = LZ_COINS.find(c => c.display.includes('USDC'))!.coin;
   const coin = (t: string) => { const [package_address, module_name, type_name] = t.split('::'); return { package_address, module_name, type_name }; };
   const markets: Record<string, unknown> = {
@@ -800,15 +800,16 @@ describe('econia idle accounts', () => {
     8: { base_name_generic: '', base_type: coin('0x1::aptos_coin::AptosCoin'), quote_type: coin(LZUSDC) },
     12: { base_name_generic: 'YT_9', base_type: coin('0x1::string::String'), quote_type: coin(LZUSDC) },
   };
-  const account = (market: string, o: { custodian?: string; asks?: unknown[]; base?: string; quote?: string } = {}) => ({ market_id: market,
-    custodian_id: o.custodian ?? '0', asks: o.asks ?? [], bids: [], base_available: o.base ?? '0', quote_available: o.quote ?? '0' });
+  // Totals: what the account holds, including coins resting in its open orders.
+  const account = (market: string, o: { custodian?: string; asks?: unknown[]; bids?: unknown[]; base?: string; quote?: string } = {}) => ({ market_id: market,
+    custodian_id: o.custodian ?? '0', asks: o.asks ?? [], bids: o.bids ?? [], base_total: o.base ?? '0', quote_total: o.quote ?? '0' });
   const chain = (accounts: unknown[]) => fakeChain({ view: (fn, args) => {
     if (fn.endsWith('::user::get_market_accounts')) return [accounts];
     if (fn.endsWith('::registry::get_market_info')) return [markets[args[0] as string]];
     throw new Error(fn);
   } });
 
-  it('lists the idle base and quote of an account the owner controls, aged from the archive date', async () => {
+  it('lists the base and quote of an account the owner controls, aged from the archive date', async () => {
     const r = await econiaIdleAccounts.read(context(chain([account('7', { base: '200000000', quote: '5000445704' })])), OWNER, {});
     expect(r.positions.map(p => [p.asset, p.expectedPayout[0].raw])).toEqual([[APT, '200000000'], [LZUSDC, '5000445704']]);
     expect(r.positions[0]).toMatchObject({ locator: 'market-7', claimableSince: ECONIA_ARCHIVED_AT, ageBasis: 'protocol_closure', status: 'recoverable',
@@ -826,21 +827,24 @@ describe('econia idle accounts', () => {
     expect(later.positions[0].claimableSince).toBe('2026-10-27T03:17:00.000Z');
     const earlier = await econiaIdleAccounts.read(context(chain(accounts)), OWNER, { since: '2025-01-01T00:00:00.000Z' });
     expect(earlier.positions[0].claimableSince).toBe(ECONIA_ARCHIVED_AT);
-    // An order in market 8 dates market 8 only.
-    const two = [account('7', { quote: '5' }), account('8', { quote: '6' })];
-    const scoped = await econiaIdleAccounts.read(context(chain(two)), OWNER, { markets: { 8: '2026-10-27T03:17:00.000Z' } });
-    expect(scoped.positions.map(p => [p.locator, p.claimableSince])).toEqual([['market-7', ECONIA_ARCHIVED_AT], ['market-8', '2026-10-27T03:17:00.000Z']]);
+  });
+
+  it('counts coins resting in open orders (Econia is closed), cancelling them before the withdrawal', async () => {
+    const r = await econiaIdleAccounts.read(context(chain([account('7', { base: '5', quote: '9', asks: [{}], bids: [{}] })])), OWNER, {});
+    expect(r.positions.map(p => [p.asset, p.expectedPayout[0].raw])).toEqual([[APT, '5'], [LZUSDC, '9']]);
+    expect(r.positions[0].steps.map(s => [s.function.replace(/<.*$/, '').split('::').pop(), s.arguments])).toEqual([
+      ['cancel_all_orders_user', ['7', 'true']], ['cancel_all_orders_user', ['7', 'false']], ['withdraw_to_coinstore', ['7', '5']]]);
   });
 
   it('has display metadata (decimals) for every coin the coin markets trade', () => {
     expect(ECONIA_COINS.filter(c => !ASSETS[c])).toEqual([]);
   });
 
-  it('leaves out accounts with open orders, custodian accounts, a generic base and empty sides', async () => {
+  it('leaves out custodian accounts, a generic base and empty sides', async () => {
     const r = await econiaIdleAccounts.read(context(chain([
-      account('7', { base: '5', asks: [{}] }),
       account('7', { quote: '5', custodian: '6' }),
       account('12', { base: '5', quote: '7' }),
+      account('8'),
     ])), OWNER);
     expect(r.positions.map(p => [p.locator, p.asset, p.expectedPayout[0].raw])).toEqual([['market-12', LZUSDC, '7']]);
   });
