@@ -878,14 +878,18 @@ describe('auro closed positions', () => {
     expect(r.positions[0]).toMatchObject({ asset: STAPT_COIN, status: 'recoverable', claimableSince: AURO_CLOSED_AT, ageBasis: 'protocol_closure',
       grossClaim: [{ raw: '250' }], expectedPayout: [{ raw: '250' }],
       steps: [{ function: `${AURO_ROUTER}::auro_router::withdraw_coin_entry<${STAPT_COIN}>`, arguments: [NFT, '250'] }] });
-    // A fungible-asset pool uses withdraw_entry; the check page finds the position NFTs itself.
+    // A fungible-asset pool uses withdraw_entry; the check page finds the position NFTs itself, but without the
+    // enumeration's repayment history it leaves the age unknown.
     const fa = await auroClosedPositions.read(context(chain({ token: addr('a7') })), OWNER);
-    expect(fa.positions[0].steps[0].function).toBe(`${AURO_ROUTER}::auro_router::withdraw_entry`);
+    expect(fa.positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined,
+      steps: [{ function: `${AURO_ROUTER}::auro_router::withdraw_entry` }] });
   });
 
-  it('ages a position topped up after the shutdown from that deposit', async () => {
+  it('ages a position topped up or repaid after the shutdown from that deposit or repayment', async () => {
     const after = await auroClosedPositions.read(context(chain({ deposited: '1780000000' })), OWNER, { tokens: [NFT] });
     expect(after.positions[0].claimableSince).toBe(new Date(1_780_000_000 * 1000).toISOString());
+    const repaid = await auroClosedPositions.read(context(chain()), OWNER, { tokens: [NFT], repaidAt: '2026-05-07T16:32:48.000Z' });
+    expect(repaid.positions[0].claimableSince).toBe('2026-05-07T16:32:48.000Z');
   });
 
   it('leaves out positions with debt and position NFTs that moved', async () => {
