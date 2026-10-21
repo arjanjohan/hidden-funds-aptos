@@ -1,6 +1,6 @@
 // Chain-wide candidate enumeration and source-level sanity checks (node-only: keyed indexer use).
 import { iso } from '../shared/accounting.ts';
-import { mapLimit, normalizeAddress } from '../shared/chain.ts';
+import { gqlAll, mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
 import { AURO_CLOSED_AT, AURO_COLLECTION, AURO_ROUTER } from '../shared/sources/auro-closed.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
@@ -20,6 +20,7 @@ import { TORTUGA, TORTUGA_STATE } from '../shared/sources/tortuga-tickets.ts';
 import { TRUFIN, unlockTable } from '../shared/sources/trufin-unlocks.ts';
 import { TOPAZ, type TopazBid, type TopazHint, type TopazKind, topazTables, u64Key } from '../shared/sources/topaz-bids.ts';
 import type { Sanity } from '../shared/snapshot.ts';
+import { processorWatermark } from './client.ts';
 import type { ChainReader, Ledger, Position } from '../shared/types.ts';
 
 export interface Candidate { owner: string; hint?: unknown }
@@ -221,15 +222,17 @@ export const amnisWithdrawalsEnumerator = collectionOwners('amnis-withdrawals', 
 // - an ownership change (the ownership row's last transaction): a position acquired after the shutdown;
 // - a repayment: one that still had debt at the shutdown qualifies only once repaid. repay_entry calls are scanned
 //   incrementally (liquidations need a Pyth price, which stopped on 2026-04-30), and the positions each one touched
-//   are taken from account_transactions at its version, so a repayment by anyone dates that position only.
+//   are taken from account_transactions at its version, so a repayment by anyone dates that position only. The scan
+//   stops at the account-transactions processor's watermark, so a repayment whose touched accounts are not indexed yet
+//   is left for a later run instead of being passed.
 const AURO_CLOSED_VERSION = 5_067_106_504;   // first version of 2026-05-01
 const AURO_TOKENS_QUERY = `query($c:String!,$after:String!){ current_token_ownerships_v2(where:{current_token_data:{collection_id:{_eq:$c}},
   amount:{_gt:"0"}, token_data_id:{_gt:$after}}, order_by:{token_data_id:asc}, limit:${PAGE}){ token_data_id owner_address last_transaction_timestamp } }`;
-const AURO_REPAY_QUERY = `query($a:bigint!){ user_transactions(where:{entry_function_contract_address:{_eq:"${AURO_ROUTER}"},
-  entry_function_module_name:{_eq:"auro_router"}, entry_function_function_name:{_eq:"repay_entry"}, version:{_gt:$a}},
+const AURO_REPAY_QUERY = `query($a:bigint!,$w:bigint!){ user_transactions(where:{entry_function_contract_address:{_eq:"${AURO_ROUTER}"},
+  entry_function_module_name:{_eq:"auro_router"}, entry_function_function_name:{_eq:"repay_entry"}, version:{_gt:$a, _lte:$w}},
   order_by:{version:asc}, limit:${PAGE}){ version timestamp } }`;
-const TOUCHED_QUERY = `query($v:[bigint!]!,$after:String!){ account_transactions(where:{transaction_version:{_in:$v}, account_address:{_gt:$after}},
-  order_by:{account_address:asc}, limit:${PAGE}){ account_address transaction_version } }`;
+const TOUCHED_QUERY = `query($v:bigint!,$after:String!){ account_transactions(where:{transaction_version:{_eq:$v}, account_address:{_gt:$after}},
+  order_by:{account_address:asc}, limit:${PAGE}){ account_address } }`;
 export const auroClosedEnumerator: Enumerator = {
   sourceId: 'auro-closed-positions',
   processor: 'token_v2_processor',
@@ -241,24 +244,20 @@ export const auroClosedEnumerator: Enumerator = {
     if (typeof stored !== 'object' || stored === null) stored = {};
     // Every account a repayment touched, with the latest such repayment's time; positions are found among them below.
     const repaid: Record<string, string> = stored.repaid && typeof stored.repaid === 'object' && !Array.isArray(stored.repaid) ? { ...stored.repaid } : {};
-    let after = stored.v ?? String(AURO_CLOSED_VERSION), pages = 0;
+    const indexed = (await processorWatermark(chain, 'account_transactions_processor')).version;
+    let after = stored.v ?? String(AURO_CLOSED_VERSION), pages = 1;
     for (;;) {
-      const page = (await chain.gql(AURO_REPAY_QUERY, { a: after })).user_transactions;
+      const page = (await chain.gql(AURO_REPAY_QUERY, { a: after, w: indexed })).user_transactions;
       pages++;
-      if (page.length) {
-        const at = new Map<string, string>(page.map((t: any) => [String(t.version), new Date(t.timestamp + 'Z').toISOString()]));
-        let from = '';
-        for (;;) {
-          const rows = (await chain.gql(TOUCHED_QUERY, { v: [...at.keys()], after: from })).account_transactions;
-          pages++;
-          for (const r of rows) {
-            const account = normalizeAddress(r.account_address), time = at.get(String(r.transaction_version))!;
-            if (!repaid[account] || time > repaid[account]) repaid[account] = time;
-          }
-          if (rows.length < PAGE) break;
-          from = rows[rows.length - 1].account_address;
+      for (const t of page) {
+        const time = new Date(t.timestamp + 'Z').toISOString();
+        const touched = await gqlAll(chain, TOUCHED_QUERY, { v: String(t.version) }, 'account_transactions', 'account_address');
+        pages++;
+        for (const r of touched) {
+          const account = normalizeAddress(r.account_address);
+          if (!repaid[account] || time > repaid[account]) repaid[account] = time;
         }
-        after = String(page[page.length - 1].version);
+        after = String(t.version);
       }
       if (page.length < PAGE) break;
     }
