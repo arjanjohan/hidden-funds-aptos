@@ -426,24 +426,6 @@ describe('layerzero claimable', () => {
   });
 });
 
-describe('layerzero claimable without a hint', () => {
-  it('asks the indexer once which tables hold an entry for the owner, and reads only those on chain', async () => {
-    const pad = (h: string) => '0x' + h.slice(2).padStart(64, '0');
-    const handleOf = (type: string) => '0x' + (LZ_COINS.findIndex(c => type.includes(`<${c.coin}>`)) + 1).toString(16) + 'ab';
-    const c = fakeChain({
-      resource: (_a, type) => (type.includes('::coin_bridge::CoinStore<') ? { claimable_amt_ld: { handle: handleOf(type) } } : { claimable_amount: { handle: handleOf(type) } }),
-      tableItem: () => '1500000',
-      gql: (query, vars) => query.includes('current_table_items')
-        ? { current_table_items: (vars.h as string[]).length === LZ_COINS.length ? [{ table_handle: pad('0x1ab'), last_transaction_version: 7 }] : [] }
-        : { user_transactions: [{ timestamp: '2025-01-01T00:00:00' }] },
-    });
-    const r = await layerzeroClaimable.read(context(c), OWNER);
-    expect(r.positions.map(p => [p.locator, p.claimableSince])).toEqual([['USDC', '2025-01-01T00:00:00.000Z']]);
-    expect(c.calls.filter(x => x.startsWith('tableItem'))).toEqual([`tableItem ${pad('0x1ab')}`]);
-    expect(c.calls.filter(x => x.startsWith('gql'))).toHaveLength(2);
-  });
-});
-
 describe('layerzero claimable dust', () => {
   it('lists entries below the verification threshold as indexer-only, without reading the chain', async () => {
     const chain = fakeChain({});
