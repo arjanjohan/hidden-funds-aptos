@@ -13,9 +13,9 @@ A position counts only if **all** hold:
 
   A protocol whose official frontend has shut down counts as closed (decided 2026-10-21), even when its contract still works. The effective date is the shutdown date the team announced, taken at the end of that day; without a notice, the earliest date it can be shown to be down.
 - **R3 Recoverable to the owner.** Payout goes to the owner, not to a strategy or third party.
-- **R4 No debt, no live use.** No outstanding borrow, not posted as collateral, not deployed in a live strategy, no open orders.
+- **R4 No debt, no live use.** No outstanding borrow and not posted as collateral, in any protocol. In a protocol that is not closed, also: not deployed in a live strategy and no open orders.
 
-  In a closed protocol, positions it holds for the user count even if they are still live on chain: LP in pools that still trade, escrows, deposits, open orders. Debt still excludes: a position that backs a loan does not count. The protocol's own tokens in the wallet are not positions and do not count.
+  So in a closed protocol, positions it holds for the user count even if they are still live on chain: LP in pools that still trade, escrows, deposits, open orders. A position that backs a loan still does not count. The protocol's own tokens in the wallet are not positions and do not count.
 
 Excluded: active stake, requests that have not matured, live LP/lending in protocols that are not closed, wallet tokens that have a market.
 
