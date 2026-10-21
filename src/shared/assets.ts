@@ -1,5 +1,6 @@
 // Display identity for assets that sources pay out. Identity is the exact id, never a ticker.
 import { SUSDE, USDC, USDT } from './sources/aave-frozen.ts';
+import { ANIMESWAP_COINS } from './sources/animeswap-closed.ts';
 import { AMAPT_COIN } from './sources/auro-closed.ts';
 import { APT, MOVE } from './sources/delegation.ts';
 import { EDOG, GUI } from './sources/econia-idle.ts';
@@ -29,4 +30,6 @@ export const ASSETS: Record<string, { symbol: string; decimals: number }> = {
   [MKL]: { symbol: 'MKL', decimals: 6 },
   [ESMKL]: { symbol: 'esMKL', decimals: 6 },
   [PREMKL]: { symbol: 'PreMKL', decimals: 6 },
+  // Coins in the AnimeSwap pools that hold ~99% of its value (whUSDC, APT and LayerZero coins are above).
+  ...Object.fromEntries(ANIMESWAP_COINS.map(c => [c.coin, { symbol: c.symbol, decimals: c.decimals }])),
 };

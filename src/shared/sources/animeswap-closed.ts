@@ -18,6 +18,19 @@ export const ANIMESWAP_CLOSED_AT = '2026-10-21T23:59:59Z';
 const SLIPPAGE_BPS = 100n;
 const SOURCE = 'animeswap-closed-lp';
 
+/** Display identity (CoinInfo symbol and decimals, read 2026-10-21) of coins in AnimeSwap's 20 largest pools that no
+ *  other source lists. Display only: none of them has a price here. */
+export const ANIMESWAP_COINS = [
+  { coin: '0xa2eda21a58856fda86451436513b867c97eecb4ba099da5775520e0f7492e852::coin::T', symbol: 'whUSDT', decimals: 6 },
+  { coin: '0xae478ff7d83ed072dbc5e264250e67ef58f57c99d89b447efd8a0a2e8b2be76e::coin::T', symbol: 'whWBTC', decimals: 8 },
+  { coin: '0xcc8a89c8dce9693d354449f1f73e60e14e347417854f029db5bc8e7454008abb::coin::T', symbol: 'whWETH', decimals: 8 },
+  { coin: '0xdd89c0e695df0692205912fb69fc290418bed0dbe6e4573d744a6d5e6bab6c13::coin::T', symbol: 'whSOL', decimals: 8 },
+  { coin: `${ANIMESWAP}::AnimeCoin::ANI`, symbol: 'ANI', decimals: 8 },
+  { coin: '0x84d7aeef42d38a5ffc3ccef853e1b82e4958659d16a7de736a29c55fbbeb0114::staked_aptos_coin::StakedAptosCoin', symbol: 'tAPT', decimals: 8 },
+  { coin: '0x777821c78442e17d82c3d7a371f42de7189e4248e529fe6eee6bca40ddbb::apcoin::ApCoin', symbol: 'APC', decimals: 8 },
+  { coin: '0x1000000fa32d122c18a6a31c009ce5e71674f22d06a581bb0a15575e6addadcc::usda::USDA', symbol: 'USDA', decimals: 6 },
+];
+
 /** Enumeration hint: each LP coin type the owner holds, with the time its store last changed (indexer). */
 export type AnimeswapHint = { lps: Record<string, string> };
 
