@@ -812,7 +812,9 @@ export const econiaIdleEnumerator: Enumerator = {
       }
     }
     const makers = Object.fromEntries([...orders].map(([maker, list]) => [maker, list.sort().join(',')]));
-    const previous: Record<string, string> = stored.m && typeof stored.m === 'object' && !Array.isArray(stored.m) ? stored.m : {};
+    // Only this shape is compared: any other (an earlier cursor's maker list) counts as no previous orders, which dates nobody.
+    const previous: Record<string, string> = stored.m && typeof stored.m === 'object' && !Array.isArray(stored.m)
+      ? Object.fromEntries(Object.entries(stored.m).filter(([, v]) => typeof v === 'string')) : {};
     // The owner's own calls, and changes to its orders since last run, date its balances from this run. Every candidate
     // carries a hint (empty when nothing changed): a read without one is the check page's, which cannot tell whether a
     // balance changed after the archive date.

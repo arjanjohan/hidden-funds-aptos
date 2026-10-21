@@ -369,6 +369,13 @@ describe('econia enumerator', () => {
     expect((await econiaIdleEnumerator.run(econia([]), gone.cursor)).candidates).toEqual([]);
   });
 
+  it('dates nobody from a cursor in an earlier shape', async () => {
+    for (const m of [[addr(1)], { [addr(1)]: ['7'] }]) {
+      const r = await econiaIdleEnumerator.run(econia([{ maker: 1, size: '10' }]), JSON.stringify({ m }));
+      expect(r.candidates).toEqual([{ owner: addr(1), hint: {} }]);
+    }
+  });
+
   it('gives an owner who only registered an empty hint, so the read keeps the archive date', async () => {
     const c = fakeChain({
       gql: (_q, vars) => ({ user_transactions: vars.f === 'register_market_account' && vars.after === '0' ? [{ version: '5', sender: addr(2) }] : [] }),
