@@ -164,8 +164,8 @@ export const PROTOCOLS: ProtocolEntry[] = [
     reason: 'Closed (frontend decommissioned 2025-09-04), so its LP and Arena escrows count, but they are small: LP worth ~748 APT on its APT side (427 holdings, 333 owners; one holds 423 APT) plus unpriced emojicoins, and Arena escrows ~182 APT of emojicoins.', defillama: 'emojicoin.fun', dead: 'yes' },
   { id: 'earnium', name: 'Earnium', chains: [...A], category: 'Dexs', status: 'not_checked',
     reason: 'No closure notice found; last liquidity change 2026-04-17 (2026-10-20). Its official frontend is not verified yet, which decides it under the closed-frontend rule.', defillama: 'earnium', dead: '2026-10-10' },
-  { id: 'arche-protocol', name: 'Arche Protocol (MSD)', chains: [...M], category: 'CDP', status: 'not_checked',
-    reason: 'No closure evidence yet (DefiLlama flags it dead). 501.6K MOVE (~$3.7K) of collateral; its summary view aborts on a stale Pyth price (2026-10-20).', defillama: 'arche-protocol', dead: 'yes' },
+  { id: 'arche-protocol', name: 'Arche Protocol (MSD)', chains: [...M], category: 'CDP', status: 'too_small', checkedAt: '2026-10-21', defillama: 'arche-protocol', dead: 'yes',
+    reason: 'Closed: archeprotocol.xyz (its listed site) is for sale; last served 2026-04 (Wayback), last contract call 2025-09-28. Its 501K MOVE (~$3.8K) back open MSD loans (538 positions, R4); the 26 debt-free positions hold 39 MOVE.' },
 
   { id: 'mole', name: 'Mole', chains: [...A], category: 'Yield', status: 'not_checked', defillama: 'mole',
     reason: 'Frontend down (app.mole.fi empty in Wayback\'s 2026-10-20 capture, no response 2026-10-21) and its GitHub repo deleted; no notice found, so closure dates from 2026-10-20. Lending vaults are nearly empty (~51 APT, ~400 USDC; interest last accrued 2024). DefiLlama\'s $203K counts worker LP counters above 100% of their pool\'s supply; the one plausible holding is ~3.7% of PancakeSwap APT/USDC (~$15K), before excluding positions with debt. Whether closing a position needs a stopped Pyth price is not checked.' },
@@ -179,6 +179,9 @@ export const PROTOCOLS: ProtocolEntry[] = [
     reason: 'Frontend gone (thetis.market parked for sale, 2026-10-21); holdings not sized (DefiLlama TVL $1.3K).' },
   { id: 'aptoslaunch', name: 'AptosLaunch', chains: [...A], category: 'Launchpad', status: 'not_checked', defillama: 'aptoslaunch', dead: 'yes',
     reason: 'Frontend gone (aptoslaunch.io redirects to an unrelated site, 2026-10-21); staking pools not sized (DefiLlama TVL $2.5K).' },
+
+  { id: 'collex', name: 'Collex', chains: [...A], category: 'Physical TCG', status: 'too_small', checkedAt: '2026-10-21', defillama: 'collex', dead: 'yes',
+    reason: 'collex.fun no longer resolves (served until at least 2026-02). Users can claim at most ~$2.3K: its USD token supply is 1,135 and cards are valued at $1,229 (15% cash-out fee); the rest of the treasury\'s 19.5K USDt is the protocol\'s.' },
 
   // Not checked yet, with DefiLlama's TVL (2026-10-21) as a hint for priority only: TVL is what the adapter counts,
   // not a ceiling on what a protocol owes (claim tables and ended rewards can sit outside it).
@@ -214,7 +217,6 @@ export const PROTOCOLS: ProtocolEntry[] = [
     ['sushi-aptos', 'Sushi (Aptos)', A, 'Dexs'],
     ['movefast', 'MoveFast', A, 'Launchpad'],
     ['goapt', 'GoAPT', A, 'Liquid Staking'],
-    ['collex', 'Collex', A, 'Physical TCG', 'yes'],
     ['kaio', 'KAIO', A, 'RWA'],
     ['propbase', 'Propbase', A, 'RWA'],
     ['newrlrwa', 'NewrlRWA', A, 'RWA'],
