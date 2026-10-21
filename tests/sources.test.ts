@@ -19,7 +19,7 @@ import { MASTERCHEF, pancakeFarmEndedRewards } from '../src/shared/sources/panca
 import { pancakeSyrupEnded, SYRUP_POOLS } from '../src/shared/sources/pancake-syrup.ts';
 import { thalaVestingMatured, thalaVethlExpired } from '../src/shared/sources/thala-thl.ts';
 import { THALA_LSD, thalaUnstake } from '../src/shared/sources/thala-unstake.ts';
-import { topazBids, u64Key } from '../src/shared/sources/topaz-bids.ts';
+import { TOPAZ_CLOSED_AT, topazBids, u64Key } from '../src/shared/sources/topaz-bids.ts';
 import { tortugaTickets } from '../src/shared/sources/tortuga-tickets.ts';
 import { trufinUnlocks } from '../src/shared/sources/trufin-unlocks.ts';
 import { addr, context, fakeChain, memoryMemo } from './fake-chain.ts';
@@ -454,12 +454,18 @@ describe('topaz bids', () => {
       : { user_transactions: [{ timestamp: '2023-01-01T00:00:00' }] },
   });
 
-  it('counts an expired bid from its deadline and leaves out one still open', async () => {
+  it('counts an expired bid from its deadline, and an open one (Topaz is closed) from the shutdown', async () => {
     const r = await topazBids.read(context(chain({ '7': { coins: '50000000', deadline: 1_700_000_000 }, '8': { coins: '30000000', deadline: 2_500_000_000 } })), OWNER);
     expect(r.complete).toBe(true);
-    expect(r.positions).toHaveLength(1);
-    expect(r.positions[0]).toMatchObject({ locator: 'collection-bid:7', ageBasis: 'onchain_maturity', claimableSince: new Date(1_700_000_000_000).toISOString(), status: 'recoverable' });
+    expect(r.positions.map(p => [p.locator, p.ageBasis, p.claimableSince])).toEqual([
+      ['collection-bid:7', 'onchain_maturity', new Date(1_700_000_000_000).toISOString()],
+      ['collection-bid:8', 'protocol_closure', TOPAZ_CLOSED_AT]]);
     expect(r.positions[0].steps[0]).toMatchObject({ function: expect.stringContaining('::collection_marketplace::cancel<0x1::aptos_coin::AptosCoin>'), arguments: ['7'] });
+  });
+
+  it('leaves the age of an open bid placed after the shutdown unknown (bid ids are sequential)', async () => {
+    const r = await topazBids.read(context(chain({ '312100': { coins: '50000000', deadline: 2_500_000_000 } })), OWNER);
+    expect(r.positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined, status: 'recoverable' });
   });
 
   it('skips bids whose escrow is empty', async () => {
@@ -469,24 +475,32 @@ describe('topaz bids', () => {
   it('lists a bidder below the verification threshold as indexer-only, without reading the chain', async () => {
     const c = fakeChain({});
     const r = await topazBids.read(context(c), OWNER, { a: { 3: { raw: '1000', deadline: 1 }, 4: { raw: '0', deadline: 1 }, 5: { raw: '9', deadline: 2_500_000_000 } } });
-    expect(r.positions).toHaveLength(1);
-    expect(r.positions[0]).toMatchObject({ locator: 'token-bid:3', confidence: 'indexer_only' });
+    // The funded bids (3 expired, 5 open) sum to under the threshold: both indexer-only.
+    expect(r.positions.map(p => [p.locator, p.confidence])).toEqual([['token-bid:3', 'indexer_only'], ['token-bid:5', 'indexer_only']]);
     expect(c.calls).toEqual([]);
   });
 
-  it('with a hint, reads only the bids it lists as funded and expired, not the bidder\'s whole index', async () => {
+  it('with a hint, reads only the bids it lists as funded, not the bidder\'s whole index', async () => {
     const c = chain({ '7': { coins: '50000000', deadline: 1_700_000_000 }, '8': { coins: '30000000', deadline: 2_500_000_000 } });
-    const r = await topazBids.read(context(c), OWNER, { c: { 7: { raw: '50000000', deadline: 1_700_000_000 }, 8: { raw: '30000000', deadline: 2_500_000_000 } } });
-    expect(r.positions.map(p => p.locator)).toEqual(['collection-bid:7']);
-    expect(c.calls.filter(x => x.startsWith('tableItem'))).toEqual([`tableItem ${pad('0xc2')}`]);
+    const r = await topazBids.read(context(c), OWNER, { c: { 7: { raw: '50000000', deadline: 1_700_000_000 }, 8: { raw: '30000000', deadline: 2_500_000_000 }, 9: { raw: '0', deadline: 1 } } });
+    expect(r.positions.map(p => p.locator)).toEqual(['collection-bid:7', 'collection-bid:8']);
+    expect(c.calls.filter(x => x.startsWith('tableItem'))).toEqual([`tableItem ${pad('0xc2')}`, `tableItem ${pad('0xc2')}`]);
   });
 
   it('ignores an id that Topaz\'s index lists under this bidder when the bid belongs to someone else', async () => {
     expect((await topazBids.read(context(chain({ '1': { coins: '100000', deadline: 1_700_000_000, buyer: addr('77') } })), OWNER)).positions).toEqual([]);
   });
 
-  it('does not count a bid without a deadline (0) as expired', async () => {
-    expect((await topazBids.read(context(chain({ '9': { coins: '50000000', deadline: 0 } })), OWNER)).positions).toEqual([]);
+  it('treats a deadline stored in milliseconds (reads as 1970) as no deadline: open, from the shutdown', async () => {
+    expect((await topazBids.read(context(chain({ '6': { coins: '50000000', deadline: 1_667_140_861 } })), OWNER)).positions[0])
+      .toMatchObject({ ageBasis: 'onchain_maturity' });
+    expect((await topazBids.read(context(chain({ '6': { coins: '50000000', deadline: 1_667_140 } })), OWNER)).positions[0])
+      .toMatchObject({ ageBasis: 'protocol_closure', claimableSince: TOPAZ_CLOSED_AT });
+  });
+
+  it('counts a bid without a deadline (0) as open, from the shutdown', async () => {
+    expect((await topazBids.read(context(chain({ '9': { coins: '50000000', deadline: 0 } })), OWNER)).positions[0])
+      .toMatchObject({ ageBasis: 'protocol_closure', claimableSince: TOPAZ_CLOSED_AT });
   });
 
   it('encodes u64 keys as the indexer stores them', () => {
