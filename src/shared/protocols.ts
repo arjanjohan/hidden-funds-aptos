@@ -162,8 +162,8 @@ export const PROTOCOLS: ProtocolEntry[] = [
     reason: 'Still used despite DefiLlama\'s dead flag: deposits until 2026-09-23, withdrawals until 2026-09-14, all pools unpaused and accruing.', defillama: 'meso-finance', dead: 'yes' },
   { id: 'emojicoin.fun', name: 'Emojicoin.fun', chains: [...A], category: 'Launchpad', status: 'too_small', checkedAt: '2026-10-21',
     reason: 'Closed (frontend decommissioned 2025-09-04), so its LP and Arena escrows count, but they are small: LP worth ~748 APT on its APT side (427 holdings, 333 owners; one holds 423 APT) plus unpriced emojicoins, and Arena escrows ~182 APT of emojicoins.', defillama: 'emojicoin.fun', dead: 'yes' },
-  { id: 'earnium', name: 'Earnium', chains: [...A], category: 'Dexs', status: 'not_checked',
-    reason: 'No closure notice found; last liquidity change 2026-04-17 (2026-10-20). Its official frontend is not verified yet, which decides it under the closed-frontend rule.', defillama: 'earnium', dead: '2026-10-10' },
+  { id: 'earnium', name: 'Earnium', chains: [...A], category: 'Dexs', status: 'implemented', checkedAt: '2026-10-21',
+    reason: 'Frontend gone (no address record for earnium.io, 2026-10-21): LP left in its pools and liquidity staking, which still work.', sources: ['earnium-closed-lp'], defillama: 'earnium', dead: '2026-10-10' },
   { id: 'arche-protocol', name: 'Arche Protocol (MSD)', chains: [...M], category: 'CDP', status: 'not_checked',
     reason: 'No closure evidence yet (DefiLlama flags it dead). 501.6K MOVE (~$3.7K) of collateral; its summary view aborts on a stale Pyth price (2026-10-20).', defillama: 'arche-protocol', dead: 'yes' },
 

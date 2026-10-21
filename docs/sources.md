@@ -200,7 +200,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - ABEL Finance (~$206K TVL) is still used: mints, borrows and redemptions until 2026-10-17 (checked 2026-10-21).
   - Meso Finance is still used: deposits until 2026-09-23, withdrawals until 2026-09-14, every pool unpaused and accruing interest.
   - Emojicoin.fun: closed. The team decommissioned the frontend on 2025-09-04 (21:00 UTC); the repository was archived on 2025-08-29 and emojicoin.fun no longer resolves. The contract still works and its markets still trade; under the closed-frontend rule its LP and Arena escrows count (decided 2026-10-21), but they are too small for a source (2026-10-21): LP from 764 providers is left in 427 holdings of 333 owners in 60 markets, worth ~748 APT on removal's APT side (`simulate_remove_liquidity`; one holder 423 APT, 9 holdings over 10 APT) plus emojicoins, which have no price. Arena escrows hold ~182 APT of emojicoins at spot (285 escrows, 173 owners).
-  - Earnium: no closure notice; the last liquidity change was on 2026-04-17. Its official frontend is not verified yet, which decides it under the closed-frontend rule, so it stays unchecked.
+  - Earnium: closed (frontend gone); now a source (`earnium-closed-lp`).
   - Arche Protocol (Movement, MSD stablecoin): 501.6K MOVE (~$3.7K) of collateral, and its summary view aborts on a stale Pyth price. No closure evidence besides DefiLlama's flag, so it stays unchecked.
   - AnimeSwap: closed (frontend gone); now a source (`animeswap-closed-lp`).
   - Aptoswap: live. aptoswap.net is up and its APT pool last traded 2026-10-20.
@@ -434,6 +434,18 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - On chain, through the source, for the 60 largest owners: 190 positions, all `recoverable`, all reads complete; $2,561 counted against the indexer's $2,567 estimate.
   - Simulated removal for 6 of them (smallest to largest): 6 of 6 succeeded and paid exactly the computed amounts (`BurnEvent`), DAO fee mint included.
 - **Cost:** ~400 indexer pages a run to enumerate (one query per pair, plus pages; APT/USDC alone 34). Holders are re-read monthly, or when their LP changes (the hint carries each store's last change): a first full read is ~6K owners × ~2 requests.
+
+## earnium-closed-lp
+
+- **What:** liquidity left in Earnium pools (Aptos AMM), in the wallet or staked in Earnium's liquidity staking, after its frontend went away.
+- **Status (checked 2026-10-21):** closed under the closed-frontend rule (decided 2026-10-21). earnium.io and app.earnium.io have no address record; Wayback shows the site served until 2026-02 and the app until 2026-01. DefiLlama marks Earnium dead from 2026-10-10 (a lead, not evidence). No closure notice found, so the effective date is the day it was found down: 2026-10-21 23:59:59 UTC.
+- **Contract still works:** removal and unstaking simulate fine (2026-10-21). Staking rewards have ended (`reward_per_sec` 0 in the main pools); unstaking pays what accrued.
+- **Positions:** `liquidity_stake_pool::user_info(owner, pools)` gives, per pool, the owner's wallet LP, staked LP and unlock time (read 20 pools a call; longer lists abort). Wallet LP plus staked LP that is unlocked is one position per side of the pool, valued with `router::redeemable_liquidity` (what removal pays, exactly). A stake still locked is `blocked` (`locked`) until its unlock time (none today). LP locked forever (`stake_and_lock` with no end: 14 position NFTs, mostly launch liquidity such as APT/CATTOS's ~4,677 APT) can never come out and is not counted.
+- **Recovery:** `liquidity_stake_pool::unstake(pool, amount)` when staked, then `router::remove_liquidity_entry(asset 1, asset 2, is_stable, liquidity, min 1, min 2, owner)` with minimums 1% below the payout. Earnium wraps coins in its own assets; payouts are valued as the original (APT as APT).
+- **Age:** from the later of 2026-10-21 23:59:59 UTC and the run that saw the owner act on Earnium after the closure began (adding, removing, staking, unstaking, claiming).
+- **Enumeration:** senders of the router's add-liquidity entry functions and of `stake` / `stake_and_lock`, ever (incremental). LP received by transfer and never added or staked by its holder is missed.
+- **Rehearsal (full, 2026-10-21, keyed):** 563 candidates, all reads complete: 683 positions, all `recoverable`, of 283 owners (22 with ≥ $10). Recoverable: 10,998 APT, 7,833 kAPT, 6,899 USDt, 5,637 USDC (~$28K at APT $0.82) plus 24 unpriced tokens. Two accounts hold ~89% of it (~$17.5K and ~$7.5K; ordinary accounts, neither the package owner nor the treasury). Simulated first steps for 6 positions, smallest to largest: 6 of 6 succeeded (removals paid exactly the computed amounts; unstakes returned the LP and accrued rewards).
+- **Cost:** ~50 indexer pages to enumerate; ~3.6K requests for a full read (5 `user_info` calls per owner plus one payout view per pool held).
 
 ## topaz-bids
 

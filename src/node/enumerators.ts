@@ -3,6 +3,7 @@ import { iso } from '../shared/accounting.ts';
 import { gqlAll, mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
 import { ANIMESWAP, ANIMESWAP_POOLS, animeswapLps, assetOf as animeswapAsset, pairOf } from '../shared/sources/animeswap-closed.ts';
+import { EARNIUM } from '../shared/sources/earnium-closed.ts';
 import { AURO_CLOSED_AT, AURO_COLLECTION, AURO_ROUTER } from '../shared/sources/auro-closed.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
 import { AAVE, type AaveHint, aaveReserves, findFreeze } from '../shared/sources/aave-frozen.ts';
@@ -879,6 +880,40 @@ export const econiaIdleEnumerator: Enumerator = {
   },
 };
 
+// Earnium: everyone who added liquidity or staked it (directly or through the router), ever; LP received by transfer and
+// never added or staked by its holder is missed. Calls after the closure day began (adding, removing, staking, unstaking,
+// claiming) put the run's time in the caller's hint, so liquidity used after the closure is aged from the run that saw it.
+const EARNIUM_CHANGES_FROM = 7_706_000_000;   // 2026-10-21, before the closure's end of day
+const EARNIUM_ADD = ['add_liquidity_entry', 'add_liquidity_coin_entry', 'add_liquidity_both_coins_entry', 'add_liquidity_and_stake_entry',
+  'add_liquidity_and_stake_coin_entry', 'add_liquidity_and_stake_both_coins_entry'];
+const EARNIUM_HOLDERS: EntryFunction[] = [
+  ...EARNIUM_ADD.map(name => ({ contract: EARNIUM, module: 'router', name })),
+  ...['stake', 'stake_and_lock'].map(name => ({ contract: EARNIUM, module: 'liquidity_stake_pool', name })),
+];
+const EARNIUM_CHANGES: EntryFunction[] = [
+  ...[...EARNIUM_ADD, 'remove_liquidity_entry'].map(name => ({ contract: EARNIUM, module: 'router', name, fromVersion: EARNIUM_CHANGES_FROM })),
+  ...['stake', 'stake_and_lock', 'unstake', 'claim_all_rewards'].map(name => ({ contract: EARNIUM, module: 'liquidity_stake_pool', name, fromVersion: EARNIUM_CHANGES_FROM })),
+];
+const earniumSenders = entrySenders('earnium-closed-lp', [...EARNIUM_HOLDERS, ...EARNIUM_CHANGES], noContractTotal);
+export const earniumClosedEnumerator: Enumerator = {
+  ...earniumSenders,
+  async run(chain, cursor) {
+    let stored: { r?: string; c?: string } = {};
+    try { stored = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: rescan */ }
+    if (typeof stored !== 'object' || stored === null) stored = {};
+    const ledger = await chain.ledger();
+    const holders = await senders(chain, EARNIUM_HOLDERS, stored.r);
+    const changed = await senders(chain, EARNIUM_CHANGES, stored.c);
+    // Every candidate carries a hint (empty when it did not act after the closure began): a read without one is the
+    // check page's, which ages from the closure.
+    const since = iso(ledger.timestampSecs);
+    const acted = new Set(changed.candidates.map(c => c.owner));
+    const owners = new Set([...holders.candidates.map(c => c.owner), ...acted]);
+    return { candidates: [...owners].map(owner => ({ owner, hint: acted.has(owner) ? { since } : {} })),
+      cursor: JSON.stringify({ r: holders.cursor, c: changed.cursor }), pages: holders.pages + changed.pages, incremental: true };
+  },
+};
+
 export const thalaVethlEnumerator = entrySenders('thala-vethl-expired',
   [{ contract: THALA_VE, module: 'scripts', name: 'lock' }, { contract: THALA_VEST, module: 'farming_vesting', name: 'convert_to_vethl' }],
   noContractTotal);
@@ -890,4 +925,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator, auroClosedEnumerator, animeswapClosedEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator, auroClosedEnumerator, animeswapClosedEnumerator, earniumClosedEnumerator];

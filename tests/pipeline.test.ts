@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RequestCapReached } from '../src/node/client.ts';
-import { aaveFrozenEnumerator, animeswapClosedEnumerator, auroClosedEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
+import { aaveFrozenEnumerator, animeswapClosedEnumerator, earniumClosedEnumerator, auroClosedEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
 import { ANIMESWAP_POOLS } from '../src/shared/sources/animeswap-closed.ts';
 import { fetchPrices } from '../src/node/prices.ts';
 import { keepPrevious, runSource } from '../src/node/snapshot.ts';
@@ -435,5 +435,16 @@ describe('animeswap enumerator', () => {
     expect(r.candidates).toEqual([{ owner: addr(1), hint: { lps: {
       [`${ANIMESWAP_POOLS}::LPCoinV1::${lps[0]}`]: '2024-01-02T03:04:05.000Z', [`${ANIMESWAP_POOLS}::LPCoinV1::${lps[1]}`]: '2025-02-03T04:05:06.000Z' } } }]);
     expect(r.pages).toBe(3);
+  });
+});
+
+describe('earnium enumerator', () => {
+  it('lists everyone who added or staked liquidity, and dates those who acted after the closure began', async () => {
+    const c = fakeChain({ gql: (_q, vars) => ({ user_transactions:
+      vars.f === 'stake' && vars.after === '0' ? [{ version: '5', sender: addr(1) }]
+      : vars.f === 'unstake' && vars.after === '7706000000' ? [{ version: '7706000100', sender: addr(2) }] : [] }) });
+    const r = await earniumClosedEnumerator.run(c, undefined);
+    expect(r.candidates).toEqual([{ owner: addr(1), hint: {} }, { owner: addr(2), hint: { since: '2027-01-15T08:00:00.000Z' } }]);
+    expect(r.incremental).toBe(true);
   });
 });
