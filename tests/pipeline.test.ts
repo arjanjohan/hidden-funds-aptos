@@ -375,26 +375,35 @@ describe('econia enumerator', () => {
 });
 
 describe('auro enumerator', () => {
+  // `indexed`: the account-transactions processor's watermark.
+  const auro = (indexed: string) => fakeChain({ gql: (query, vars) => {
+    if (query.includes('processor_status')) return { processor_status: [{ last_success_version: indexed, last_transaction_timestamp: '2026-10-21T00:00:00' }] };
+    if (query.includes('current_token_ownerships_v2')) return { current_token_ownerships_v2: [
+      { token_data_id: addr('f1'), owner_address: addr(1), last_transaction_timestamp: '2025-01-01T00:00:00' },
+      { token_data_id: addr('f3'), owner_address: addr(1), last_transaction_timestamp: '2026-06-01T00:00:00' },
+      { token_data_id: addr('f2'), owner_address: addr(2), last_transaction_timestamp: '2025-01-01T00:00:00' }] };
+    // One repayment after the shutdown, sent by someone else (addr 9); it touched position f1 and a pool.
+    if (query.includes('repay_entry')) return { user_transactions: vars.a === '5067106504' && BigInt(vars.w as string) >= 5_100_000_000n
+      ? [{ version: '5100000000', timestamp: '2026-05-07T16:32:48' }] : [] };
+    if (query.includes('account_transactions')) return { account_transactions: vars.v === '5100000000' && vars.after === ''
+      ? [{ account_address: addr(9) }, { account_address: addr('d0') }, { account_address: addr('f1') }] : [] };
+    throw new Error(query);
+  } });
+
   it('dates a position by its repayment after the shutdown, whoever repaid, and by an ownership change after it', async () => {
-    const c = fakeChain({ gql: (query, vars) => {
-      if (query.includes('current_token_ownerships_v2')) return { current_token_ownerships_v2: [
-        { token_data_id: addr('f1'), owner_address: addr(1), last_transaction_timestamp: '2025-01-01T00:00:00' },
-        { token_data_id: addr('f3'), owner_address: addr(1), last_transaction_timestamp: '2026-06-01T00:00:00' },
-        { token_data_id: addr('f2'), owner_address: addr(2), last_transaction_timestamp: '2025-01-01T00:00:00' }] };
-      // One repayment after the shutdown, sent by someone else (addr 9); it touched position f1 and a pool.
-      if (query.includes('repay_entry')) return { user_transactions: vars.a === '5067106504' ? [{ version: '5100000000', timestamp: '2026-05-07T16:32:48' }] : [] };
-      if (query.includes('account_transactions')) return { account_transactions: (vars.v as string[]).includes('5100000000') && vars.after === ''
-        ? [{ account_address: addr(9), transaction_version: '5100000000' }, { account_address: addr('d0'), transaction_version: '5100000000' },
-          { account_address: addr('f1'), transaction_version: '5100000000' }] : [] };
-      throw new Error(query);
-    } });
-    const r = await auroClosedEnumerator.run(c, undefined);
+    const r = await auroClosedEnumerator.run(auro('5200000000'), undefined);
     expect(r.candidates).toEqual([
       { owner: addr(1), hint: { tokens: [addr('f1'), addr('f3')], changed: { [addr('f1')]: '2026-05-07T16:32:48.000Z', [addr('f3')]: '2026-06-01T00:00:00.000Z' } } },
       { owner: addr(2), hint: { tokens: [addr('f2')] } },
     ]);
     expect(JSON.parse(r.cursor!)).toMatchObject({ v: '5100000000', repaid: { [addr('f1')]: '2026-05-07T16:32:48.000Z' } });
     // The repayment is remembered across runs.
-    expect((await auroClosedEnumerator.run(c, r.cursor)).candidates[0].hint).toMatchObject({ changed: { [addr('f1')]: '2026-05-07T16:32:48.000Z' } });
+    expect((await auroClosedEnumerator.run(auro('5200000000'), r.cursor)).candidates[0].hint).toMatchObject({ changed: { [addr('f1')]: '2026-05-07T16:32:48.000Z' } });
+  });
+
+  it('leaves a repayment the account index has not reached for a later run', async () => {
+    const early = await auroClosedEnumerator.run(auro('5050000000'), undefined);
+    expect(JSON.parse(early.cursor!)).toEqual({ v: '5067106504', repaid: {} });
+    expect((await auroClosedEnumerator.run(auro('5200000000'), early.cursor)).candidates[0].hint).toMatchObject({ changed: { [addr('f1')]: '2026-05-07T16:32:48.000Z' } });
   });
 });
