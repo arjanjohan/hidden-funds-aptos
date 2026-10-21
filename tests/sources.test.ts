@@ -850,6 +850,8 @@ describe('econia accounts', () => {
     expect(r.positions.map(p => [p.asset, p.expectedPayout[0].raw])).toEqual([[APT, '5'], [LZUSDC, '9']]);
     expect(r.positions[0].steps.map(s => [s.function.replace(/<.*$/, '').split('::').pop(), s.arguments])).toEqual([
       ['cancel_all_orders_user', ['7', 'true']], ['cancel_all_orders_user', ['7', 'false']], ['withdraw_to_coinstore', ['7', '5']]]);
+    // The cancels free both sides: the other side lists only its withdrawal, after them.
+    expect(r.positions[1].steps).toMatchObject([{ arguments: ['7', '9'], prerequisites: [expect.stringContaining('cancel_all_orders_user')] }]);
   });
 
   it('has display metadata (decimals) for every coin the coin markets trade', () => {

@@ -58,6 +58,8 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: EconiaHint): Pr
       const cancels = [...(a.asks.length ? [true] : []), ...(a.bids.length ? [false] : [])].map(side => ({
         function: `${ECONIA}::market::cancel_all_orders_user`, arguments: [a.market_id, String(side)], prerequisites: [], expectedOutputs: [] }));
       const sides = [{ coin: market.base, amount: BigInt(a.base_total) }, { coin: market.quote, amount: BigInt(a.quote_total) }];
+      // The cancels free both sides at once, so they are listed with the market's first position only.
+      let cancelled = false;
       for (const { coin, amount } of sides) {
         if (!coin || amount === 0n) continue;
         const asset = payoutAsset(coin);
@@ -71,8 +73,10 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: EconiaHint): Pr
           status: 'recoverable', blockers: [],
           confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
           // Arguments are (market id, amount): simulated; the reverse order aborts.
-          steps: [...cancels, { function: `${ECONIA}::user::withdraw_to_coinstore<${coin}>`, arguments: [a.market_id, amount.toString()], prerequisites: [], expectedOutputs: value }],
+          steps: [...(cancelled ? [] : cancels), { function: `${ECONIA}::user::withdraw_to_coinstore<${coin}>`, arguments: [a.market_id, amount.toString()],
+            prerequisites: cancelled && cancels.length ? [`cancel_all_orders_user for market ${a.market_id} (listed with its other side)`] : [], expectedOutputs: value }],
         });
+        cancelled = true;
       }
     }
     return { positions, complete: true, errors: [], ledgerVersion: version };
