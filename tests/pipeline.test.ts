@@ -373,23 +373,26 @@ describe('econia enumerator', () => {
 });
 
 describe('auro enumerator', () => {
-  it('dates the positions of owners who repaid after the shutdown by each position\'s own last transaction', async () => {
+  it('dates a position by its repayment after the shutdown, whoever repaid, and by an ownership change after it', async () => {
     const c = fakeChain({ gql: (query, vars) => {
       if (query.includes('current_token_ownerships_v2')) return { current_token_ownerships_v2: [
-        { token_data_id: addr('f1'), owner_address: addr(1) }, { token_data_id: addr('f3'), owner_address: addr(1) }, { token_data_id: addr('f2'), owner_address: addr(2) }] };
-      // Repayments after the shutdown: owner 1 only.
-      if (query.includes('repay_entry')) return { user_transactions: vars.a === '5067106504' ? [{ version: '5100000000', sender: addr(1) }] : [] };
-      // Owner 1's position f1 changed after the shutdown; f3 did not.
-      if (query.includes('account_transactions')) return { account_transactions: vars.p === addr('f1') ? [{ transaction_version: '5100000000' }] : [] };
-      return { user_transactions: [{ timestamp: '2026-05-07T16:32:48' }] };
+        { token_data_id: addr('f1'), owner_address: addr(1), last_transaction_timestamp: '2025-01-01T00:00:00' },
+        { token_data_id: addr('f3'), owner_address: addr(1), last_transaction_timestamp: '2026-06-01T00:00:00' },
+        { token_data_id: addr('f2'), owner_address: addr(2), last_transaction_timestamp: '2025-01-01T00:00:00' }] };
+      // One repayment after the shutdown, sent by someone else (addr 9); it touched position f1 and a pool.
+      if (query.includes('repay_entry')) return { user_transactions: vars.a === '5067106504' ? [{ version: '5100000000', timestamp: '2026-05-07T16:32:48' }] : [] };
+      if (query.includes('account_transactions')) return { account_transactions: (vars.v as string[]).includes('5100000000') && vars.after === ''
+        ? [{ account_address: addr(9), transaction_version: '5100000000' }, { account_address: addr('d0'), transaction_version: '5100000000' },
+          { account_address: addr('f1'), transaction_version: '5100000000' }] : [] };
+      throw new Error(query);
     } });
     const r = await auroClosedEnumerator.run(c, undefined);
     expect(r.candidates).toEqual([
-      { owner: addr(1), hint: { tokens: [addr('f1'), addr('f3')], changed: { [addr('f1')]: '2026-05-07T16:32:48.000Z' } } },
+      { owner: addr(1), hint: { tokens: [addr('f1'), addr('f3')], changed: { [addr('f1')]: '2026-05-07T16:32:48.000Z', [addr('f3')]: '2026-06-01T00:00:00.000Z' } } },
       { owner: addr(2), hint: { tokens: [addr('f2')] } },
     ]);
-    expect(JSON.parse(r.cursor!)).toEqual({ v: '5100000000', repaid: [addr(1)] });
-    // The repayer is remembered across runs.
+    expect(JSON.parse(r.cursor!)).toMatchObject({ v: '5100000000', repaid: { [addr('f1')]: '2026-05-07T16:32:48.000Z' } });
+    // The repayment is remembered across runs.
     expect((await auroClosedEnumerator.run(c, r.cursor)).candidates[0].hint).toMatchObject({ changed: { [addr('f1')]: '2026-05-07T16:32:48.000Z' } });
   });
 });
