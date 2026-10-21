@@ -201,7 +201,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - Meso Finance is still used: deposits until 2026-09-23, withdrawals until 2026-09-14, every pool unpaused and accruing interest.
   - Emojicoin.fun: closed. The team decommissioned the frontend on 2025-09-04 (21:00 UTC); the repository was archived on 2025-08-29 and emojicoin.fun no longer resolves. The contract still works and its markets still trade; under the closed-frontend rule its LP and Arena escrows count (decided 2026-10-21), but they are too small for a source (2026-10-21): LP from 764 providers is left in 427 holdings of 333 owners in 60 markets, worth ~748 APT on removal's APT side (`simulate_remove_liquidity`; one holder 423 APT, 9 holdings over 10 APT) plus emojicoins, which have no price. Arena escrows hold ~182 APT of emojicoins at spot (285 escrows, 173 owners).
   - Earnium: no closure notice; the last liquidity change was on 2026-04-17. LP in an AMM that still works is live liquidity (R4).
-  - Arche Protocol (Movement, MSD stablecoin): 501.6K MOVE (~$3.7K) of collateral, and its summary view aborts on a stale Pyth price. Blocked, and too small to add.
+  - Arche Protocol (Movement, MSD stablecoin): 501.6K MOVE (~$3.7K) of collateral, and its summary view aborts on a stale Pyth price. No closure evidence besides DefiLlama's flag, so it stays unchecked.
 - **Argo, Laminar Markets:** no closure notice found (Laminar was merged into Econia in 2023).
 - **Amnis AMI vesting** (`0xbc99…::token_vesting`, buckets airdrop / KOL / seed / private / team / …): vested AMI that claimers never took (e.g. the KOL bucket, 156 claimers, fully vested 2025-12-23) would count. But AMI trades at $0.00084 (market cap ~$515K), so even millions of unclaimed AMI are worth a few thousand dollars. Skipped. The AMI lock pools from the June 2025 campaign were not found on chain.
 - **ThalaSwap v1:** no deprecation notice and still trading, so v1 LP is live liquidity (R4).
@@ -404,10 +404,11 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Read:** the position's `ObjectCore` owner must be the wallet. The amount comes from share accounting: shares × (reserves + debt − fees) / total shares, which is the amount a full withdrawal pays.
 - **Reserves are short:** every pool keeps its reserves with the DAO account `0xafe4…`, as the fungible asset recorded in `LendingPool.fungible_asset` (Auro wraps a coin pool's coin in its own asset). Most pools hold 99.9% of their books. The stkAPT pool holds 2,061 of 5,611 stkAPT (~37%); the DAO also holds a Kofi withdrawal manager, so part is probably in Kofi's unstake queue. Each position is counted for its pro-rata share of what the pool really holds.
 - **Recovery:** `auro_router::withdraw_coin_entry<coin>(position, amount)` for a coin pool, `withdraw_entry(position, amount)` for a fungible-asset pool, with the exact full amount (rounded up so it burns every share). A partial withdrawal checks the position's health with a Pyth price that no longer updates, so it aborts (simulated). A position larger than what its pool holds is therefore `blocked` (`insufficient_cash`): today, one stkAPT position of 5,131 stkAPT.
-- **Enumeration:** current owners of the collection (4 indexer pages, 298 owners). Zero owners (positions with debt) are re-read monthly, so a repaid position is picked up.
-- **Prices:** stAPT and stkAPT at redemption (on-chain rate × APT; stkAPT uses Kofi's `get_exchange_rate`), kAPT and amAPT from CoinGecko (amAPT's coin type maps to `amnis-aptos`), USDt and USDC from CoinGecko.
+- **Age:** from the later of 2026-04-30 23:59:59 UTC and the position's own `last_deposited_times`, since the contract still takes deposits.
+- **Enumeration:** current owners of the collection (4 indexer pages, 298 owners). Withdrawals, repayments and the pools' shared reserves change positions without changing who holds the NFTs, so every owner is re-read every run (~715 requests).
+- **Prices:** stAPT and stkAPT at redemption (on-chain rate × APT; stkAPT uses Kofi's `get_exchange_rate` less its withdrawal fee, 0 bps today), kAPT and amAPT from CoinGecko (amAPT's coin type maps to `amnis-aptos`), USDt and USDC from CoinGecko.
 - **Rehearsal (full, 2026-10-21):** 229 debt-free positions of 209 owners, all reads complete. On the books: 4,696 stAPT, 5,459 stkAPT, 485 kAPT, 164 amAPT, ~9 USDt, 0.4 USDC. Counted: 4,693 stAPT, 2,005 stkAPT, 484 kAPT, 164 amAPT (about $6.6K). Simulations, per token the smallest, median and largest: 15 of 15 recoverable positions paid exactly their claim, and the one blocked position aborted (`EINSUFFICIENT_BALANCE`).
-- **Cost:** ~715 requests a full pass; monthly afterwards.
+- **Cost:** ~715 requests a run.
 
 ## topaz-bids
 

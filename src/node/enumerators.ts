@@ -213,8 +213,8 @@ export const amnisWithdrawalsEnumerator = collectionOwners('amnis-withdrawals', 
       detail: `matured ${matured} of ${total} pending (${pct(matured, total)})` };
   });
 
-// Auro: current owners of CDP position NFTs. Positions with debt are read too (they count once repaid, which the monthly
-// re-read of zero owners picks up).
+// Auro: current owners of CDP position NFTs. Every owner is re-read every run (the source's refresh), so withdrawals,
+// repayments and changes to the pools' reserves are picked up without on-chain change events.
 export const auroClosedEnumerator = collectionOwners('auro-closed-positions', AURO_COLLECTION,
   async () => ({ check: 'none', ok: null, detail: 'no contract total: the pools\' books overstate what the DAO account holds (stkAPT ~37%)' }));
 

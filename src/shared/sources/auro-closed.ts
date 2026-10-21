@@ -60,6 +60,9 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: TokensHint): Pr
       // A burned position or one that moved belongs to nobody's or its new owner's read; any debt excludes it (R4).
       if (!core || !position || normalizeAddress(core.owner) !== owner) return [];
       if (position.debt_shares.data.some((d: any) => BigInt(d.value) > 0n)) return [];
+      // The contract still takes deposits: a position topped up after the shutdown is aged from that deposit.
+      const deposited = Number(position.last_deposited_times ?? 0);
+      const since = deposited > Date.parse(AURO_CLOSED_AT) / 1000 ? iso(deposited) : AURO_CLOSED_AT;
       return await Promise.all(position.deposit_shares.data.filter((d: any) => BigInt(d.value) > 0n).map(async (d: any): Promise<Position> => {
         const p = await pool(ctx, normalizeAddress(d.key.inner));
         const shares = BigInt(d.value);
@@ -79,7 +82,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: TokensHint): Pr
         const locator = `${token}/${normalizeAddress(d.key.inner)}`;
         return {
           ...positionIds(SOURCE, owner, locator, 'principal', p.token), source: SOURCE, owner, locator, positionKind: 'principal', asset: p.token,
-          claimableSince: AURO_CLOSED_AT, ageBasis: 'protocol_closure',
+          claimableSince: since, ageBasis: 'protocol_closure',
           provenance: { reader: `${AURO}::lending_pool::UserPosition`, ledgerVersion: version },
           grossClaim: gross, expectedPayout: payout, payoutBasis: 'derived',
           status: blockers.length ? 'blocked' : 'recoverable', blockers,
@@ -111,7 +114,9 @@ export const auroClosedPositions: SourceDef<TokensHint> = {
     checkedAt: '2026-10-21',
     effectiveAt: AURO_CLOSED_AT,
   },
-  refresh: { nonZero: 'monthly', zero: 'monthly' },
+  // Withdrawals, repayments and the pools' shared reserves change positions without changing who holds the NFTs, and
+  // the whole collection is ~715 requests: every owner is re-read every run.
+  refresh: { nonZero: 'every_run', zero: 'weekly' },
   headlineAgeBases: ['protocol_closure'],
   howTo: [
     `Call ${AURO_ROUTER}::auro_router::withdraw_coin_entry<coin type>(position, amount) for a coin pool, or withdraw_entry(position, amount) for a fungible-asset pool, from the account holding the position NFT, with the full amount.`,
