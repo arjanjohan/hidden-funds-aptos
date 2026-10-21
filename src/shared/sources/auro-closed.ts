@@ -16,7 +16,9 @@ export const AMAPT_COIN = '0x111ae3e5bc816a5e63c2da97d0aa3886519e0cd5e4b046659fa
 export const AURO_CLOSED_AT = '2026-04-30T23:59:59Z';
 const SOURCE = 'auro-closed-positions';
 
-export type TokensHint = { tokens: string[] };
+/** Enumeration hint: the owner's position NFTs, and its last repayment after the shutdown (a position that had debt then
+ *  qualifies only from its repayment). */
+export type AuroHint = { tokens: string[]; repaidAt?: string };
 
 interface Pool { token: string; coin: boolean; supply: bigint; totalShares: bigint; available: bigint; paused: boolean }
 
@@ -44,7 +46,7 @@ function pool(ctx: ReadContext, address: string): Promise<Pool> {
 const TOKENS_QUERY = `query($o:String!,$c:String!,$after:String!){ current_token_ownerships_v2(where:{owner_address:{_eq:$o}, amount:{_gt:"0"},
   current_token_data:{collection_id:{_eq:$c}}, token_data_id:{_gt:$after}}, order_by:{token_data_id:asc}, limit:100){ token_data_id } }`;
 
-async function read(ctx: ReadContext, ownerInput: string, hint?: TokensHint): Promise<ReadResult> {
+async function read(ctx: ReadContext, ownerInput: string, hint?: AuroHint): Promise<ReadResult> {
   const owner = normalizeAddress(ownerInput);
   const version = ctx.ledger.version;
   const errors: string[] = [];
@@ -60,9 +62,11 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: TokensHint): Pr
       // A burned position or one that moved belongs to nobody's or its new owner's read; any debt excludes it (R4).
       if (!core || !position || normalizeAddress(core.owner) !== owner) return [];
       if (position.debt_shares.data.some((d: any) => BigInt(d.value) > 0n)) return [];
-      // The contract still takes deposits: a position topped up after the shutdown is aged from that deposit.
-      const deposited = Number(position.last_deposited_times ?? 0);
-      const since = deposited > Date.parse(AURO_CLOSED_AT) / 1000 ? iso(deposited) : AURO_CLOSED_AT;
+      // The contract still takes deposits and repayments: a position topped up after the shutdown is aged from that
+      // deposit, and one whose owner repaid after it (it had debt, so it did not qualify) from that repayment. The check
+      // page reads without the enumeration's repayment history, so there the age is unknown.
+      const since = hint ? [AURO_CLOSED_AT, iso(Number(position.last_deposited_times ?? 0)), hint.repaidAt]
+        .filter((d): d is string => !!d).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a)) : undefined;
       return await Promise.all(position.deposit_shares.data.filter((d: any) => BigInt(d.value) > 0n).map(async (d: any): Promise<Position> => {
         const p = await pool(ctx, normalizeAddress(d.key.inner));
         const shares = BigInt(d.value);
@@ -82,7 +86,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: TokensHint): Pr
         const locator = `${token}/${normalizeAddress(d.key.inner)}`;
         return {
           ...positionIds(SOURCE, owner, locator, 'principal', p.token), source: SOURCE, owner, locator, positionKind: 'principal', asset: p.token,
-          claimableSince: since, ageBasis: 'protocol_closure',
+          claimableSince: since, ageBasis: since ? 'protocol_closure' : 'unknown',
           provenance: { reader: `${AURO}::lending_pool::UserPosition`, ledgerVersion: version },
           grossClaim: gross, expectedPayout: payout, payoutBasis: 'derived',
           status: blockers.length ? 'blocked' : 'recoverable', blockers,
@@ -100,7 +104,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: TokensHint): Pr
   return { positions: found.flat(), complete: failed === 0, errors, ledgerVersion: version };
 }
 
-export const auroClosedPositions: SourceDef<TokensHint> = {
+export const auroClosedPositions: SourceDef<AuroHint> = {
   id: SOURCE,
   chain: 'aptos',
   protocol: 'Auro Finance',

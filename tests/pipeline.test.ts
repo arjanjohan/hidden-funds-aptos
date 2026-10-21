@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RequestCapReached } from '../src/node/client.ts';
-import { aaveFrozenEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
+import { aaveFrozenEnumerator, auroClosedEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
 import { fetchPrices } from '../src/node/prices.ts';
 import { keepPrevious, runSource } from '../src/node/snapshot.ts';
 import { State } from '../src/node/state.ts';
@@ -363,5 +363,25 @@ describe('econia enumerator', () => {
       view: () => [{ asks: [], bids: [] }],
     });
     expect((await econiaIdleEnumerator.run(c, undefined)).candidates).toEqual([{ owner: addr(2), hint: {} }]);
+  });
+});
+
+describe('auro enumerator', () => {
+  it('adds each holder\'s last repayment after the shutdown to its hint, kept across runs in the cursor', async () => {
+    const c = fakeChain({ gql: (query, vars) => {
+      if (query.includes('current_token_ownerships_v2')) return { current_token_ownerships_v2: [{ token_data_id: addr('f1'), owner_address: addr(1) }, { token_data_id: addr('f2'), owner_address: addr(2) }] };
+      // Repayments: owner 1 before and after the shutdown, owner 2 only before.
+      return { user_transactions: vars.a === '0' ? [
+        { version: '10', sender: addr(1), timestamp: '2026-03-01T00:00:00' },
+        { version: '11', sender: addr(2), timestamp: '2026-04-01T00:00:00' },
+        { version: '12', sender: addr(1), timestamp: '2026-05-07T16:32:48' }] : [] };
+    } });
+    const r = await auroClosedEnumerator.run(c, undefined);
+    expect(r.candidates).toEqual([
+      { owner: addr(1), hint: { tokens: [addr('f1')], repaidAt: '2026-05-07T16:32:48.000Z' } },
+      { owner: addr(2), hint: { tokens: [addr('f2')] } },
+    ]);
+    expect(JSON.parse(r.cursor!)).toEqual({ v: '12', repaid: { [addr(1)]: '2026-05-07T16:32:48.000Z' } });
+    expect((await auroClosedEnumerator.run(c, r.cursor)).candidates[0].hint).toMatchObject({ repaidAt: '2026-05-07T16:32:48.000Z' });
   });
 });

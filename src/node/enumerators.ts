@@ -2,7 +2,7 @@
 import { iso } from '../shared/accounting.ts';
 import { mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
-import { AURO_COLLECTION } from '../shared/sources/auro-closed.ts';
+import { AURO_CLOSED_AT, AURO_COLLECTION, AURO_ROUTER } from '../shared/sources/auro-closed.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
 import { AAVE, type AaveHint, aaveReserves, findFreeze } from '../shared/sources/aave-frozen.ts';
 import { ECHELON, FROZEN_MARKETS } from '../shared/sources/echelon-frozen.ts';
@@ -214,9 +214,38 @@ export const amnisWithdrawalsEnumerator = collectionOwners('amnis-withdrawals', 
   });
 
 // Auro: current owners of CDP position NFTs. Every owner is re-read every run (the source's refresh), so withdrawals,
-// repayments and changes to the pools' reserves are picked up without on-chain change events.
-export const auroClosedEnumerator = collectionOwners('auro-closed-positions', AURO_COLLECTION,
+// repayments and changes to the pools' reserves are picked up without on-chain change events. A position that still
+// had debt at the shutdown qualifies only once repaid, so each owner's hint also carries its last repayment after the
+// shutdown (repay_entry calls, scanned incrementally; liquidations need a Pyth price, which stopped on 2026-04-30).
+const AURO_REPAY_QUERY = `query($a:bigint!){ user_transactions(where:{entry_function_contract_address:{_eq:"${AURO_ROUTER}"},
+  entry_function_module_name:{_eq:"auro_router"}, entry_function_function_name:{_eq:"repay_entry"}, version:{_gt:$a}},
+  order_by:{version:asc}, limit:${PAGE}){ version sender timestamp } }`;
+const auroOwners = collectionOwners('auro-closed-positions', AURO_COLLECTION,
   async () => ({ check: 'none', ok: null, detail: 'no contract total: the pools\' books overstate what the DAO account holds (stkAPT ~37%)' }));
+export const auroClosedEnumerator: Enumerator = {
+  ...auroOwners,
+  scope: `${auroOwners.scope}; plus senders of ${AURO_ROUTER}::auro_router::repay_entry after the shutdown`,
+  async run(chain, cursor) {
+    let stored: { v?: string; repaid?: Record<string, string> } = {};
+    try { stored = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: rescan */ }
+    if (typeof stored !== 'object' || stored === null) stored = {};
+    const holders = await auroOwners.run(chain, undefined);
+    const repaid: Record<string, string> = { ...stored.repaid };
+    let after = stored.v ?? '0', pages = holders.pages;
+    for (;;) {
+      const page = (await chain.gql(AURO_REPAY_QUERY, { a: after })).user_transactions;
+      pages++;
+      for (const t of page) {
+        const at = iso(Date.parse(`${t.timestamp}Z`) / 1000), owner = normalizeAddress(t.sender);
+        if (Date.parse(at) > Date.parse(AURO_CLOSED_AT) && (!repaid[owner] || at > repaid[owner])) repaid[owner] = at;
+      }
+      if (page.length) after = String(page[page.length - 1].version);
+      if (page.length < PAGE) break;
+    }
+    return { candidates: holders.candidates.map(c => ({ owner: c.owner, hint: { ...(c.hint as object), ...(repaid[c.owner] ? { repaidAt: repaid[c.owner] } : {}) } })),
+      cursor: JSON.stringify({ v: after, repaid }), pages };
+  },
+};
 
 // Every delegation pool, then the active-stake delegators of pools whose validator is inactive.
 const inactiveValidatorEnumeratorFor = (sourceId: string): Enumerator => ({
