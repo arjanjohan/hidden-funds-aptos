@@ -11,7 +11,7 @@ A position counts only if **all** hold:
   - the protocol is closed, wound down or deprecated, with written evidence and an effective date; or
   - the position has ended: stake cooled down, request matured, lock expired, vesting released, stream or rewards ended.
 
-  A protocol whose official frontend has shut down counts as closed (decided 2026-10-21), even when its contract still works. The effective date is the shutdown date the team announced, taken at the end of that day; without a notice, the earliest date it can be shown to be down.
+  A protocol whose official frontend has shut down counts as closed (decided 2026-10-21), even when its contract still works. The effective date is the shutdown date the team announced, taken at the end of that day; without a notice, the earliest date it can be shown to be down. Since such a contract can still take new positions, a position is aged from the later of the effective date and its own last change (deposit, order) where the source can read it; a source that cannot says why the effective date is still a safe bound.
 - **R3 Recoverable to the owner.** Payout goes to the owner, not to a strategy or third party.
 - **R4 No debt, no live use.** No outstanding borrow and not posted as collateral, in any protocol. In a protocol that is not closed, also: not deployed in a live strategy and no open orders.
 

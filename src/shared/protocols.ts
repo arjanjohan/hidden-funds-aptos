@@ -164,8 +164,8 @@ export const PROTOCOLS: ProtocolEntry[] = [
     reason: 'Closed (frontend decommissioned 2025-09-04), so its LP and Arena escrows count, but they are small: LP worth ~748 APT on its APT side (427 holdings, 333 owners; one holds 423 APT) plus unpriced emojicoins, and Arena escrows ~182 APT of emojicoins.', defillama: 'emojicoin.fun', dead: 'yes' },
   { id: 'earnium', name: 'Earnium', chains: [...A], category: 'Dexs', status: 'not_left_behind', checkedAt: '2026-10-20',
     reason: 'No closure notice; last liquidity change 2026-04-17. LP in an AMM that still works is live liquidity (R4).', defillama: 'earnium', dead: '2026-10-10' },
-  { id: 'arche-protocol', name: 'Arche Protocol (MSD)', chains: [...M], category: 'CDP', status: 'blocked', checkedAt: '2026-10-20',
-    reason: '501.6K MOVE (~$3.7K) of collateral; its views abort on a stale Pyth price, so positions could only show as "may not work".', defillama: 'arche-protocol', dead: 'yes' },
+  { id: 'arche-protocol', name: 'Arche Protocol (MSD)', chains: [...M], category: 'CDP', status: 'not_checked',
+    reason: 'No closure evidence yet (DefiLlama flags it dead). 501.6K MOVE (~$3.7K) of collateral; its summary view aborts on a stale Pyth price (2026-10-20).', defillama: 'arche-protocol', dead: 'yes' },
 
   // Not checked yet, with DefiLlama's TVL (2026-10-21) as a hint for priority only: TVL is what the adapter counts,
   // not a ceiling on what a protocol owes (claim tables and ended rewards can sit outside it).
