@@ -194,11 +194,12 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **MovePosition (Movement) and Superposition (Aptos):** withdrawals need a packet signed by the protocol's service, and both services still issue packets (aptos-script, 2026-10-08). Live protocols, not left behind.
 - **Fliq (Aptos prediction markets):** winnings on a settled question that were never redeemed are an ended position (R2), and `connector::redeem` needs no operator. But the collateral wrapper's account holds 4,200 USDt in total (2026-10-20). That backs every open position, free collateral and unredeemed winning together, so unredeemed winnings are only a part of ~$4.2K. Skipped.
 - **Joule:** live. Withdrawals need fresh Pyth price updates, which require a paid Pyth key; that is a cost of using it, not a closure.
-- **No closure notice found (web search, 2026-10-20):** Auro Finance (Aptos CDP), AnimeSwap, Abel Finance, BlueMove (its Sei marketplace closed in 2023; Aptos was not affected).
+- **No closure notice found (web search, 2026-10-20):** AnimeSwap, Abel Finance, BlueMove (its Sei marketplace closed in 2023; Aptos was not affected).
+- **Auro Finance (Aptos CDP):** closed. The team's notice (on X) told users to withdraw all funds before April 30, 2026, and permanently shut down the website by the end of April, because Pyth deprecated its push feeds on Aptos. auro.finance and app.auro.finance no longer resolve; the last archived capture of the app is from 2025-12-04. Under the closed-frontend rule, debt-free collateral counts, aged from 2026-04-30. Source not built yet.
 - **DefiLlama "dead" flags (checked 2026-10-20):**
   - ABEL Finance (~$206K TVL) is still used: mints, borrows and redemptions until 2026-10-17 (checked 2026-10-21).
   - Meso Finance is still used: deposits until 2026-09-23, withdrawals until 2026-09-14, every pool unpaused and accruing interest.
-  - Emojicoin.fun: Econia Labs archived its repository on 2025-08-29, but its markets still trade (swaps and liquidity changes on 2026-10-20), so tokens and LP are live.
+  - Emojicoin.fun: closed. The team decommissioned the frontend on 2025-09-04 (21:00 UTC); the repository was archived on 2025-08-29 and emojicoin.fun no longer resolves. The contract still works and its markets still trade, but under the closed-frontend rule LP in its pools and Arena escrows count (decided 2026-10-21). The Arena escrows hold ~182 APT at spot in 285 escrows of 173 owners (2026-10-21); LP is not sized yet. Source not built yet.
   - Earnium: no closure notice; the last liquidity change was on 2026-04-17. LP in an AMM that still works is live liquidity (R4).
   - Arche Protocol (Movement, MSD stablecoin): 501.6K MOVE (~$3.7K) of collateral, and its summary view aborts on a stale Pyth price. Blocked, and too small to add.
 - **Argo, Laminar Markets:** no closure notice found (Laminar was merged into Econia in 2023).
