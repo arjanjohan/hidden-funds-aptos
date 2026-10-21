@@ -20,7 +20,7 @@ const SOURCE = 'auro-closed-positions';
  *  transaction since (a position that had debt then qualifies only from its repayment). */
 export type AuroHint = { tokens: string[]; changed?: Record<string, string> };
 
-interface Pool { token: string; coin: boolean; supply: bigint; totalShares: bigint; available: bigint; paused: boolean }
+interface Pool { token: string; coin: boolean; supply: bigint; totalShares: bigint; available: bigint; paused: boolean; lockSecs: number; earlyFeeBps: bigint }
 
 /** A pool's share accounting and what the DAO account actually holds of its token (pools can be short of it). */
 function pool(ctx: ReadContext, address: string): Promise<Pool> {
@@ -38,6 +38,7 @@ function pool(ctx: ReadContext, address: string): Promise<Pool> {
     const [held] = await ctx.chain.view('0x1::primary_fungible_store::balance', [AURO_DAO, normalizeAddress(lending.fungible_asset.inner)],
       ['0x1::fungible_asset::Metadata'], version);
     return { token: coin ? token : normalizeAddress(token), coin, available: BigInt(held), paused: state.is_paused,
+      lockSecs: Number(state.lock_times), earlyFeeBps: BigInt(state.early_withdraw_fee_bps),
       supply: BigInt(state.total_reserves_amount) + BigInt(state.total_debt_amount) - BigInt(state.total_fees),
       totalShares: BigInt(state.total_supply_shares) };
   });
@@ -83,14 +84,19 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: AuroHint): Prom
           ...(p.paused ? [{ code: 'paused', detail: 'Auro paused this pool.' }] : []),
           ...(requested > p.available ? [{ code: 'insufficient_cash', detail: 'The pool holds less than this position; a partial withdrawal needs a fresh Pyth price, which no longer updates on Aptos.' }] : []),
         ];
+        // A withdrawal inside the pool's lock window pays an early-withdrawal fee whose formula is not published. No pool
+        // sets one (lock_times and early_withdraw_fee_bps are 0 in every pool, 2026-10-21); should one, such a position
+        // is unknown rather than guessed.
+        const early = p.earlyFeeBps > 0n && p.lockSecs > 0 && ctx.ledger.timestampSecs < Number(position.last_deposited_times ?? 0) + p.lockSecs;
         const locator = `${token}/${normalizeAddress(d.key.inner)}`;
         return {
           ...positionIds(SOURCE, owner, locator, 'principal', p.token), source: SOURCE, owner, locator, positionKind: 'principal', asset: p.token,
           claimableSince: since, ageBasis: since ? 'protocol_closure' : 'unknown',
           provenance: { reader: `${AURO}::lending_pool::UserPosition`, ledgerVersion: version },
           // A blocked position's only step aborts, so nothing is payable now.
-          grossClaim: gross, expectedPayout: blockers.length ? [] : payout, payoutBasis: 'derived',
-          status: blockers.length ? 'blocked' : 'recoverable', blockers,
+          grossClaim: gross, expectedPayout: blockers.length || early ? [] : payout, payoutBasis: 'derived',
+          status: early ? 'unknown' : blockers.length ? 'blocked' : 'recoverable',
+          blockers: early ? [...blockers, { code: 'early_withdraw_fee', detail: 'Inside the pool\'s lock window: an early-withdrawal fee applies.' }] : blockers,
           confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
           steps: [{ function: p.coin ? `${AURO_ROUTER}::auro_router::withdraw_coin_entry<${p.token}>` : `${AURO_ROUTER}::auro_router::withdraw_entry`,
             arguments: [token, requested.toString()], prerequisites: [], expectedOutputs: gross }],
