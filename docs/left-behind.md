@@ -17,7 +17,7 @@ A position counts only if **all** hold:
 
   So in a closed protocol, positions it holds for the user count even if they are still live on chain: LP in pools that still trade, escrows, deposits, open orders. A position that backs a loan still does not count. The protocol's own tokens in the wallet are not positions and do not count.
 
-Excluded: active stake, requests that have not matured, live LP/lending in protocols that are not closed, wallet tokens that have a market.
+Excluded: in a protocol that is not closed, active stake and live LP or lending (in a closed one they count, as above); anywhere, requests that have not matured yet (they count from maturity) and wallet tokens that have a market.
 
 ### Stranded liquid receipt tokens
 
