@@ -177,11 +177,22 @@ export const PROTOCOLS: ProtocolEntry[] = [
     reason: 'Frontend up, and its 11 pools hold ~1.5 MOVE plus dust (lens::getAllPools).' },
   { id: 'thetis-perps', name: 'Thetis Perps', chains: [...A], category: 'Derivatives', status: 'not_checked', defillama: 'thetis-perps', dead: 'yes',
     reason: 'Frontend gone (thetis.market parked for sale, 2026-10-21); holdings not sized (DefiLlama TVL $1.3K).' },
-  { id: 'aptoslaunch', name: 'AptosLaunch', chains: [...A], category: 'Launchpad', status: 'not_checked', defillama: 'aptoslaunch', dead: 'yes',
-    reason: 'Frontend gone (aptoslaunch.io redirects to an unrelated site, 2026-10-21); staking pools not sized (DefiLlama TVL $2.5K).' },
 
   { id: 'collex', name: 'Collex', chains: [...A], category: 'Physical TCG', status: 'too_small', checkedAt: '2026-10-21', defillama: 'collex', dead: 'yes',
     reason: 'collex.fun no longer resolves (served until at least 2026-02). Users can claim at most ~$2.3K: its USD token supply is 1,135 and cards are valued at $1,229 (15% cash-out fee); the rest of the treasury\'s 19.5K USDt is the protocol\'s.' },
+
+  { id: 'baptswap', name: 'BaptSwap (V1, V2, V2.1)', chains: [...A], category: 'Dexs', status: 'too_small', checkedAt: '2026-10-21', defillama: 'baptswap-v2.1', dead: 'yes',
+    reason: 'Closed (none of its domains resolve, 2026-10-21), but its 12 pools hold ~91 APT and ~$40 of stablecoins (~$190).' },
+  { id: 'atodex', name: 'AtoDEX', chains: [...A], category: 'Dexs', status: 'too_small', checkedAt: '2026-10-21', defillama: 'atodex', dead: 'yes',
+    reason: 'Its 8 pools hold ~15 APT on their APT sides.' },
+  { id: 'aptoslaunch', name: 'AptosLaunch', chains: [...A], category: 'Launchpad', status: 'too_small', checkedAt: '2026-10-21', defillama: 'aptoslaunch', dead: 'yes',
+    reason: 'Closed (aptoslaunch.io redirects to an unrelated site), but its lock-bond pools hold its own ALT token, which has no market price (not on CoinGecko), so nothing can be valued.' },
+  { id: 'lotto-run', name: 'Lotto Run', chains: [...A], category: 'Yield Lottery', status: 'too_small', checkedAt: '2026-10-21', defillama: 'lotto-run', dead: 'yes',
+    reason: 'Its 4 lottery pots hold 14 APT.' },
+  { id: 'movepump', name: 'MovePump', chains: [...A], category: 'Launchpad', status: 'not_left_behind', checkedAt: '2026-10-21', defillama: 'movepump', dead: 'yes',
+    reason: 'Bonding curves (175, 757.5 APT): holders keep the tokens in their wallets, and the curve is their market (R1).' },
+  { id: 'movegpt', name: 'MoveGPT', chains: [...A], category: 'Launchpad', status: 'too_small', checkedAt: '2026-10-21', defillama: 'movegpt', dead: '2026-03-05',
+    reason: 'Its two staking pools hold ~477K MGPT, ~$6 at CoinGecko\'s price.' },
 
   // Not checked yet, with DefiLlama's TVL (2026-10-21) as a hint for priority only: TVL is what the adapter counts,
   // not a ceiling on what a protocol owes (claim tables and ended rewards can sit outside it).
@@ -191,14 +202,10 @@ export const PROTOCOLS: ProtocolEntry[] = [
     ['obric', 'Obric', A, 'Dexs', undefined, 1487],
     ['bridgers', 'Bridgers', A, 'Dexs', undefined, 688],
     ['jujube-finance', 'Jujube Finance', A, 'Dexs', 'yes', 29],
-    ['atodex', 'AtoDEX', A, 'Dexs', 'yes', 0],
-    ['movepump', 'MovePump', A, 'Launchpad', 'yes', 617],
-    ['movegpt', 'MoveGPT', A, 'Launchpad', '2026-03-05', 0],
     ['bluemove-staking', 'BlueMove Staking', A, 'NFT Marketplace', 'yes', 0],
     ['streamflow', 'Streamflow', A, 'Payments', undefined, 4],
     ['moveflow', 'MoveFlow', A, 'Payments', undefined, 3],
     ['mosquitos-finance', 'Mosquitos Finance', A, 'Yield', '2023-03-09', 0],
-    ['lotto-run', 'Lotto Run', A, 'Yield Lottery', 'yes', 12],
   ] as [string, string, readonly ('aptos' | 'movement')[], string, string | undefined, number][]).map(([id, name, chains, category, dead, tvl]): ProtocolEntry => ({
     id, name, chains: [...chains], category, status: 'not_checked',
     reason: `Not checked yet (DefiLlama TVL $${tvl.toLocaleString('en-US')} on 2026-10-21).`,
@@ -213,7 +220,6 @@ export const PROTOCOLS: ProtocolEntry[] = [
     ['liquidswap', 'LiquidSwap', A, 'Dexs'],
     ['cetus-clmm', 'Cetus CLMM', A, 'Dexs'],
     ['houstonswap', 'HoustonSwap', A, 'Dexs', 'yes'],
-    ['baptswap', 'BaptSwap (V1, V2, V2.1)', A, 'Dexs', 'yes'],
     ['sushi-aptos', 'Sushi (Aptos)', A, 'Dexs'],
     ['movefast', 'MoveFast', A, 'Launchpad'],
     ['goapt', 'GoAPT', A, 'Liquid Staking'],
@@ -223,7 +229,7 @@ export const PROTOCOLS: ProtocolEntry[] = [
     ['eternal-finance', 'Eternal Finance', A, 'Yield'],
     ['moneyfi-v1', 'MoneyFi', A, 'Yield Aggregator'],
   ] as [string, string, readonly ('aptos' | 'movement')[], string, string?][]).map(([id, name, chains, category, dead]): ProtocolEntry => ({
-    id, name, chains: [...chains], category, status: 'not_checked', reason: 'Not checked yet.', defillama: id === 'baptswap' ? 'baptswap-v2.1' : id, ...(dead ? { dead } : {}),
+    id, name, chains: [...chains], category, status: 'not_checked', reason: 'Not checked yet.', defillama: id, ...(dead ? { dead } : {}),
   })),
 
   // Out of scope: custodial exchanges DefiLlama lists with Aptos reserves
