@@ -88,7 +88,8 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: AuroHint): Prom
           ...positionIds(SOURCE, owner, locator, 'principal', p.token), source: SOURCE, owner, locator, positionKind: 'principal', asset: p.token,
           claimableSince: since, ageBasis: since ? 'protocol_closure' : 'unknown',
           provenance: { reader: `${AURO}::lending_pool::UserPosition`, ledgerVersion: version },
-          grossClaim: gross, expectedPayout: payout, payoutBasis: 'derived',
+          // A blocked position's only step aborts, so nothing is payable now.
+          grossClaim: gross, expectedPayout: blockers.length ? [] : payout, payoutBasis: 'derived',
           status: blockers.length ? 'blocked' : 'recoverable', blockers,
           confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
           steps: [{ function: p.coin ? `${AURO_ROUTER}::auro_router::withdraw_coin_entry<${p.token}>` : `${AURO_ROUTER}::auro_router::withdraw_entry`,
