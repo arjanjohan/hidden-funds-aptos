@@ -1,7 +1,7 @@
 // Live check: reads Aptos mainnet from the browser, anonymously. Nothing is sent to this site.
 import { useRef, useState } from 'react';
 import { freshPrices, usd as toUsd, type PriceBook } from '../../shared/accounting.ts';
-import { createReader, mapLimit, NETWORKS, normalizeAddress } from '../../shared/chain.ts';
+import { createReader, mapLimit, NETWORKS, normalizeAddress, withOwnResources } from '../../shared/chain.ts';
 import { ASSETS } from '../../shared/assets.ts';
 import { tableProvider, type MarketTable } from '../../shared/market.ts';
 import { readClassified } from '../../shared/owners.ts';
@@ -10,7 +10,11 @@ import { SOURCES } from '../../shared/sources/index.ts';
 import type { Memo, Position, ReadContext, ReadResult } from '../../shared/types.ts';
 import { date, short, units, usd } from '../lib/format.ts';
 
-const MAX_ADDRESSES = 20;
+/** Wallets the public Aptos API serves one browser in one 5-minute rate-limit window, so a check never waits. */
+const MAX_ANONYMOUS = 3;
+/** With the visitor's own Geomi key the limit is the key's, far above the public one. */
+const MAX_WITH_KEY = 50;
+const KEY_STORE = 'geomi-api-key';
 /** Sources read at once per address: keeps each burst small against the public per-IP limit. */
 const SOURCE_CONCURRENCY = 4;
 /** Enough retries to outlast the public API's 5-minute rate-limit window (2+4+…+60 s ≈ 5 min). */
@@ -29,9 +33,29 @@ function parse(text: string): { addresses: string[]; invalid: string[] } {
   return { addresses: [...addresses], invalid };
 }
 
-/** A short reason for an error: rate limits by name, anything else truncated. */
+/** A short reason for an error: rate limits and a rejected key by name, anything else truncated. */
 function readable(error: string): string {
-  return /429|rate limit/i.test(error) ? 'the public API rate limit was reached' : error.slice(0, 120);
+  if (/HTTP 40[13]/.test(error)) return 'the API key was rejected';
+  return /429|rate limit/i.test(error) ? 'the API rate limit was reached' : error.slice(0, 120);
+}
+
+// The key lives in this browser only. Storage can be unavailable (private windows, blocked site data).
+function loadKey(): string {
+  try { return localStorage.getItem(KEY_STORE) ?? ''; } catch { return ''; }
+}
+function storeKey(key: string) {
+  try { if (key) localStorage.setItem(KEY_STORE, key); else localStorage.removeItem(KEY_STORE); } catch { /* kept for this visit only */ }
+}
+const keyHeaders = (key: string): Record<string, string> => (key ? { authorization: `Bearer ${key}` } : {});
+
+/** Null when Aptos accepts the key; otherwise why not. */
+async function checkKey(key: string): Promise<string | null> {
+  try {
+    await createReader({ network: 'aptos', headers: keyHeaders(key), retries: 0 }).ledger();
+    return null;
+  } catch (err) {
+    return /HTTP 40[13]/.test(String(err)) ? 'Geomi rejected this key.' : `Could not check the key: ${readable(String(err))}.`;
+  }
 }
 
 function memory(): Memo {
@@ -49,13 +73,16 @@ export default function Check({ prices: published, markets }: { prices: PriceBoo
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const running = useRef(false);   // blocks a second click before the disabled button renders
+  const [key, setKey] = useState(loadKey);
   const { addresses, invalid } = parse(text);
+  const limit = key ? MAX_WITH_KEY : MAX_ANONYMOUS;
 
   async function run() {
     if (running.current) return;
     setError(''); setNotice(''); setRows([]);
     if (!addresses.length) return setError('Paste at least one Aptos address.');
-    if (addresses.length > MAX_ADDRESSES) return setError(`Check at most ${MAX_ADDRESSES} addresses at a time.`);
+    if (addresses.length > limit) return setError(key ? `Check at most ${limit} addresses at a time.`
+      : `Without an API key, check at most ${limit} addresses at a time. Add your own key below to check up to ${MAX_WITH_KEY}.`);
     // Busy before the first request: connecting can wait out a rate limit for minutes, and the button must stay off.
     running.current = true;
     setBusy('Connecting…');
@@ -64,8 +91,10 @@ export default function Check({ prices: published, markets }: { prices: PriceBoo
       // reached only fails its own sources.
       const contexts = new Map<string, ReadContext>(), unreachable = new Map<string, string>();
       for (const network of new Set(SOURCES.map(s => s.chain))) {
-        const chain = createReader({ network, retries: RETRIES, onWait: (_label, ms, status) => {
-          if (status === 429) setNotice(`The public ${NETWORKS[network].name} API is rate-limiting this browser; continuing in ${Math.ceil(ms / 1000)} s…`);
+        // The visitor's key goes to the Aptos Labs API only, never to Movement.
+        const keyed = network === 'aptos' && !!key;
+        const chain = createReader({ network, retries: RETRIES, headers: keyed ? keyHeaders(key) : {}, onWait: (_label, ms, status) => {
+          if (status === 429) setNotice(`${keyed ? 'Your API key\'s rate limit was reached' : `The public ${NETWORKS[network].name} API is rate-limiting this browser`}; continuing in ${Math.ceil(ms / 1000)} s…`);
         } });
         try {
           contexts.set(network, { chain, ledger: await chain.ledger(), memo: memory(), scratch: new Map(),
@@ -78,9 +107,11 @@ export default function Check({ prices: published, markets }: { prices: PriceBoo
       const out: Row[] = [];
       for (const [i, address] of addresses.entries()) {
         setBusy(`Checking ${i + 1} of ${addresses.length}…`);
+        // Each source reads some of the wallet's own resources: one read of all of them serves those.
+        const own = new Map([...contexts].map(([network, c]) => [network, { ...c, chain: withOwnResources(c.chain, address, c.ledger.version) }]));
         // A source that fails is reported on its own; the others still answer.
         const results = await mapLimit(SOURCES, SOURCE_CONCURRENCY, async s => {
-          const ctx = contexts.get(s.chain);
+          const ctx = own.get(s.chain);
           if (!ctx) return { sourceId: s.id, result: { positions: [], complete: false, errors: [unreachable.get(s.chain)!], ledgerVersion: '0' } };
           // Same read and owner classification as the pipeline: a resource account or object cannot sign a claim.
           try { return { sourceId: s.id, result: await readClassified(s, ctx, address) }; }
@@ -108,7 +139,48 @@ export default function Check({ prices: published, markets }: { prices: PriceBoo
       {error && <p style={{ color: 'var(--bad)' }}>{error}</p>}
       {rows.length > 0 && stalePrices > 0 && <p className="muted">{stalePrices} price{stalePrices === 1 ? ' is' : 's are'} older than 7 days and not shown; amounts are still exact.</p>}
       {rows.map(row => <AddressResult key={row.address} row={row} prices={prices} />)}
+      <ApiKey current={key} onChange={k => { storeKey(k); setKey(k); }} disabled={!!busy} />
     </div>
+  );
+}
+
+function ApiKey({ current, onChange, disabled }: { current: string; onChange: (key: string) => void; disabled: boolean }) {
+  const [draft, setDraft] = useState('');
+  const [status, setStatus] = useState('');
+  async function save() {
+    const key = draft.trim();
+    if (!key) return;
+    setStatus('Checking the key…');
+    const problem = await checkKey(key);
+    if (problem) return setStatus(problem);
+    onChange(key); setDraft(''); setStatus('');
+  }
+  if (current) return (
+    <p className="muted" style={{ marginTop: 24 }}>
+      Using your API key (…{current.slice(-4)}): up to {MAX_WITH_KEY} wallets at a time.{' '}
+      <button className="link" onClick={() => onChange('')} disabled={disabled}>Remove key</button>
+    </p>
+  );
+  return (
+    <details style={{ marginTop: 24 }}>
+      <summary>Check more than {MAX_ANONYMOUS} wallets</summary>
+      <p className="muted">
+        Without a key, the public Aptos API serves one browser about {MAX_ANONYMOUS} wallets per 5 minutes, so this page checks at
+        most {MAX_ANONYMOUS} at a time. With your own free API key you can check up to {MAX_WITH_KEY}.
+      </p>
+      <ol className="muted">
+        <li>Sign up at <a href="https://geomi.dev" target="_blank" rel="noopener">geomi.dev</a> (Aptos Labs' developer platform) and create an API key for Aptos mainnet.</li>
+        <li>If you limit the key to websites, add <code>{typeof location === 'undefined' ? '' : location.origin}</code>.</li>
+        <li>Paste it here.</li>
+      </ol>
+      <p>
+        <input value={draft} onChange={e => setDraft(e.target.value)} placeholder="API key" aria-label="Geomi API key" autoComplete="off"
+          style={{ font: '14px ui-monospace, monospace', padding: 8, borderRadius: 8, border: '1px solid var(--line)', background: 'var(--card)', color: 'var(--fg)', width: 'min(100%, 420px)' }} />{' '}
+        <button className="button" onClick={save} disabled={disabled || !draft.trim()}>Use key</button>
+      </p>
+      {status && <p className="muted" role="status">{status}</p>}
+      <p className="muted">The key stays in this browser and is sent only to the Aptos Labs API, never to this site or to Movement.</p>
+    </details>
   );
 }
 

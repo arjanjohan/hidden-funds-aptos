@@ -45,6 +45,10 @@ export function createReader(options: ReaderOptions = {}): ChainReader {
   const endpoints = NETWORKS[network];
 
   async function request(url: string, init: RequestInit, label: string, allow404 = false): Promise<any> {
+    return (await requestWithHeaders(url, init, label, allow404))?.body ?? null;
+  }
+
+  async function requestWithHeaders(url: string, init: RequestInit, label: string, allow404 = false): Promise<{ body: any; headers: Headers } | null> {
     for (let attempt = 0; ; attempt++) {
       onRequest?.(label);
       let res: Response;
@@ -77,7 +81,7 @@ export function createReader(options: ReaderOptions = {}): ChainReader {
       }
       if (!res.ok) throw new Error(`${label}: HTTP ${res.status} ${text.slice(0, 300)}`);
       if (body?.errors) throw new Error(`${label}: ${JSON.stringify(body.errors).slice(0, 300)}`);
-      return body;
+      return { body, headers: res.headers };
     }
   }
 
@@ -94,6 +98,12 @@ export function createReader(options: ReaderOptions = {}): ChainReader {
       request(`${endpoints.fullnode}/view${at(version)}`, json({ function: fn, type_arguments: typeArgs, arguments: args }), `view ${fn}`),
     resource: async (address, type, version) =>
       (await request(`${endpoints.fullnode}/accounts/${address}/resource/${encodeURIComponent(type)}${at(version)}`, {}, `resource ${type}`, true))?.data ?? null,
+    // One page of up to 9,999 resources; a longer list (a cursor follows) is not served.
+    resources: async (address, version) => {
+      const page = await requestWithHeaders(`${endpoints.fullnode}/accounts/${address}/resources?limit=9999${version ? `&ledger_version=${version}` : ''}`, {}, 'resources', true);
+      if (!page) return [];
+      return page.headers.get('x-aptos-cursor') ? null : page.body;
+    },
     account: address => request(`${endpoints.fullnode}/accounts/${address}`, {}, 'account', true),
     tableItem: (handle, keyType, valueType, key, version) =>
       request(`${endpoints.fullnode}/tables/${handle}/item${at(version)}`, json({ key_type: keyType, value_type: valueType, key }), 'table', true),
@@ -138,4 +148,24 @@ export async function transactionTime(chain: ChainReader, version: number | stri
     'query($v:bigint!){ user_transactions(where:{version:{_eq:$v}}, limit:1){ timestamp } }', { v: String(version) });
   const ts = d.user_transactions[0]?.timestamp;
   return ts ? Math.floor(Date.parse(ts + 'Z') / 1000) : null;
+}
+
+/** A type tag in one spelling: every address in it at full length, no spaces. */
+export const canonicalType = (type: string) => type.replace(/\s+/g, '').replace(/0x[0-9a-fA-F]{1,64}(?=::)/g, a => normalizeAddress(a));
+
+/** A reader that answers `resource()` for `owner` at `version` from one read of all the owner's resources (loaded on
+ *  first use), instead of a request per type. Other addresses, versions and calls go to `chain` unchanged; so does
+ *  everything when the owner's resources do not fit one page. */
+export function withOwnResources(chain: ChainReader, owner: string, version: string): ChainReader {
+  const self = normalizeAddress(owner);
+  let all: Promise<Map<string, any> | null> | undefined;
+  const load = () => (all ??= chain.resources(self, version).then(list => list && new Map(list.map(r => [canonicalType(r.type), r.data]))));
+  return {
+    ...chain,
+    resource: async (address, type, ledgerVersion) => {
+      if (normalizeAddress(address) !== self || ledgerVersion !== version) return chain.resource(address, type, ledgerVersion);
+      const map = await load();
+      return map ? map.get(canonicalType(type)) ?? null : chain.resource(address, type, ledgerVersion);
+    },
+  };
 }

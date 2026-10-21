@@ -48,14 +48,28 @@ export function claimableHandle(ctx: ReadContext, c: LzCoin): Promise<string | n
   });
 }
 
-const ENTRY_QUERY = `query($h:String!,$k:jsonb){ current_table_items(where:{table_handle:{_eq:$h}, decoded_key:{_eq:$k}, is_deleted:{_eq:false}}){ last_transaction_version } }`;
+const ENTRIES_QUERY = `query($h:[String!]!,$k:jsonb){ current_table_items(where:{table_handle:{_in:$h}, decoded_key:{_eq:$k}, is_deleted:{_eq:false}}){ table_handle last_transaction_version } }`;
+
+/** Without a hint (the check page): which coins' tables hold an entry for the owner, and when each was written, in one
+ *  indexer query instead of a table read per coin. An entry written in the last minutes, before the indexer has it,
+ *  is not found. */
+async function indexedEntries(ctx: ReadContext, owner: string): Promise<Record<string, number>> {
+  const handles = new Map<string, string>();
+  for (const c of LZ_COINS) {
+    const h = await claimableHandle(ctx, c);
+    if (h) handles.set(h, c.coin);
+  }
+  const rows = (await ctx.chain.gql(ENTRIES_QUERY, { h: [...handles.keys()], k: shortAddress(owner) })).current_table_items;
+  return Object.fromEntries(rows.map((r: any) => [handles.get(normalizeAddress(r.table_handle))!, Number(r.last_transaction_version)]));
+}
 
 async function read(ctx: ReadContext, ownerInput: string, hint?: ClaimableHint): Promise<ReadResult> {
   const owner = normalizeAddress(ownerInput);
   const version = ctx.ledger.version;
   const errors: string[] = [];
   let failed = 0;
-  const coins = hint ? LZ_COINS.filter(c => hint.versions[c.coin] !== undefined) : LZ_COINS;
+  const versions = hint?.versions ?? await indexedEntries(ctx, owner);
+  const coins = LZ_COINS.filter(c => versions[c.coin] !== undefined);
   const found = await mapLimit(coins, 3, async (c): Promise<Position | null> => {
     try {
       const indexed = hint?.amounts?.[c.coin];
@@ -76,9 +90,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: ClaimableHint):
       const amount = BigInt(raw ?? 0);
       if (amount === 0n) return null;
       // Credited when the bridge wrote the entry; later credits move the date forward, never back.
-      const written = hint?.versions[c.coin] ??
-        (await ctx.chain.gql(ENTRY_QUERY, { h: handle, k: shortAddress(owner) })).current_table_items[0]?.last_transaction_version;
-      const since = hint?.times?.[c.coin] ?? (written !== undefined ? await transactionTime(ctx.chain, written) : null);
+      const since = hint?.times?.[c.coin] ?? await transactionTime(ctx.chain, versions[c.coin]);
       const value = [{ asset: c.coin, raw: amount.toString() }];
       return {
         ...positionIds(SOURCE, owner, c.symbol, 'principal', c.coin), source: SOURCE, owner, locator: c.symbol, positionKind: 'principal', asset: c.coin,
