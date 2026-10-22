@@ -204,6 +204,8 @@ export const PROTOCOLS: ProtocolEntry[] = [
     reason: 'Live: obric.xyz is up (2026-10-21); its liquidity is in live use (R4).' },
   { id: 'tsunamix', name: 'TsunamiX (Tsunami Finance)', chains: [...A], category: 'Derivatives', status: 'not_left_behind', checkedAt: '2026-10-21', defillama: 'tsunamix', dead: 'yes',
     reason: 'Live despite DefiLlama\'s dead flag: tsunami.finance/trade serves the app (2026-10-21).' },
+  { id: 'vibrantx', name: 'VibrantX', chains: [...A], category: 'Yield Aggregator', status: 'not_left_behind', checkedAt: '2026-10-22',
+    reason: 'Holds nothing itself: it acts from users\' own accounts, so its positions are their own lending profiles (Aries profiles named "vibrantx::aries_lending", read by aries-wound-down on the check page). vibrantx.finance redirects to vibrantxapp.finance, which answers 400 (2026-10-22).' },
   { id: 'ekiden', name: 'Ekiden', chains: [...A], category: 'Derivatives', status: 'not_left_behind', checkedAt: '2026-10-22',
     reason: 'Live: app.ekiden.fi serves its trading app (2026-10-22); listed in the Aptos ecosystem directory.' },
   { id: 'decibel', name: 'Decibel', chains: [...A], category: 'Derivatives', status: 'not_left_behind', checkedAt: '2026-10-21', defillama: 'decibel',
