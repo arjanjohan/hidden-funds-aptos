@@ -1,0 +1,28 @@
+---
+import Base from '../layouts/Base.astro';
+import { REPO } from '../lib/site.ts';
+import { Content, getHeadings } from '../../../docs/sources.md';
+
+const sections = getHeadings().filter(h => h.depth === 2);
+---
+<Base title="Sources and evidence · hidden funds" description="Every source: what it reads, how it was verified, and the evidence for each decision.">
+  <article class="prose">
+    <h1>Sources and evidence</h1>
+    <p>Every source we count, every candidate we checked and left out, and the evidence for each decision.
+      What counts as left behind is on <a href="/how-we-count">how we count</a>.</p>
+    <div class="toc" role="navigation" aria-label="Sections">
+      {sections.map(h => <a href={`#${h.slug}`}>{h.text}</a>)}
+    </div>
+    <div class="doc"><Content /></div>
+    <p class="muted source-note">This page is <a href={`${REPO}/blob/main/docs/sources.md`}>docs/sources.md</a>, rendered from the code repository. Every protocol and its status: <a href="/coverage">protocol coverage</a>.</p>
+  </article>
+</Base>
+
+<style>
+  .toc { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 16px; padding: 14px 16px;
+    margin: 24px 0 8px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; font-size: 14px; }
+  .toc a { min-width: 0; color: var(--muted); text-decoration: none; overflow-wrap: anywhere; }
+  /* The page has its own title and contents above; the document's own title is not repeated. */
+  .doc :global(h1:first-child) { display: none; }
+  .toc a:hover { color: var(--fg); }
+</style>
