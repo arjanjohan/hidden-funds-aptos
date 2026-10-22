@@ -182,6 +182,26 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Recovery:** `multi_rewards::claim_reward(staking token)`. It claims every subscribed pool of that staking token, live ones included. Sample simulation: 12/12, paying exactly the expected MOVE; 1 needs gas.
 - **Re-read schedule:** monthly, or when a stake changes or the staker claims or unsubscribes. First run: 12.6K requests, all to Movement's public endpoints.
 
+## canopy-frozen-vaults (Movement)
+
+- **What:** shares left in Canopy vaults that Canopy closed to deposits, held in the wallet or staked in Canopy's rewards pools.
+- **Rule:** a vault whose deposit limit is 0 or that is paused counts as frozen (decided 2026-10-21), like Echelon's frozen markets. Both close deposits; withdrawals stay open by design.
+- **Status (checked 2026-10-21):** all 47 vaults are frozen, by deposit limit; none is paused. Canopy's admin multisig set the limit to 0 on 42 vaults in one transaction on 2026-10-16 14:40 UTC (`SetDepositLimit` events), on one more that afternoon, and on four (two rsETH vaults, the rsETH-WETH LP vault, a Meridian LP vault) on 2026-06-16. Before that the vaults had no limit. Movement acquired Canopy in May 2026. Aged from the vault's freeze, or from the owner's own later change (the share store's last change; a staking row changed after the freeze).
+- **Positions:** per frozen vault, the owner's wallet shares (`primary_fungible_store::balance`) plus staked shares (`multi_rewards::get_user_staked_balance`), valued with `vault::shares_to_amount`. The staking pool's own store is left out: its shares are the stakers'.
+- **Recovery:** `multi_rewards::withdraw(shares token, amount)` for staked shares, then `router::withdraw_fa(vault, strategies, strategy data, shares, some(10), minimum)`, with the strategies from `router::withdraw::get_withdrawal_map_view`.
+- **Withdrawal check (simulated 2026-10-21, a real holder's shares, the vault's own withdrawal map):**
+  - Works: sUSDa, the rsETH-WETH LP vault and five Meridian LP vaults. Unstaking works too (a MOVE-0 staker).
+  - Needs a MovePosition price packet that the Canopy app supplies (rsETH, ezETH, WETH.e-5): counted as recoverable, not simulated end to end.
+  - Aborts in the vault (`EINVALID_SHARES_FACTORS`), also for 1 MOVE of shares and with any option values: every MOVE vault, the USDC.e and USDT.e vaults, WBTC.e-14. Their strategies report a fraction of what the vault lent them (MOVE-0: ~8,990 of 833K MOVE); a keeper script pulled funds out of ~170 strategy positions at 08:07 that day, before the freeze. The last successful MOVE-0 withdrawal was 2026-10-15. `blocked` (`withdrawal_aborts`).
+  - Aborts in the strategy: `EINSUFFICIENT_BALANCE` (WETH.e-13, LBTC, four Meridian LP vaults), `EUNKNOWN_STRATEGY` (seven Meridian LP vaults, not supported by the router). `blocked`.
+  - Vaults with no holder to simulate with (MOVE-1, SolvBTC, rsETH-32 and other dust vaults): `unknown`.
+  - The check is a table in the source; re-simulate when Canopy changes anything.
+- **Not counted here:** the rsETH vault's shares (233.5 rsETH, ~$635K) and the rsETH-WETH LP vault's are held by Canopy's pre-deposit contract (`0xbc59…::single_asset_base_deployer` / dual-asset), on behalf of contributors who claim with `claim_relevant_assets_with_move_address`. Contract-held, so the owner check leaves them out; contributions never claimed there are a separate lead.
+- **Rehearsal (2026-10-21, Movement's public endpoints):**
+  - Sized from aggregates (staked shares in the staking pool's stores plus wallet shares, valued with `shares_to_amount`): stakers and wallets hold **~1.22M MOVE (~$9.2K at $0.00755)**, all in vaults whose withdrawal aborts, so `blocked`. Recoverable and priced: ~$15 (sUSDa). The rest is Meridian and LS05 LP tokens, which have no price here.
+  - The source's read on every wallet holder plus 200 stakers: positions in 30 vaults, each with the status above; owners that are contracts (the pre-deposit holders) are `unknown` through the owner check.
+- **Cost:** enumeration is ~80 indexer pages (the staking table in 16 key ranges, plus share holders). A read is one positions view, one staked-balance view per subscribed vault token and one wallet view per held token, then two views per position; ~7.5K stakers, refreshed monthly, all on Movement's public endpoints.
+
 ## Sized and not added
 
 - **Echelon farming rewards (Aptos):** 5 of 7 reward programs have ended: USDC 2025-08-23, Amnis amAPT 2025-10-13, Kofi kAPT 2026-02-21, Goblin stAPT 2026-04-12, Thala sthAPT 2026-08-17. Unclaimed amounts are bounded by what the package holds to pay them: 3,540 USDC and 95 kAPT (~$3.6K). Reading every Echelon supplier for that is not worth it. Skipped.

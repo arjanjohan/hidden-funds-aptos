@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ownerKind } from '../src/shared/owners.ts';
 import { AAVE, aaveFrozenReserves, AAVE_UNFROZEN_AT, USDC } from '../src/shared/sources/aave-frozen.ts';
 import { canopyEndedRewards } from '../src/shared/sources/canopy-rewards.ts';
+import { CANOPY_VAULTS, canopyFrozenVaults, FROZEN_VAULTS } from '../src/shared/sources/canopy-frozen.ts';
 import { APT, delegation, MOVE, movementDelegation } from '../src/shared/sources/delegation.ts';
 import { EARNIUM, EARNIUM_CLOSED_AT, earniumClosedLp } from '../src/shared/sources/earnium-closed.ts';
 import { ANIMESWAP, ANIMESWAP_CLOSED_AT, ANIMESWAP_POOLS, animeswapClosedLp, isqrt, pairOf } from '../src/shared/sources/animeswap-closed.ts';
@@ -1044,5 +1045,52 @@ describe('earnium closed lp', () => {
     const r = await earniumClosedLp.read(context(c), OWNER, {});
     expect(r.positions.map(p => p.locator)).toEqual([pools[24], pools[24]]);
     expect(c.calls.filter(x => x.includes('user_info'))).toHaveLength(2);
+  });
+});
+
+describe('canopy frozen vaults', () => {
+  const byName = (n: string) => [...FROZEN_VAULTS].find(([, v]) => v.name === n)![0];
+  const MOVE0 = byName('CV MOVE-0'), SUSDA = byName('CV sUSDa-46'), RSETH = byName('CV rsETH-26');
+  const share = (v: string) => addr(`5${v.slice(3, 10)}`);
+  type Held = Record<string, { wallet?: string; staked?: string; open?: boolean }>;
+  // Each vault pays 2 asset units per share; its withdrawal map names one strategy.
+  const chain = (held: Held) => fakeChain({
+    view: (fn, args) => {
+      if (fn.endsWith('::vault::vaults_view')) return [{ vaults: [MOVE0, SUSDA, RSETH].map(v => ({ vault_address: v, shares_address: share(v), asset_address: '0xa' })) }];
+      if (fn.endsWith('::rewards_view::get_user_pool_positions')) return [Object.entries(held).filter(([, h]) => h.staked).map(([v]) => ({ pool_staking_token: { inner: share(v) } }))];
+      const v = [MOVE0, SUSDA, RSETH].find(x => share(x) === args[1] || x === args[0]);
+      if (fn === '0x1::primary_fungible_store::balance') return [held[v!]?.wallet ?? '0'];
+      if (fn.endsWith('::multi_rewards::get_user_staked_balance')) return [held[v!]?.staked ?? '0'];
+      if (fn.endsWith('::vault::shares_to_amount')) return [String(BigInt(args[1] as string) * 2n)];
+      if (fn.endsWith('::withdraw::get_withdrawal_map_view')) return [{ data: [{ key: { inner: addr('5a') }, value: '1' }] }];
+      throw new Error(fn);
+    },
+    resource: (address, type) => type === `${CANOPY_VAULTS}::vault::Vault` ? { is_paused: false, deposit_limit: { vec: held[address]?.open ? [] : ['0'] } } : null,
+    gql: () => ({ current_fungible_asset_balances: Object.entries(held).filter(([, h]) => h.wallet).map(([v]) => ({ asset_type: share(v), storage_id: addr('6') })) }),
+  });
+
+  it('counts shares in the wallet and staked in a frozen vault, unstaking first; blocked where withdrawing aborts', async () => {
+    // The staking row (version 5) changed long before the freeze, so its time is not looked up.
+    const r = await canopyFrozenVaults.read(context(chain({ [MOVE0]: { wallet: '50', staked: '100' } })), OWNER, { at: '2026-01-01T00:00:00.000Z', v: '5' });
+    expect(r.complete).toBe(true);
+    expect(r.positions).toHaveLength(1);
+    expect(r.positions[0]).toMatchObject({ locator: MOVE0, status: 'blocked', blockers: [{ code: 'withdrawal_aborts' }], grossClaim: [{ raw: '300' }], expectedPayout: [],
+      claimableSince: '2026-10-16T14:40:46Z', ageBasis: 'protocol_closure' });
+    expect(r.positions[0].steps.map(s => [s.function.split('::').slice(-2).join('::'), s.arguments.slice(0, 2)])).toEqual([
+      ['multi_rewards::withdraw', [share(MOVE0), '100']], ['router::withdraw_fa', [MOVE0, JSON.stringify([addr('5a')])]]]);
+  });
+
+  it('is recoverable where withdrawing works, aged from a later change of the owner\'s shares', async () => {
+    const r = await canopyFrozenVaults.read(context(chain({ [SUSDA]: { wallet: '7' } })), OWNER, { at: '2026-10-20T00:00:00.000Z' });
+    expect(r.positions[0]).toMatchObject({ status: 'recoverable', expectedPayout: [{ raw: '14' }], claimableSince: '2026-10-20T00:00:00.000Z' });
+    expect(r.positions[0].steps).toHaveLength(1);
+    // MovePosition strategies need a price packet the Canopy app supplies; counted as recoverable.
+    const packet = await canopyFrozenVaults.read(context(chain({ [RSETH]: { staked: '3' } })), OWNER, {});
+    expect(packet.positions[0]).toMatchObject({ status: 'recoverable', claimableSince: '2026-06-16T13:09:26Z' });
+    expect(packet.positions[0].steps[1].prerequisites[0]).toMatch(/MovePosition/);
+  });
+
+  it('leaves out a vault that is open to deposits', async () => {
+    expect((await canopyFrozenVaults.read(context(chain({ [SUSDA]: { wallet: '7', open: true } })), OWNER)).positions).toEqual([]);
   });
 });

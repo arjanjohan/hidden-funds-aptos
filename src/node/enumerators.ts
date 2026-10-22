@@ -6,6 +6,7 @@ import { ANIMESWAP, ANIMESWAP_POOLS, animeswapLps, assetOf as animeswapAsset, pa
 import { EARNIUM } from '../shared/sources/earnium-closed.ts';
 import { AURO_CLOSED_AT, AURO_COLLECTION, AURO_ROUTER } from '../shared/sources/auro-closed.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
+import { CANOPY_VAULTS } from '../shared/sources/canopy-frozen.ts';
 import { AAVE, type AaveHint, aaveReserves, findFreeze } from '../shared/sources/aave-frozen.ts';
 import { ECHELON, FROZEN_MARKETS } from '../shared/sources/echelon-frozen.ts';
 import { ECONIA, ECONIA_COIN_MARKETS, KANA_ECONIA_WRAPPER } from '../shared/sources/econia-idle.ts';
@@ -684,6 +685,49 @@ export const canopyEndedRewardsEnumerator: Enumerator = {
   sanity: async () => ({ check: 'none', ok: null, detail: 'no contract total: earned rewards are computed per staker' }),
 };
 
+// Canopy vault shares (Movement): every store holding a vault's shares token (the staking pool's own store left out:
+// its shares belong to the stakers), and every staker in multi_rewards (shares are staked there; the read checks which).
+// Store holders carry their store's last change, stakers their staking row's version, for aging.
+export const canopyFrozenEnumerator: Enumerator = {
+  sourceId: 'canopy-frozen-vaults',
+  processor: 'fungible_asset_processor',
+  alsoProcessors: ['default_processor'],
+  scope: `stores holding any ${CANOPY_VAULTS}::vault shares token (current_fungible_asset_balances), plus stakers in ${CANOPY_REWARDS}::multi_rewards (user_staked_balances)`,
+  async run(chain) {
+    const shares: string[] = [];
+    for (let offset = 0; ; offset += 100) {
+      const [page] = await chain.view(`${CANOPY_VAULTS}::vault::vaults_view`, [String(offset), '100']);
+      shares.push(...(page as any).vaults.map((v: any) => normalizeAddress(v.shares_address)));
+      if ((page as any).vaults.length < 100) break;
+    }
+    const hints = new Map<string, { at?: string; v?: string }>();
+    let pages = 1;
+    let after = '';
+    for (;;) {
+      const rows = (await chain.gql(`query($a:[String!]!,$s:String!){ current_fungible_asset_balances(where:{asset_type:{_in:$a}, amount:{_gt:"0"},
+        storage_id:{_gt:$s}}, order_by:{storage_id:asc}, limit:${PAGE}){ owner_address storage_id last_transaction_timestamp } }`, { a: shares, s: after })).current_fungible_asset_balances;
+      pages++;
+      for (const r of rows) {
+        const owner = normalizeAddress(r.owner_address);
+        if (owner === CANOPY_REWARDS_STATE) continue;
+        const at = new Date(r.last_transaction_timestamp + 'Z').toISOString(), prev = hints.get(owner) ?? {};
+        if (!prev.at || at > prev.at) hints.set(owner, { ...prev, at });
+      }
+      if (rows.length < PAGE) break;
+      after = rows[rows.length - 1].storage_id;
+    }
+    const state = await chain.resource(CANOPY_REWARDS_STATE, `${CANOPY_REWARDS}::multi_rewards::MultiRewardsModule`);
+    if (!state) throw new Error('Canopy MultiRewardsModule missing');
+    const table = await tableRows(chain, normalizeAddress(state.user_staked_balances.handle), undefined);
+    for (const r of table.rows) {
+      const owner = normalizeAddress(r.key);
+      hints.set(owner, { ...hints.get(owner), v: String(r.last_transaction_version) });
+    }
+    return { candidates: [...hints].map(([owner, hint]) => ({ owner, hint })), pages: pages + table.pages };
+  },
+  sanity: async () => ({ check: 'none', ok: null, detail: 'no contract total: shares are spread over wallets and the staking pool' }),
+};
+
 // Senders of smart_chef::deposit: everyone who staked in a PancakeSwap (Aptos) CAKE syrup pool.
 // Deposits after the last CAKE pool ended (version ~444.55M, 2024-02-09 14:05 UTC) only went to the Gui Inu pools.
 // Withdrawals (any time) mark a staker changed, so an exit drops out in the next run instead of at a monthly re-read.
@@ -925,4 +969,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator, auroClosedEnumerator, animeswapClosedEnumerator, earniumClosedEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator, auroClosedEnumerator, animeswapClosedEnumerator, earniumClosedEnumerator, canopyFrozenEnumerator];

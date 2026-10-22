@@ -6,7 +6,7 @@ import { normalizeAddress, once } from '../chain.ts';
 import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
 
 export const CANOPY_REWARDS = '0x113a1769acc5ce21b5ece6f9533eef6dd34c758911fa5235124c87ff1298633b';
-const CANOPY_REWARDS_VIEWS = '0x707462571715301b063d79c2cdb57c3bd1cfe2189889793b00077ceed86e0219';
+export const CANOPY_REWARDS_VIEWS = '0x707462571715301b063d79c2cdb57c3bd1cfe2189889793b00077ceed86e0219';
 /** Resource account holding MultiRewardsModule (user_staked_balances: staker → staked tokens). */
 export const CANOPY_REWARDS_STATE = '0x9ffd3dc838ac548abc68c83b4052c7332807ccb88dc47bbab3e8e5a42ff47ee0';
 const SOURCE = 'canopy-ended-rewards';

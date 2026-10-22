@@ -4,8 +4,9 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RequestCapReached } from '../src/node/client.ts';
-import { aaveFrozenEnumerator, animeswapClosedEnumerator, earniumClosedEnumerator, auroClosedEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
+import { aaveFrozenEnumerator, animeswapClosedEnumerator, canopyFrozenEnumerator, earniumClosedEnumerator, auroClosedEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
 import { ANIMESWAP_POOLS } from '../src/shared/sources/animeswap-closed.ts';
+import { CANOPY_REWARDS_STATE } from '../src/shared/sources/canopy-rewards.ts';
 import { fetchPrices } from '../src/node/prices.ts';
 import { keepPrevious, runSource } from '../src/node/snapshot.ts';
 import { State } from '../src/node/state.ts';
@@ -446,5 +447,24 @@ describe('earnium enumerator', () => {
     const r = await earniumClosedEnumerator.run(c, undefined);
     expect(r.candidates).toEqual([{ owner: addr(1), hint: {} }, { owner: addr(2), hint: { since: '2027-01-15T08:00:00.000Z' } }]);
     expect(r.incremental).toBe(true);
+  });
+});
+
+describe('canopy frozen enumerator', () => {
+  it('lists share holders with their store\'s last change and stakers with their row version, leaving out the staking pool', async () => {
+    const c = fakeChain({
+      view: () => [{ vaults: [{ shares_address: addr('51'), vault_address: addr('52') }] }],
+      resource: () => ({ user_staked_balances: { handle: addr('99') } }),
+      gql: (query, vars) => query.includes('current_table_items')
+        // The staking table, walked in 16 key ranges: both stakers sit in the first.
+        ? { current_table_items: vars.a === '0x0' ? [{ key: addr(1), last_transaction_version: '7' }, { key: addr(2), last_transaction_version: '9' }] : [] }
+        : { current_fungible_asset_balances: [
+          { owner_address: addr(1), storage_id: addr('a1'), last_transaction_timestamp: '2026-10-01T00:00:00' },
+          { owner_address: CANOPY_REWARDS_STATE, storage_id: addr('a2'), last_transaction_timestamp: '2026-10-01T00:00:00' }] },
+    });
+    expect((await canopyFrozenEnumerator.run(c, undefined)).candidates).toEqual([
+      { owner: addr(1), hint: { at: '2026-10-01T00:00:00.000Z', v: '7' } },
+      { owner: addr(2), hint: { v: '9' } },
+    ]);
   });
 });
