@@ -78,8 +78,8 @@ export const PROTOCOLS: ProtocolEntry[] = [
     reason: 'Wound down in July 2026 and most reserve cash moved out: deposits are read on the check page only (decided 2026-10-22), at the protocol\'s current quote; no dashboard totals (re-reading ~455K profiles would cost ~285K reads a run).', sources: ['aries-wound-down'], defillama: 'aries-markets' },
   { id: 'portal', name: 'Wormhole (Portal)', chains: [...A], category: 'Bridge', status: 'implemented', checkedAt: '2026-10-22',
     reason: 'Transfers to Aptos never redeemed: found through Wormholescan on the check page when the visitor opts in (decided 2026-10-22), checked on chain against the bridge\'s consumed VAAs; no dashboard totals.', sources: ['wormhole-unredeemed'], defillama: 'portal' },
-  { id: 'layerzero-v2', name: 'LayerZero v2 OFTs and Stargate', chains: [...A, ...M], category: 'Bridge', status: 'needs_decision', checkedAt: '2026-10-19', issue: 2,
-    reason: 'Messages that failed delivery: a check-page lookup via LayerZero Scan, or a pipeline source?' },
+  { id: 'layerzero-v2', name: 'LayerZero v2 OFTs and Stargate', chains: [...A, ...M], category: 'Bridge', status: 'too_small', checkedAt: '2026-10-22',
+    reason: 'Deliveries that never executed, read on chain (the endpoint\'s stored inbound payload hashes): on Movement 22 of 30,098 verified packets, of which only 2 carry tokens (136 MOVE on the MOVE adapter, retryable by anyone now); on Aptos 54, all name-service proxy messages or integration tests. About $1 in all.' },
 
   // Blocked
   { id: 'aptin-finance', name: 'Aptin Finance', chains: [...A], category: 'Lending', status: 'blocked', checkedAt: '2026-10-07',
@@ -116,8 +116,8 @@ export const PROTOCOLS: ProtocolEntry[] = [
     reason: 'Markets unpaused and still used; withdrawals take a packet its service still signs.', defillama: 'superposition' },
   { id: 'moveposition', name: 'MovePosition', chains: [...M], category: 'Lending', status: 'not_left_behind', checkedAt: '2026-10-20',
     reason: 'Live: its service still signs withdrawal packets.', defillama: 'moveposition' },
-  { id: 'joule-finance', name: 'Joule Finance', chains: [...A], category: 'Lending', status: 'not_left_behind', checkedAt: '2026-10-20',
-    reason: 'Live; withdrawals need paid Pyth price updates, a cost of using it, not a closure.', defillama: 'joule-finance' },
+  { id: 'joule-finance', name: 'Joule Finance', chains: [...A, ...M], category: 'Lending', status: 'not_left_behind', checkedAt: '2026-10-22',
+    reason: 'Live on both chains (app.joule.finance serves both; on Movement, joule-core deposits until 2026-09-27); withdrawals need paid Pyth price updates, a cost of using it, not a closure.', defillama: 'joule-finance' },
   { id: 'ditto', name: 'Ditto', chains: [...A], category: 'Liquid Staking', status: 'not_left_behind', checkedAt: '2026-10-19',
     reason: 'Unstake queue empty and redemption still works, so stAPT is not stranded.', defillama: 'ditto', dead: 'yes' },
   { id: 'thalaswap-v2', name: 'ThalaSwap V2', chains: [...A], category: 'Dexs', status: 'not_left_behind', checkedAt: '2026-10-19',

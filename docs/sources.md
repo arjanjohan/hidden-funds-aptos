@@ -531,11 +531,16 @@ A bridge leaves funds behind when a transfer arrived but was never claimed or co
 | Wormhole Portal → Aptos | transfers never redeemed on Aptos (VAA not submitted) | off-chain (Wormholescan), checked on Aptos against the token bridge's consumed VAAs | **source `wormhole-unredeemed`** (check page, opt-in) |
 | Celer cBridge (`0x8d87…::peg_bridge`, `vault`) | large transfers held 6 hours (`delayed_transfer` map), then executed by anyone | on Aptos | delay map has never held an entry; peg bridge live (last mint 2026-10-16), vault paused. Refunds of failed transfers go through cBridge's API: not built |
 | Circle CCTP → Aptos | USDC burned on another chain, never minted on Aptos | source-chain burns + Circle attestation API | needs cross-chain indexing; not built |
-| LayerZero v2 OFTs and Stargate (Aptos, Movement) | messages that failed delivery | LayerZero Scan | not built: its per-wallet endpoint lists messages a wallet *sent*, so an inbound failure to an Aptos or Movement address is not found by that address. Its status listings (FAILED, BLOCKED, PAYLOAD_STORED; 100 each, 2026-10-22) hold none to Aptos or Movement. Successful deliveries go straight to the receiver's fungible store, so nothing waits on chain |
+| LayerZero v2 OFTs and Stargate (Aptos, Movement) | messages that failed delivery | on chain: the endpoint (`0xe600…f43c`, same address on both chains) keeps each verified message's payload hash until it executes | too small (2026-10-22), see below |
 | Movement canonical bridge (LayerZero) | inbound credits arrive directly; outbound transfers wait out a security delay on Ethereum | Ethereum | needs EVM support; not built |
 | Movement framework bridges (`atomic_bridge`, `native_bridge`) | — | on Movement | never used on mainnet: all event counters 0, transfer tables empty (2026-10-19) |
 | NEAR Intents | balances held in NEAR's intents contract | NEAR | needs NEAR support; not built |
 | Meson, Gas.zip, ChangeNOW, Swapspace, Panora, CashmereLabs | swaps settled by liquidity providers; nothing held for the user on Aptos | — | nothing to claim |
+
+- **LayerZero v2 inbound failures (checked 2026-10-22):** a message that is verified but never executes leaves its payload hash in the endpoint's store (`OAppStore` → `channels` → `inbound_hashes`); executing removes it. LayerZero Scan cannot find these per address (its wallet endpoint lists messages a wallet *sent*).
+  - Movement: 30,098 `PacketVerified` events against 30,076 `PacketDelivered` (none burnt or nilified): 22 never executed, all still stored on chain and all with an `LzReceiveAlert`. 19 are the Movement Name Service proxy's messages from Aptos, 1 a 1-unit compose message, and 2 are MOVE bridged from Base to one address (123.86 and 12.39 MOVE; MOVE's shared decimals are 8) that failed while the MOVE adapter was paused (`EPAUSED`, 2026-04-19). It is unpaused now: a retry (`oapp_receive::lz_receive`, permissionless, with the alert's message) simulates fine and pays exactly. Movement's indexer keeps ~27K deleted `inbound_hashes` rows as current; the fullnode is the authority.
+  - Aptos: 54 stored hashes (the Aptos indexer marks deletions): 46 are the name-service proxy's, 8 are integration tests or stale (duplicate orders, an overflow, unregistered composers, one actually delivered).
+  - About $1 in all: too small.
 
 ## aries-wound-down (check-only)
 
