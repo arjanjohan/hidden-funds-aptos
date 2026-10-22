@@ -12,11 +12,12 @@ on:
         default: ''
   push:
     branches: [main]
-    paths-ignore: ['snapshot/**', 'docs/**', 'spikes/**', '*.md']
+    paths-ignore: ['snapshot/**', 'spikes/**', '*.md']
   pull_request:
     branches: [main]
-    paths-ignore: ['snapshot/**', 'docs/**', 'spikes/**', '*.md']
+    paths-ignore: ['snapshot/**', 'spikes/**', '*.md']
 
+# docs/ is rendered into the site (How we count, Sources), so docs changes build and deploy too.
 # Read-only by default; only the jobs that need more get it (PR code runs in test and preview).
 permissions:
   contents: read

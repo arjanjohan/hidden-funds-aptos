@@ -2,9 +2,9 @@
 import Base from '../layouts/Base.astro';
 import { snapshot } from '../lib/data.ts';
 import { date } from '../lib/format.ts';
+import { REPO } from '../lib/site.ts';
 import { PROTOCOLS, type ProtocolStatus } from '../../shared/protocols.ts';
 
-const REPO = 'https://github.com/arjanjohan/hidden-funds-aptos';
 const groups: [ProtocolStatus, string, string][] = [
   ['implemented', 'Counted', 'We read these on chain every week.'],
   ['dormant', 'Waiting for a trigger', 'Built, but counts nothing until the protocol does something (for example, freezes its markets).'],
@@ -28,7 +28,7 @@ const chainName = { aptos: 'Aptos', movement: 'Movement' } as const;
   <h1>Protocol coverage</h1>
   <p class="muted">
     Every Aptos and Movement protocol we know of ({PROTOCOLS.length}), from DefiLlama's list plus a few it does not track, and what we did
-    about each. The evidence for each decision is in <a href={`${REPO}/blob/main/docs/sources.md`}>sources and evidence</a>.
+    about each. The evidence for each decision is in <a href="/sources">sources and evidence</a>.
     Something missing or wrong? <a href={`${REPO}/issues`}>Open an issue</a>.
   </p>
 
