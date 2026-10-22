@@ -827,6 +827,9 @@ describe('econia accounts', () => {
     expect(later.positions[0].claimableSince).toBe('2026-10-27T03:17:00.000Z');
     const earlier = await econiaIdleAccounts.read(context(chain(accounts)), OWNER, { since: '2025-01-01T00:00:00.000Z' });
     expect(earlier.positions[0].claimableSince).toBe(ECONIA_ARCHIVED_AT);
+    // A fill dates only the market it happened in.
+    const fill = await econiaIdleAccounts.read(context(chain([...accounts, account('8', { quote: '6' })])), OWNER, { markets: { 8: '2026-10-27T03:17:00.000Z' } });
+    expect(fill.positions.map(p => [p.locator, p.claimableSince])).toEqual([['market-7', ECONIA_ARCHIVED_AT], ['market-8', '2026-10-27T03:17:00.000Z']]);
   });
 
   it('counts coins resting in open orders (Econia is closed), cancelling them before the withdrawal', async () => {
