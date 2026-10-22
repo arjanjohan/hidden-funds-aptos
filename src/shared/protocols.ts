@@ -181,10 +181,10 @@ export const PROTOCOLS: ProtocolEntry[] = [
   { id: 'collex', name: 'Collex', chains: [...A], category: 'Physical TCG', status: 'too_small', checkedAt: '2026-10-21', defillama: 'collex', dead: 'yes',
     reason: 'collex.fun no longer resolves (served until at least 2026-02). Users can claim at most ~$2.3K: its USD token supply is 1,135 and cards are valued at $1,229 (15% cash-out fee); the rest of the treasury\'s 19.5K USDt is the protocol\'s.' },
 
-  { id: 'baptswap', name: 'BaptSwap (V1, V2, V2.1)', chains: [...A], category: 'Dexs', status: 'too_small', checkedAt: '2026-10-21', defillama: 'baptswap-v2.1', dead: 'yes',
-    reason: 'Closed (none of its domains resolve, 2026-10-21), but its 12 pools hold ~91 APT and ~$40 of stablecoins (~$190).' },
-  { id: 'atodex', name: 'AtoDEX', chains: [...A], category: 'Dexs', status: 'too_small', checkedAt: '2026-10-21', defillama: 'atodex', dead: 'yes',
-    reason: 'Its 8 pools hold ~15 APT on their APT sides.' },
+  { id: 'baptswap', name: 'BaptSwap (V1, V2, V2.1)', chains: [...A], category: 'Dexs', status: 'not_checked', defillama: 'baptswap-v2.1', dead: 'yes',
+    reason: 'Closed (none of its domains resolve, 2026-10-21); its 12 pools hold ~91 APT and ~$40 of stablecoins. Only the APT and stablecoin sides are sized; the tokens paired with them have no price, so the total is not bounded yet.' },
+  { id: 'atodex', name: 'AtoDEX', chains: [...A], category: 'Dexs', status: 'not_checked', defillama: 'atodex', dead: 'yes',
+    reason: 'Its 8 pools hold ~15 APT on their APT sides. Only the APT and stablecoin sides are sized; the tokens paired with them have no price, so the total is not bounded yet.' },
   { id: 'aptoslaunch', name: 'AptosLaunch', chains: [...A], category: 'Launchpad', status: 'not_checked', defillama: 'aptoslaunch', dead: 'yes',
     reason: 'Closed (aptoslaunch.io redirects to an unrelated site), but its lock-bond pools hold its own ALT token, which has no price here (not on CoinGecko): unpriced, not sized.' },
   { id: 'lotto-run', name: 'Lotto Run', chains: [...A], category: 'Yield Lottery', status: 'too_small', checkedAt: '2026-10-21', defillama: 'lotto-run', dead: 'yes',
@@ -224,8 +224,8 @@ export const PROTOCOLS: ProtocolEntry[] = [
     reason: 'Its fixed-term "Summer 2025" staking pool ended 2026-05-13; everything it still holds, unclaimed principal (~139K PROPS) and rewards together, is 439K PROPS (~$2.7K). Its membership staking is live (no end).' },
   { id: 'moveflow', name: 'MoveFlow', chains: [...A], category: 'Payments', status: 'too_small', checkedAt: '2026-10-21', defillama: 'moveflow',
     reason: 'Its stream escrow holds ~2.1 USDt, 0.2 USDC and 0.28 APT (stream::get_fa_tvl, get_coin_tvl).' },
-  { id: 'jujube-finance', name: 'Jujube Finance', chains: [...A], category: 'Dexs', status: 'too_small', checkedAt: '2026-10-21', defillama: 'jujube-finance', dead: 'yes',
-    reason: 'jujube.finance is listed as an expired domain (2026-10-21); its pools hold ~17 APT on their APT sides.' },
+  { id: 'jujube-finance', name: 'Jujube Finance', chains: [...A], category: 'Dexs', status: 'not_checked', defillama: 'jujube-finance', dead: 'yes',
+    reason: 'jujube.finance is listed as an expired domain (2026-10-21); its pools hold ~17 APT on their APT sides. Only the APT and stablecoin sides are sized; the tokens paired with them have no price, so the total is not bounded yet.' },
   { id: 'mosquitos-finance', name: 'Mosquitos Finance', chains: [...A], category: 'Yield', status: 'not_checked', defillama: 'mosquitos-finance', dead: '2023-03-09',
     reason: 'No domain answers (2026-10-21); package not located.' },
   { id: 'bluemove-staking', name: 'BlueMove Staking', chains: [...A], category: 'NFT Marketplace', status: 'not_checked', defillama: 'bluemove-staking', dead: 'yes',
@@ -239,8 +239,8 @@ export const PROTOCOLS: ProtocolEntry[] = [
 
   { id: 'agdex', name: 'AGDEX', chains: [...A], category: 'Derivatives', status: 'not_left_behind', checkedAt: '2026-10-21', defillama: 'agdex',
     reason: 'Live: agdex.io/trade serves the app (2026-10-21).' },
-  { id: 'houstonswap', name: 'HoustonSwap', chains: [...A], category: 'Dexs', status: 'too_small', checkedAt: '2026-10-21', defillama: 'houstonswap', dead: 'yes',
-    reason: 'Its 33 pools hold ~412 APT on their APT sides (~$700 in all with the stablecoin sides).' },
+  { id: 'houstonswap', name: 'HoustonSwap', chains: [...A], category: 'Dexs', status: 'not_checked', defillama: 'houstonswap', dead: 'yes',
+    reason: 'Its 33 pools hold ~412 APT on their APT sides plus some stablecoins. Only the APT and stablecoin sides are sized; the tokens paired with them have no price, so the total is not bounded yet.' },
 
   // Out of scope: custodial exchanges DefiLlama lists with Aptos reserves
   ...([['binance-cex', 'Binance'], ['bybit', 'Bybit'], ['okx', 'OKX'], ['gate', 'Gate'], ['mexc', 'MEXC'], ['kucoin', 'KuCoin'],
