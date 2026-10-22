@@ -996,6 +996,17 @@ describe('animeswap closed lp', () => {
     expect(later.positions[0].claimableSince).toBe('2026-12-01T00:00:00.000Z');
   });
 
+  it('leaves the age unknown for LP that changed after the indexer watermark the store time was taken at', async () => {
+    // At version 90 (the watermark) the owner held 40 LP; at the read's version 100 it holds 100.
+    const c = chain();
+    const at90 = (held: string) => ({ ...c, view: async (fn: string, args: unknown[], typeArgs: string[], version?: string) =>
+      version === '90' && fn === '0x1::coin::balance' ? [held] : c.view(fn, args, typeArgs) });
+    const changed = await animeswapClosedLp.read(context(at90('40')), OWNER, { lps: { [LP]: '2024-01-02T03:04:05.000Z' }, w: '90' });
+    expect(changed.positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined, status: 'recoverable' });
+    const same = await animeswapClosedLp.read(context(at90('100')), OWNER, { lps: { [LP]: '2024-01-02T03:04:05.000Z' }, w: '90' });
+    expect(same.positions[0].claimableSince).toBe(ANIMESWAP_CLOSED_AT);
+  });
+
   it('mints the DAO fee in LP first when the pool grew since the last mint', async () => {
     // root k 1,414,213 vs 1,000,000: fee LP = 1000 x 414,213 / (1,414,213 x 5 + 1,000,000) = 51, so 100 of 1,051 LP.
     const r = await animeswapClosedLp.read(context(chain({ kLast: '1000000000000' })), OWNER, { lps: { [LP]: '2024-01-02T03:04:05.000Z' } });
