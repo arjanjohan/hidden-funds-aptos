@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readers, RequestCapReached } from '../src/node/client.ts';
-import { createReader, gqlAll } from '../src/shared/chain.ts';
+import { canonicalType, createReader, gqlAll, withOwnResources } from '../src/shared/chain.ts';
+import { addr, fakeChain } from './fake-chain.ts';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -37,6 +38,35 @@ describe('reader', () => {
   it('fails rather than answering absent when the node stays behind', async () => {
     vi.stubGlobal('fetch', async () => respond(404, { error_code: 'version_not_found' }));
     await expect(createReader({ retries: 0 }).resource('0x1', '0x1::a::B', '5')).rejects.toThrow(/404/);
+  });
+});
+
+describe('own resources', () => {
+  it('reads all of an account\'s resources in one page, and refuses a list that needs more pages', async () => {
+    vi.stubGlobal('fetch', async (url: string) => (url.includes('/0x2/')
+      ? new Response(JSON.stringify([{ type: '0x1::a::B', data: {} }]), { status: 200, headers: { 'x-aptos-cursor': 'next' } })
+      : url.includes('/0x3/') ? respond(404, { error_code: 'account_not_found' }) : respond(200, [{ type: '0x1::a::B', data: { v: 1 } }])));
+    const r = createReader({ retries: 0 });
+    expect(await r.resources('0x1', '5')).toEqual([{ type: '0x1::a::B', data: { v: 1 } }]);
+    expect(await r.resources('0x2', '5')).toBeNull();
+    expect(await r.resources('0x3', '5')).toEqual([]);
+  });
+
+  it('answers the owner\'s resource reads at the pinned version from one bulk read, whatever the address spelling', async () => {
+    expect(canonicalType('0x1::coin::CoinStore<0xabc::m::T, 0x1::aptos_coin::AptosCoin>'))
+      .toBe(`${addr('1')}::coin::CoinStore<${addr('abc')}::m::T,${addr('1')}::aptos_coin::AptosCoin>`);
+    const owner = addr('77');
+    const c = fakeChain({ resources: () => [{ type: '0x1::coin::CoinStore<0xabc::m::T>', data: { coin: 5 } }], resource: () => ({ direct: true }) });
+    const own = withOwnResources(c, owner, '9');
+    expect(await own.resource(owner, `0x1::coin::CoinStore<${addr('abc')}::m::T>`, '9')).toEqual({ coin: 5 });
+    expect(await own.resource(owner, '0x1::x::Absent', '9')).toBeNull();
+    expect(c.calls).toEqual([`resources ${owner}`]);
+    // Another address or version is read directly.
+    expect(await own.resource(addr('78'), '0x1::x::Y', '9')).toEqual({ direct: true });
+    expect(await own.resource(owner, '0x1::x::Y', '8')).toEqual({ direct: true });
+    // A list longer than one page: every read goes direct.
+    const long = withOwnResources(fakeChain({ resources: () => null, resource: () => ({ direct: true }) }), owner, '9');
+    expect(await long.resource(owner, '0x1::x::Absent', '9')).toEqual({ direct: true });
   });
 });
 

@@ -149,3 +149,23 @@ export async function transactionTime(chain: ChainReader, version: number | stri
   const ts = d.user_transactions[0]?.timestamp;
   return ts ? Math.floor(Date.parse(ts + 'Z') / 1000) : null;
 }
+
+/** A type tag in one spelling: every address in it at full length, no spaces. */
+export const canonicalType = (type: string) => type.replace(/\s+/g, '').replace(/0x[0-9a-fA-F]{1,64}(?=::)/g, a => normalizeAddress(a));
+
+/** A reader that answers `resource()` for `owner` at `version` from one read of all the owner's resources (loaded on
+ *  first use), instead of a request per type. Other addresses, versions and calls go to `chain` unchanged; so does
+ *  everything when the owner's resources do not fit one page. */
+export function withOwnResources(chain: ChainReader, owner: string, version: string): ChainReader {
+  const self = normalizeAddress(owner);
+  let all: Promise<Map<string, any> | null> | undefined;
+  const load = () => (all ??= chain.resources(self, version).then(list => list && new Map(list.map(r => [canonicalType(r.type), r.data]))));
+  return {
+    ...chain,
+    resource: async (address, type, ledgerVersion) => {
+      if (normalizeAddress(address) !== self || ledgerVersion !== version) return chain.resource(address, type, ledgerVersion);
+      const map = await load();
+      return map ? map.get(canonicalType(type)) ?? null : chain.resource(address, type, ledgerVersion);
+    },
+  };
+}
