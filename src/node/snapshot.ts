@@ -72,10 +72,11 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
     if (result.cursor) state.setCursor(def.id, result.cursor);
     Object.assign(run.enumeration, { end: new Date().toISOString(), pages: result.pages, cursor: result.cursor,
       candidates: state.candidateCount(def.id), newCandidates: state.candidateCount(def.id) - before });
-    if (en.processor) {
-      run.watermarkAfter = await processorWatermark(chain, en.processor);
-      const lagMs = Date.now() - Date.parse(run.watermarkAfter.timestamp);
-      if (lagMs > WATERMARK_MAX_LAG_MS) run.degradedReasons.push(`indexer ${en.processor} is ${Math.round(lagMs / 60_000)} min behind`);
+    if (en.processor) run.watermarkAfter = await processorWatermark(chain, en.processor);
+    for (const processor of [en.processor, ...(en.alsoProcessors ?? [])].filter((p): p is string => !!p)) {
+      const mark = processor === en.processor ? run.watermarkAfter! : await processorWatermark(chain, processor);
+      const lagMs = Date.now() - Date.parse(mark.timestamp);
+      if (lagMs > WATERMARK_MAX_LAG_MS) run.degradedReasons.push(`indexer ${processor} is ${Math.round(lagMs / 60_000)} min behind`);
     }
 
     // A changed source version means changed rules: stored positions must not survive until their next refresh.

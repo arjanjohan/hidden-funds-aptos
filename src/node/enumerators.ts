@@ -1,7 +1,8 @@
 // Chain-wide candidate enumeration and source-level sanity checks (node-only: keyed indexer use).
 import { iso } from '../shared/accounting.ts';
-import { mapLimit, normalizeAddress } from '../shared/chain.ts';
+import { gqlAll, mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
+import { AURO_CLOSED_AT, AURO_COLLECTION, AURO_ROUTER } from '../shared/sources/auro-closed.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
 import { AAVE, type AaveHint, aaveReserves, findFreeze } from '../shared/sources/aave-frozen.ts';
 import { ECHELON, FROZEN_MARKETS } from '../shared/sources/echelon-frozen.ts';
@@ -19,6 +20,7 @@ import { TORTUGA, TORTUGA_STATE } from '../shared/sources/tortuga-tickets.ts';
 import { TRUFIN, unlockTable } from '../shared/sources/trufin-unlocks.ts';
 import { TOPAZ, type TopazBid, type TopazHint, type TopazKind, topazTables, u64Key } from '../shared/sources/topaz-bids.ts';
 import type { Sanity } from '../shared/snapshot.ts';
+import { processorWatermark } from './client.ts';
 import type { ChainReader, Ledger, Position } from '../shared/types.ts';
 
 export interface Candidate { owner: string; hint?: unknown }
@@ -35,6 +37,8 @@ export interface Enumerator {
   sourceId: string;
   /** Indexer processor whose watermark bounds the enumeration; null when only the fullnode is read. */
   processor: string | null;
+  /** Other processors whose tables the enumeration reads; any of them lagging degrades the run like `processor`. */
+  alsoProcessors?: string[];
   /** Named enumeration scope; "complete" means complete within this, never chain-wide. */
   scope: string;
   run(chain: ChainReader, cursor: string | undefined): Promise<Enumeration>;
@@ -211,6 +215,84 @@ export const amnisWithdrawalsEnumerator = collectionOwners('amnis-withdrawals', 
     return { check: 'matured withdrawal tokens found <= withdrawal::total_pending_withdrawal (all open tokens)', ok: matured <= total,
       detail: `matured ${matured} of ${total} pending (${pct(matured, total)})` };
   });
+
+// Auro: current owners of CDP position NFTs. Every owner is re-read every run (the source's refresh), so withdrawals,
+// repayments and changes to the pools' reserves are picked up without on-chain change events. A position is aged from
+// its last change after the shutdown, which the hint carries per position:
+// - an ownership change (the ownership row's last transaction): a position acquired after the shutdown;
+// - any Auro call that touched it: a repayment (one that still had debt at the shutdown qualifies only once repaid), a
+//   withdrawal from one of its pools, a deposit. Router calls on positions are scanned incrementally (liquidations need
+//   a Pyth price, which stopped on 2026-04-30), and the positions each one touched are taken from account_transactions
+//   at its version, so a call by anyone dates that position only. The scan stops at the account-transactions
+//   processor's watermark, so a call whose touched accounts are not indexed yet is left for a later run.
+const AURO_CLOSED_VERSION = 5_067_106_504;   // first version of 2026-05-01
+const AURO_TOKENS_QUERY = `query($c:String!,$after:String!){ current_token_ownerships_v2(where:{current_token_data:{collection_id:{_eq:$c}},
+  amount:{_gt:"0"}, token_data_id:{_gt:$after}}, order_by:{token_data_id:asc}, limit:${PAGE}){ token_data_id owner_address last_transaction_timestamp } }`;
+/** auro_router's entry functions that act on an existing position (a new one is dated by its ownership row). An
+ *  unfiltered scan of the router times out on the indexer. */
+const AURO_POSITION_CALLS = ['deposit_entry', 'deposit_apt_entry', 'deposit_coin_entry', 'borrow_entry', 'repay_entry', 'withdraw_entry',
+  'withdraw_coin_entry', 'exit_position', 'exit_position_coin', 'liquidate_entry', 'claim_rewards'];
+const AURO_CALLS_QUERY = `query($a:bigint!,$w:bigint!){ user_transactions(where:{entry_function_contract_address:{_eq:"${AURO_ROUTER}"},
+  entry_function_module_name:{_eq:"auro_router"}, entry_function_function_name:{_in:${JSON.stringify(AURO_POSITION_CALLS)}}, version:{_gt:$a, _lte:$w}},
+  order_by:{version:asc}, limit:${PAGE}){ version timestamp } }`;
+const TOUCHED_QUERY = `query($v:bigint!,$after:String!){ account_transactions(where:{transaction_version:{_eq:$v}, account_address:{_gt:$after}},
+  order_by:{account_address:asc}, limit:${PAGE}){ account_address } }`;
+export const auroClosedEnumerator: Enumerator = {
+  sourceId: 'auro-closed-positions',
+  processor: 'token_v2_processor',
+  alsoProcessors: ['user_transaction_processor', 'account_transactions_processor'],
+  scope: `current owners of tokens in collection ${AURO_COLLECTION} (current_token_ownerships_v2, amount > 0); plus ${AURO_ROUTER}::auro_router calls on positions after the shutdown and the accounts each touched`,
+  async run(chain, cursor) {
+    let stored: { v?: string; repaid?: Record<string, string> } = {};
+    try { stored = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: rescan */ }
+    if (typeof stored !== 'object' || stored === null) stored = {};
+    // Every account an Auro call touched, with the latest such call's time; positions are found among them below.
+    const repaid: Record<string, string> = stored.repaid && typeof stored.repaid === 'object' && !Array.isArray(stored.repaid) ? { ...stored.repaid } : {};
+    // Calls and the accounts they touched come from two processors: scan only what both have indexed.
+    const indexed = String([await processorWatermark(chain, 'user_transaction_processor'), await processorWatermark(chain, 'account_transactions_processor')]
+      .map(m => BigInt(m.version)).reduce((a, b) => (a < b ? a : b)));
+    let after = stored.v ?? String(AURO_CLOSED_VERSION), pages = 1;
+    for (;;) {
+      const page = (await chain.gql(AURO_CALLS_QUERY, { a: after, w: indexed })).user_transactions;
+      pages++;
+      for (const t of page) {
+        const time = new Date(t.timestamp + 'Z').toISOString();
+        const touched = await gqlAll(chain, TOUCHED_QUERY, { v: String(t.version) }, 'account_transactions', 'account_address');
+        pages++;
+        for (const r of touched) {
+          const account = normalizeAddress(r.account_address);
+          if (!repaid[account] || time > repaid[account]) repaid[account] = time;
+        }
+        after = String(t.version);
+      }
+      if (page.length < PAGE) break;
+    }
+    const owners = new Map<string, { tokens: string[]; changed: Record<string, string> }>();
+    let from = '';
+    for (;;) {
+      const page = (await chain.gql(AURO_TOKENS_QUERY, { c: AURO_COLLECTION, after: from })).current_token_ownerships_v2;
+      pages++;
+      for (const t of page) {
+        const owner = normalizeAddress(t.owner_address), token = normalizeAddress(t.token_data_id);
+        const o = owners.get(owner) ?? { tokens: [], changed: {} };
+        o.tokens.push(token);
+        const moved = new Date(t.last_transaction_timestamp + 'Z').toISOString();
+        const latest = [moved > AURO_CLOSED_AT ? moved : undefined, repaid[token]].filter((d): d is string => !!d).sort().pop();
+        if (latest) o.changed[token] = latest;
+        owners.set(owner, o);
+      }
+      if (page.length < PAGE) break;
+      from = page[page.length - 1].token_data_id;
+    }
+    const candidates = [...owners].map(([owner, o]) => ({ owner, hint: { tokens: o.tokens.sort(), ...(Object.keys(o.changed).length ? { changed: o.changed } : {}), w: indexed } }));
+    // Kept whole (a few accounts per repayment, which are rare): a position the ownership index has not caught up on
+    // still finds its date in a later run.
+    return { candidates, cursor: JSON.stringify({ v: after, repaid }), pages };
+  },
+  async sanity() {
+    return { check: 'none', ok: null, detail: 'no contract total: the pools\' books overstate what the DAO account holds (stkAPT ~37%)' };
+  },
+};
 
 // Every delegation pool, then the active-stake delegators of pools whose validator is inactive.
 const inactiveValidatorEnumeratorFor = (sourceId: string): Enumerator => ({
@@ -765,4 +847,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator, auroClosedEnumerator];

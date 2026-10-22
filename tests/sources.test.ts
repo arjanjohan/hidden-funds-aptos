@@ -3,6 +3,7 @@ import { ownerKind } from '../src/shared/owners.ts';
 import { AAVE, aaveFrozenReserves, AAVE_UNFROZEN_AT, USDC } from '../src/shared/sources/aave-frozen.ts';
 import { canopyEndedRewards } from '../src/shared/sources/canopy-rewards.ts';
 import { APT, delegation, MOVE, movementDelegation } from '../src/shared/sources/delegation.ts';
+import { AURO_CLOSED_AT, AURO_DAO, AURO_ROUTER, auroClosedPositions } from '../src/shared/sources/auro-closed.ts';
 import { echelonFrozenMarkets, FROZEN_MARKETS } from '../src/shared/sources/echelon-frozen.ts';
 import { ECONIA, ECONIA_ARCHIVED_AT, ECONIA_COINS, econiaIdleAccounts } from '../src/shared/sources/econia-idle.ts';
 import { ASSETS } from '../src/shared/assets.ts';
@@ -842,5 +843,89 @@ describe('econia idle accounts', () => {
       account('12', { base: '5', quote: '7' }),
     ])), OWNER);
     expect(r.positions.map(p => [p.locator, p.asset, p.expectedPayout[0].raw])).toEqual([['market-12', LZUSDC, '7']]);
+  });
+});
+
+describe('auro closed positions', () => {
+  const NFT = addr('f1'), POOL = addr('f2'), STAPT_COIN = '0x111ae3e5bc816a5e63c2da97d0aa3886519e0cd5e4b046659fa35796bd11542a::stapt_token::StakedApt';
+  type Opts = { debt?: boolean; held?: string; owner?: string; token?: string; deposited?: string; shares?: string; lock?: string; fee?: string };
+  // Pool books: 1,000 supplied over 800 shares; the position holds 200 shares (250 coins).
+  const chain = (o: Opts = {}) => fakeChain({
+    resource: (address, type) => {
+      if (address === NFT && type === '0x1::object::ObjectCore') return { owner: o.owner ?? OWNER };
+      if (address === NFT && type.endsWith('::lending_pool::UserPosition')) return {
+        deposit_shares: { data: [{ key: { inner: POOL }, value: o.shares ?? '200' }] }, debt_shares: { data: o.debt ? [{ key: { inner: POOL }, value: '1' }] : [] },
+        last_deposited_times: o.deposited ?? '1762830676' };
+      if (address === POOL && type.endsWith('::lending_pool::State')) return { total_reserves_amount: '1000', total_debt_amount: '0', total_fees: '0', total_supply_shares: '800', is_paused: false, lock_times: o.lock ?? '0', early_withdraw_fee_bps: o.fee ?? '0' };
+      if (address === POOL && type.endsWith('::lending_pool::LendingPool')) return { token: o.token ?? STAPT_COIN, fungible_asset: { inner: addr('a8') } };
+      return null;
+    },
+    view: (fn, args) => {
+      // The DAO's balance of the pool's held asset (Auro wraps a coin pool's coin in its own fungible asset).
+      if (fn === '0x1::primary_fungible_store::balance' && args[0] === AURO_DAO && args[1] === addr('a8')) return [o.held ?? '1000'];
+      throw new Error(fn);
+    },
+    gql: () => ({ current_token_ownerships_v2: [{ token_data_id: NFT }] }),
+  });
+
+  it('counts a debt-free position from the shutdown date, withdrawn whole with the exact share amount', async () => {
+    const r = await auroClosedPositions.read(context(chain()), OWNER, { tokens: [NFT] });
+    expect(r.positions).toHaveLength(1);
+    expect(r.positions[0]).toMatchObject({ asset: STAPT_COIN, status: 'recoverable', claimableSince: AURO_CLOSED_AT, ageBasis: 'protocol_closure',
+      grossClaim: [{ raw: '250' }], expectedPayout: [{ raw: '250' }],
+      steps: [{ function: `${AURO_ROUTER}::auro_router::withdraw_coin_entry<${STAPT_COIN}>`, arguments: [NFT, '250'] }] });
+    // A fungible-asset pool uses withdraw_entry; the check page finds the position NFTs itself, but without the
+    // enumeration's repayment history it leaves the age unknown.
+    const fa = await auroClosedPositions.read(context(chain({ token: addr('a7') })), OWNER);
+    expect(fa.positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined,
+      steps: [{ function: `${AURO_ROUTER}::auro_router::withdraw_entry` }] });
+  });
+
+  it('ages a position topped up or repaid after the shutdown from that deposit or repayment', async () => {
+    const after = await auroClosedPositions.read(context(chain({ deposited: '1780000000' })), OWNER, { tokens: [NFT] });
+    expect(after.positions[0].claimableSince).toBe(new Date(1_780_000_000 * 1000).toISOString());
+    const repaid = await auroClosedPositions.read(context(chain()), OWNER, { tokens: [NFT], changed: { [NFT]: '2026-05-07T16:32:48.000Z' } });
+    expect(repaid.positions[0].claimableSince).toBe('2026-05-07T16:32:48.000Z');
+    // A change to another of the owner's positions does not re-date this one.
+    const other = await auroClosedPositions.read(context(chain()), OWNER, { tokens: [NFT], changed: { [addr('f9')]: '2026-05-07T16:32:48.000Z' } });
+    expect(other.positions[0].claimableSince).toBe(AURO_CLOSED_AT);
+  });
+
+  it('leaves the age unknown for a position that changed after the version the enumeration scans reached', async () => {
+    // At version 90 (the scans') the position differed from the read's version 100: repaid, withdrawn from, or held by
+    // someone else since.
+    const c = chain();
+    const at90 = (then: { position?: object; owner?: string }) => ({ ...c, resource: async (address: string, type: string, version?: string) =>
+      version === '90' && type.endsWith('::lending_pool::UserPosition') && then.position ? then.position
+        : version === '90' && type === '0x1::object::ObjectCore' && then.owner ? { owner: then.owner } : c.resource(address, type) });
+    const current = await c.resource(NFT, `x::lending_pool::UserPosition`);
+    for (const then of [{ position: { ...current, debt_shares: { data: [{ key: { inner: POOL }, value: '1' }] } } },
+      { position: { ...current, deposit_shares: { data: [{ key: { inner: POOL }, value: '300' }] } } }, { owner: addr('e9') }]) {
+      const r = await auroClosedPositions.read(context(at90(then)), OWNER, { tokens: [NFT], w: '90' });
+      expect(r.positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined });
+    }
+    // Unchanged since the scans, or scanned at the read's version: dated as usual.
+    expect((await auroClosedPositions.read(context(c), OWNER, { tokens: [NFT], w: '90' })).positions[0].claimableSince).toBe(AURO_CLOSED_AT);
+    expect((await auroClosedPositions.read(context(c), OWNER, { tokens: [NFT], w: '100' })).positions[0].claimableSince).toBe(AURO_CLOSED_AT);
+  });
+
+  it('leaves out positions with debt and position NFTs that moved', async () => {
+    expect((await auroClosedPositions.read(context(chain({ debt: true })), OWNER, { tokens: [NFT] })).positions).toEqual([]);
+    expect((await auroClosedPositions.read(context(chain({ owner: addr('e9') })), OWNER, { tokens: [NFT] })).positions).toEqual([]);
+  });
+
+  it('counts the pro-rata share of what the pool really holds, and blocks a position the pool cannot pay whole', async () => {
+    // The DAO holds 400 of the 1,000 on the books: 250 x 0.4 = 100 counted; 250 > 400 is false, so it can be withdrawn whole.
+    const short = await auroClosedPositions.read(context(chain({ held: '400' })), OWNER, { tokens: [NFT] });
+    expect(short.positions[0]).toMatchObject({ status: 'recoverable', expectedPayout: [{ raw: '100' }], steps: [{ expectedOutputs: [{ raw: '250' }] }] });
+    // Holding 200 < 250: only a partial withdrawal could pay, and that needs a fresh Pyth price; nothing is payable now.
+    const blocked = await auroClosedPositions.read(context(chain({ held: '200' })), OWNER, { tokens: [NFT] });
+    expect(blocked.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'insufficient_cash' }], grossClaim: [{ raw: '250' }], expectedPayout: [] });
+    // 201 shares are 251.25 coins: the full withdrawal requests 252 and pays 251, so a pool holding 251 cannot pay it.
+    // Deposited 100 s before the fake ledger time, in a pool with a 1-day lock and a fee: the fee formula is unknown.
+    const early = await auroClosedPositions.read(context(chain({ deposited: '1799999900', lock: '86400', fee: '50' })), OWNER, { tokens: [NFT] });
+    expect(early.positions[0]).toMatchObject({ status: 'unknown', blockers: [{ code: 'early_withdraw_fee' }], expectedPayout: [] });
+    const rounded = await auroClosedPositions.read(context(chain({ shares: '201', held: '251' })), OWNER, { tokens: [NFT] });
+    expect(rounded.positions[0]).toMatchObject({ status: 'blocked', blockers: [{ code: 'insufficient_cash' }], steps: [{ arguments: [NFT, '252'] }] });
   });
 });

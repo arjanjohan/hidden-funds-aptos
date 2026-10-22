@@ -1,5 +1,6 @@
 // Display identity for assets that sources pay out. Identity is the exact id, never a ticker.
 import { SUSDE, USDC, USDT } from './sources/aave-frozen.ts';
+import { AMAPT_COIN } from './sources/auro-closed.ts';
 import { APT, MOVE } from './sources/delegation.ts';
 import { EDOG, GUI } from './sources/econia-idle.ts';
 import { FROZEN_MARKETS } from './sources/echelon-frozen.ts';
@@ -15,6 +16,7 @@ export const ASSETS: Record<string, { symbol: string; decimals: number }> = {
   [APT]: { symbol: 'APT', decimals: 8 },
   [THL]: { symbol: 'THL', decimals: 8 },
   [MOVE]: { symbol: 'MOVE', decimals: 8 },
+  [AMAPT_COIN]: { symbol: 'amAPT', decimals: 8 },
   [GUI]: { symbol: 'GUI', decimals: 6 },
   [EDOG]: { symbol: 'EDOG', decimals: 6 },
   [USDT]: { symbol: 'USDt', decimals: 6 },

@@ -2,9 +2,11 @@
 import { PRICE_MAX_AGE_SECS, type PriceBook } from '../shared/accounting.ts';
 import { SUSDE, USDC, USDT } from '../shared/sources/aave-frozen.ts';
 import { AMNIS } from '../shared/sources/amnis-withdrawals.ts';
+import { AMAPT_COIN } from '../shared/sources/auro-closed.ts';
 import { APT, MOVE } from '../shared/sources/delegation.ts';
 import { AMAPT_FA, MOD, STAPT, STHAPT, WH_USDC } from '../shared/sources/echelon-frozen.ts';
-import { KAPT } from '../shared/sources/kofi-receipts.ts';
+import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
+import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
 import { BTCB, CAKE, LZ_BRIDGE } from '../shared/sources/layerzero-claimable.ts';
 import { THL } from '../shared/sources/thala-thl.ts';
 import { THALA_LSD } from '../shared/sources/thala-unstake.ts';
@@ -27,6 +29,7 @@ const COINGECKO = [
   { asset: KAPT, id: 'kofi-aptos', decimals: 8 },
   // CoinGecko lists the amAPT coin; this is its paired fungible asset.
   { asset: AMAPT_FA, id: 'amnis-aptos', decimals: 8 },
+  { asset: AMAPT_COIN, id: 'amnis-aptos', decimals: 8 },
   // Native fungible assets of the Aave reserves; each id's Aptos contract is this exact address.
   { asset: USDT, id: 'tether', decimals: 6 },
   { asset: USDC, id: 'usd-coin', decimals: 6 },
@@ -71,6 +74,15 @@ async function redemptionPrices(prices: PriceBook, errors: string[], aptos: Chai
     }
   };
   await Promise.all([
+    // stkAPT unstakes to kAPT at Kofi's exchange rate (1e8 scale); kAPT redeems 1:1 for APT less Kofi's withdrawal fee
+    // (basis points; 0 on 2026-10-21).
+    derive(STKAPT, 'stkAPT', 'derived: Kofi get_exchange_rate less get_withdrawal_fee x APT (coingecko)', async () => {
+      const [[rate], [feeBps]] = await Promise.all([
+        aptos.view(`${KOFI}::rewards_manager::get_exchange_rate`, []),
+        aptos.view(`${KOFI}::config::get_withdrawal_fee`, []),
+      ]);
+      return Number(rate) / 1e8 * (1 - Number(feeBps) / 10_000);
+    }),
     derive(STAPT, 'stAPT', 'derived: Amnis stapt_price x APT (coingecko)', async () =>
       Number((await aptos.view(`${AMNIS}::stapt_token::stapt_price`, []))[0]) / 1e8),
     derive(STHAPT, 'sthAPT', 'derived: Thala thAPT_sthAPT_exchange_rate less unstake_APT_fee_bps x APT (coingecko)', async () => {
