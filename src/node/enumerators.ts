@@ -248,7 +248,9 @@ export const auroClosedEnumerator: Enumerator = {
     if (typeof stored !== 'object' || stored === null) stored = {};
     // Every account an Auro call touched, with the latest such call's time; positions are found among them below.
     const repaid: Record<string, string> = stored.repaid && typeof stored.repaid === 'object' && !Array.isArray(stored.repaid) ? { ...stored.repaid } : {};
-    const indexed = (await processorWatermark(chain, 'account_transactions_processor')).version;
+    // Calls and the accounts they touched come from two processors: scan only what both have indexed.
+    const indexed = String([await processorWatermark(chain, 'user_transaction_processor'), await processorWatermark(chain, 'account_transactions_processor')]
+      .map(m => BigInt(m.version)).reduce((a, b) => (a < b ? a : b)));
     let after = stored.v ?? String(AURO_CLOSED_VERSION), pages = 1;
     for (;;) {
       const page = (await chain.gql(AURO_CALLS_QUERY, { a: after, w: indexed })).user_transactions;
@@ -282,7 +284,7 @@ export const auroClosedEnumerator: Enumerator = {
       if (page.length < PAGE) break;
       from = page[page.length - 1].token_data_id;
     }
-    const candidates = [...owners].map(([owner, o]) => ({ owner, hint: { tokens: o.tokens.sort(), ...(Object.keys(o.changed).length ? { changed: o.changed } : {}), w: String(indexed) } }));
+    const candidates = [...owners].map(([owner, o]) => ({ owner, hint: { tokens: o.tokens.sort(), ...(Object.keys(o.changed).length ? { changed: o.changed } : {}), w: indexed } }));
     // Kept whole (a few accounts per repayment, which are rare): a position the ownership index has not caught up on
     // still finds its date in a later run.
     return { candidates, cursor: JSON.stringify({ v: after, repaid }), pages };

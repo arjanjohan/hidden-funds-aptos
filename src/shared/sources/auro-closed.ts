@@ -66,10 +66,15 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: AuroHint): Prom
       // The contract still takes deposits and repayments: a position topped up after the shutdown is aged from that
       // deposit, and one repaid after it (it had debt, so it did not qualify) from its last change since. The check page
       // reads without the enumeration's history, so there the age is unknown.
-      // A position that still had debt at the scan's version was repaid since, by a call the scan has not seen yet: its
-      // age is unknown until a later run dates the repayment.
-      const unscanned = hint?.w && Number(hint.w) < Number(version) &&
-        ((await ctx.chain.resource(token, `${AURO}::lending_pool::UserPosition`, hint.w))?.debt_shares.data ?? []).some((d: any) => BigInt(d.value) > 0n);
+      // A position that changed after the version the enumeration's scans reached (a repayment, withdrawal, claim or
+      // transfer the scans have not seen yet) has an age the hint cannot give: unknown until a later run dates it.
+      const unscanned = !!hint?.w && Number(hint.w) < Number(version) && await (async () => {
+        const [coreThen, positionThen] = await Promise.all([
+          ctx.chain.resource(token, '0x1::object::ObjectCore', hint.w),
+          ctx.chain.resource(token, `${AURO}::lending_pool::UserPosition`, hint.w),
+        ]);
+        return coreThen?.owner !== core.owner || JSON.stringify(positionThen) !== JSON.stringify(position);
+      })();
       const since = hint && !unscanned ? [AURO_CLOSED_AT, iso(Number(position.last_deposited_times ?? 0)), hint.changed?.[token]]
         .filter((d): d is string => !!d).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a)) : undefined;
       return await Promise.all(position.deposit_shares.data.filter((d: any) => BigInt(d.value) > 0n).map(async (d: any): Promise<Position> => {
