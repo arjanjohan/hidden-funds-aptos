@@ -2,6 +2,7 @@
 import Base from '../layouts/Base.astro';
 import { snapshot } from '../lib/data.ts';
 import { count, usd } from '../lib/format.ts';
+import { REPO } from '../lib/site.ts';
 import { NETWORKS, type Network } from '../../shared/chain.ts';
 import type { SnapshotSource } from '../../shared/snapshot.ts';
 
@@ -35,8 +36,11 @@ const faq = [
   ['Does it cost anything?', 'No. Claiming costs the normal network fee, paid from your own wallet in the official app.'],
   ['Where does the data come from?', 'Aptos and Movement mainnet. An indexer finds candidate wallets for each source; every counted position is then read from a fullnode. The dashboard updates weekly; the check is live.'],
   ['Why might a claim fail?', 'Positions change every day: you, or anyone with access, may have claimed since. Some positions need the protocol team (for example after a wind-down), and some are blocked, such as when a protocol removed its reserves. Those are labelled.'],
-  ['Which chains and protocols?', `Aptos and Movement, ${sources.length} sources so far: native staking, liquid staking, closed apps and bridges. Something missing? Open an issue on GitHub.`],
-];
+  ['Which chains and protocols?', `Aptos and Movement, ${sources.length} sources so far: native staking, liquid staking, closed apps and bridges.`,
+    [['Every protocol we checked', '/coverage'], ['Something missing? Open an issue on GitHub', `${REPO}/issues/new`]]],
+  ['How do you decide what counts?', 'A position counts only if getting it back needs a transaction, it has ended or its protocol has closed, the payout goes to you, and it is not backing a loan.',
+    [['How we count', '/how-we-count'], ['Sources and evidence', '/sources']]],
+] as [string, string, [string, string][]?][];
 ---
 <Base title="hidden funds · Find the crypto you left behind on Aptos and Movement">
   <section class="hero">
@@ -91,7 +95,7 @@ const faq = [
 
   <section id="faq">
     <h2>Questions</h2>
-    {faq.map(([q, a]) => <details><summary>{q}</summary><p>{a}</p></details>)}
+    {faq.map(([q, a, links]) => <details><summary>{q}</summary><p>{a}{links?.map(([text, href]) => <> <a href={href}>{text}</a>.</>)}</p></details>)}
   </section>
 
   <section class="closing">

@@ -39,21 +39,26 @@ function marketInfo(ctx: ReadContext, id: string): Promise<MarketInfo> {
   });
 }
 
-/** Enumeration hint: the time of the run that saw the owner act (a deposit, withdrawal or order of its own). */
-export interface EconiaHint { since?: string }
+/**
+ * Enumeration hint: `since`, the time of the run that saw the owner act (a deposit, withdrawal or order of its own; the
+ * scan does not see which market, so it dates them all); `markets`, per market, the time of the run that saw the
+ * owner's orders there change without it (a fill).
+ */
+export interface EconiaHint { since?: string; markets?: Record<string, string> }
 
 async function read(ctx: ReadContext, ownerInput: string, hint?: EconiaHint): Promise<ReadResult> {
   const owner = normalizeAddress(ownerInput);
   const version = ctx.ledger.version;
   // A balance that changed after the archive date has been idle only since then: the latest of the dates that apply.
   // Without the enumeration hint (the check page) a later change cannot be ruled out, so the age is unknown.
-  const since = hint && (hint.since && Date.parse(hint.since) > Date.parse(ECONIA_ARCHIVED_AT) ? hint.since : ECONIA_ARCHIVED_AT);
+  const sinceIn = (market: string) => hint && [ECONIA_ARCHIVED_AT, hint.since, hint.markets?.[market]]
+    .filter((d): d is string => !!d).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a));
   try {
     const [accounts] = await ctx.chain.view(`${ECONIA}::user::get_market_accounts`, [owner], [], version);
     const own = (accounts as any[]).filter(a => a.custodian_id === '0');
     const positions: Position[] = [];
     for (const a of own) {
-      const market = await marketInfo(ctx, a.market_id);
+      const market = await marketInfo(ctx, a.market_id), since = sinceIn(a.market_id);
       // Totals include coins resting in open orders; cancelling them (asks: side true, bids: false) frees them first.
       const cancels = [...(a.asks.length ? [true] : []), ...(a.bids.length ? [false] : [])].map(side => ({
         function: `${ECONIA}::market::cancel_all_orders_user`, arguments: [a.market_id, String(side)], prerequisites: [], expectedOutputs: [] }));

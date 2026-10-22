@@ -51,7 +51,7 @@ What counts, how it is aged and how totals are computed: [docs/left-behind.md](d
 
 ## Develop
 
-Node 24.21.0 (`.nvmrc`), pnpm 9.
+Node 24.22.1 (`.nvmrc`), pnpm 9.
 
 ```sh
 pnpm install
