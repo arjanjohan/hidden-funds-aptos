@@ -19,8 +19,9 @@ const SLIPPAGE_BPS = 100n;
 const POOLS_PER_CALL = 20;
 const SOURCE = 'earnium-closed-lp';
 
-/** Enumeration hint: when the owner last acted on Earnium after the closure (owner-wide); empty when it has not. */
-export type EarniumHint = { since?: string };
+/** Enumeration hint: when the owner last acted on Earnium after the closure began (owner-wide), and when each pool's
+ *  LP in its wallet last changed (a transfer in included). */
+export type EarniumHint = { since?: string; lps?: Record<string, string> };
 
 /** Every pool, once per ledger version. */
 export const earniumPools = (ctx: ReadContext) => once(ctx, `earnium-pools:${ctx.ledger.version}`, async () =>
@@ -67,14 +68,17 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: EarniumHint): P
   try { held = await holdings(ctx, owner); } catch (err) {
     return { positions: [], complete: false, errors: [`user_info: ${String(err).slice(0, 200)}`], ledgerVersion: version };
   }
-  // The pools still take liquidity, so an owner who acted after the closure is aged from that run.
-  const since = hint?.since && Date.parse(hint.since) > Date.parse(EARNIUM_CLOSED_AT) ? hint.since : EARNIUM_CLOSED_AT;
+  // The pools still take liquidity, so an owner who acted after the closure is aged from that run, wallet LP from its
+  // last change (LP received later is aged from then), and a stake that unlocked after the closure from its unlock.
+  const latest = (...dates: (string | undefined)[]) => dates.filter((d): d is string => !!d).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a));
   const found = await mapLimit(held, 4, async (h): Promise<Position[]> => {
     try {
       // LP locked with no end can never come out; a stake still locked is blocked until its unlock time.
       const stakedFree = h.unlock === LOCKED_FOREVER || BigInt(ctx.ledger.timestampSecs) < h.unlock ? 0n : h.staked;
       const lockedUntil = h.staked > 0n && stakedFree === 0n && h.unlock !== LOCKED_FOREVER ? h.unlock : null;
       const liquidity = h.wallet + stakedFree;
+      const since = latest(EARNIUM_CLOSED_AT, hint?.since, h.wallet > 0n ? hint?.lps?.[h.pool] : undefined,
+        stakedFree > 0n && h.unlock > 0n ? iso(Number(h.unlock)) : undefined);
       const p = await poolInfo(ctx, h.pool);
       const parts: { lp: bigint; blocked: boolean }[] = [
         ...(liquidity > 0n ? [{ lp: liquidity, blocked: false }] : []),
