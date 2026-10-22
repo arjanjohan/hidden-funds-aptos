@@ -251,7 +251,9 @@ export const auroClosedEnumerator: Enumerator = {
     if (typeof stored !== 'object' || stored === null) stored = {};
     // Every account an Auro call touched, with the latest such call's time; positions are found among them below.
     const repaid: Record<string, string> = stored.repaid && typeof stored.repaid === 'object' && !Array.isArray(stored.repaid) ? { ...stored.repaid } : {};
-    const indexed = (await processorWatermark(chain, 'account_transactions_processor')).version;
+    // Calls and the accounts they touched come from two processors: scan only what both have indexed.
+    const indexed = String([await processorWatermark(chain, 'user_transaction_processor'), await processorWatermark(chain, 'account_transactions_processor')]
+      .map(m => BigInt(m.version)).reduce((a, b) => (a < b ? a : b)));
     let after = stored.v ?? String(AURO_CLOSED_VERSION), pages = 1;
     for (;;) {
       const page = (await chain.gql(AURO_CALLS_QUERY, { a: after, w: indexed })).user_transactions;
@@ -285,7 +287,7 @@ export const auroClosedEnumerator: Enumerator = {
       if (page.length < PAGE) break;
       from = page[page.length - 1].token_data_id;
     }
-    const candidates = [...owners].map(([owner, o]) => ({ owner, hint: { tokens: o.tokens.sort(), ...(Object.keys(o.changed).length ? { changed: o.changed } : {}), w: String(indexed) } }));
+    const candidates = [...owners].map(([owner, o]) => ({ owner, hint: { tokens: o.tokens.sort(), ...(Object.keys(o.changed).length ? { changed: o.changed } : {}), w: indexed } }));
     // Kept whole (a few accounts per repayment, which are rare): a position the ownership index has not caught up on
     // still finds its date in a later run.
     return { candidates, cursor: JSON.stringify({ v: after, repaid }), pages };
@@ -866,9 +868,10 @@ const noContractTotal: Enumerator['sanity'] = async () =>
 // changed; those only matter after an owner's first read, which comes after this source was added (2026-10-20), so
 // their scan starts there. A fill of a resting order is sent by the taker, so makers are taken from the coin markets'
 // open orders each run: current makers and last run's are re-read (a fill moves coins between base and quote, and the
-// account whose order filled is read again in the run after). An owner's own call, or a change to its open orders it did
-// not make (a fill, whole or partial), puts the run's time in its hint, so a balance that changed after the archive date
-// is aged from the run that saw it, never from the archive.
+// account whose order filled is read again in the run after). An owner's own call puts the run's time in its hint for
+// every market (the scan does not see which one), and a change to its open orders it did not make (a fill, whole or
+// partial) for that market only, so a balance that changed after the archive date is aged from the run that saw it,
+// never from the archive.
 const ECONIA_CHANGES_FROM = 7_696_900_000;
 const ECONIA_REGISTRATIONS: EntryFunction[] = [
   ...['register_market_account', 'register_market_account_generic_base'].map(name => ({ contract: ECONIA, module: 'user', name })),
@@ -910,24 +913,35 @@ export const econiaIdleEnumerator: Enumerator = {
     // Only this shape is compared: any other (an earlier cursor's maker list) counts as no previous orders, which dates nobody.
     const previous: Record<string, string> = stored.m && typeof stored.m === 'object' && !Array.isArray(stored.m)
       ? Object.fromEntries(Object.entries(stored.m).filter(([, v]) => typeof v === 'string')) : {};
-    // The owner's own calls, and changes to its orders since last run, date its balances from this run. Every candidate
-    // carries a hint (empty when nothing changed): a read without one is the check page's, which cannot tell whether a
-    // balance changed after the archive date.
+    // The owner's own calls date all its balances from this run, and changes to its orders since last run the balances
+    // in that market. Every candidate carries a hint (empty when nothing changed): a read without one is the check
+    // page's, which cannot tell whether a balance changed after the archive date.
     const since = iso(ledger.timestampSecs);
     const acted = new Set(changed.candidates.map(c => c.owner));
-    const filled = Object.keys(previous).filter(maker => previous[maker] !== (makers[maker] ?? ''));
-    const dated = new Set([...acted, ...filled]);
+    const byMarket = (list: string) => {
+      const m = new Map<string, string>();
+      for (const o of list ? list.split(',') : []) { const id = o.slice(0, o.indexOf(':')); m.set(id, m.has(id) ? `${m.get(id)},${o}` : o); }
+      return m;
+    };
+    const filled = new Map<string, string[]>();
+    for (const maker of Object.keys(previous)) {
+      const before = byMarket(previous[maker]), now = byMarket(makers[maker] ?? '');
+      const markets = [...before.keys()].filter(id => before.get(id) !== now.get(id));
+      if (markets.length) filled.set(maker, markets);
+    }
     const owners = new Set([...registered.candidates.map(c => c.owner), ...acted, ...Object.keys(makers), ...Object.keys(previous)]);
-    return { candidates: [...owners].map(owner => ({ owner, hint: dated.has(owner) ? { since } : {} })),
+    return { candidates: [...owners].map(owner => ({ owner, hint: { ...(acted.has(owner) ? { since } : {}),
+        ...(filled.has(owner) ? { markets: Object.fromEntries(filled.get(owner)!.map(id => [id, since])) } : {}) } })),
       cursor: JSON.stringify({ r: registered.cursor, c: changed.cursor, m: makers }),
       pages: registered.pages + changed.pages + ECONIA_COIN_MARKETS.length, incremental: true };
   },
 };
 
 // Earnium: everyone who added liquidity or staked it (directly or through the router), ever, and every wallet holding
-// LP (current primary stores per pool, transfers included). Calls after the closure day began (adding, removing,
-// staking, unstaking, claiming) put the run's time in the caller's hint, so liquidity used after the closure is aged
-// from the run that saw it; wallet LP also carries its store's last change.
+// LP (current primary stores per pool, transfers included). A call after the closure day began that moved a pool's LP
+// (adding, removing, staking, unstaking; in a wallet's store or a staking pool's) dates that pool's LP for its sender
+// from the call's time, so liquidity used after the closure is aged from then; wallet LP also carries its store's last
+// change. Reward claims move no LP and date nothing.
 const EARNIUM_CHANGES_FROM = 7_706_000_000;   // 2026-10-21, before the closure's end of day
 const EARNIUM_ADD = ['add_liquidity_entry', 'add_liquidity_coin_entry', 'add_liquidity_both_coins_entry', 'add_liquidity_and_stake_entry',
   'add_liquidity_and_stake_coin_entry', 'add_liquidity_and_stake_both_coins_entry'];
@@ -935,46 +949,63 @@ const EARNIUM_HOLDERS: EntryFunction[] = [
   ...EARNIUM_ADD.map(name => ({ contract: EARNIUM, module: 'router', name })),
   ...['stake', 'stake_and_lock'].map(name => ({ contract: EARNIUM, module: 'liquidity_stake_pool', name })),
 ];
-const EARNIUM_CHANGES: EntryFunction[] = [
-  ...[...EARNIUM_ADD, 'remove_liquidity_entry'].map(name => ({ contract: EARNIUM, module: 'router', name, fromVersion: EARNIUM_CHANGES_FROM })),
-  ...['stake', 'stake_and_lock', 'unstake', 'claim_all_rewards'].map(name => ({ contract: EARNIUM, module: 'liquidity_stake_pool', name, fromVersion: EARNIUM_CHANGES_FROM })),
-];
-const earniumSenders = entrySenders('earnium-closed-lp', [...EARNIUM_HOLDERS, ...EARNIUM_CHANGES], noContractTotal);
+const EARNIUM_CALLS_QUERY = `query($a:bigint!,$w:bigint!){ user_transactions(where:{entry_function_contract_address:{_eq:"${EARNIUM}"}, _or:[
+  {entry_function_module_name:{_eq:"router"}, entry_function_function_name:{_in:${JSON.stringify([...EARNIUM_ADD, 'remove_liquidity_entry'])}}},
+  {entry_function_module_name:{_eq:"liquidity_stake_pool"}, entry_function_function_name:{_in:["stake","stake_and_lock","unstake"]}}],
+  version:{_gt:$a, _lte:$w}}, order_by:{version:asc}, limit:${PAGE}){ version sender timestamp } }`;
+const LP_MOVES_QUERY = `query($v:bigint!,$p:[String!]!){ fungible_asset_activities(where:{transaction_version:{_eq:$v}, asset_type:{_in:$p}},
+  limit:${PAGE}){ asset_type } }`;
+const earniumSenders = entrySenders('earnium-closed-lp', EARNIUM_HOLDERS, noContractTotal);
 export const earniumClosedEnumerator: Enumerator = {
   ...earniumSenders,
+  scope: `${earniumSenders.scope}; plus every wallet holding LP, and Earnium calls from version ${EARNIUM_CHANGES_FROM} with the pools whose LP they moved`,
   async run(chain, cursor) {
-    let stored: { r?: string; c?: string } = {};
+    let stored: { r?: string; v?: string } = {};
     try { stored = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: rescan */ }
     if (typeof stored !== 'object' || stored === null) stored = {};
-    const ledger = await chain.ledger();
     const holders = await senders(chain, EARNIUM_HOLDERS, stored.r);
-    const changed = await senders(chain, EARNIUM_CHANGES, stored.c);
-    // Every candidate carries a hint (empty when it did not act after the closure began): a read without one is the
-    // check page's, which ages from the closure.
-    const since = iso(ledger.timestampSecs);
-    const acted = new Set(changed.candidates.map(c => c.owner));
+    const [pools] = await chain.view(`${EARNIUM}::liquidity_pool::pools`, []);
+    const poolIds = (pools as { inner: string }[]).map(p => normalizeAddress(p.inner));
+    let pages = holders.pages + 1;
+    // Calls and the LP they moved come from two processors: scan only what both have indexed.
+    const indexed = String([await processorWatermark(chain, 'user_transaction_processor'), await processorWatermark(chain, 'fungible_asset_processor')]
+      .map(m => BigInt(m.version)).reduce((a, b) => (a < b ? a : b)));
+    const moved = new Map<string, Record<string, string>>();
+    let after = stored.v ?? String(EARNIUM_CHANGES_FROM);
+    for (;;) {
+      const page = (await chain.gql(EARNIUM_CALLS_QUERY, { a: after, w: indexed })).user_transactions;
+      pages++;
+      for (const t of page) {
+        const sender = normalizeAddress(t.sender), at = new Date(t.timestamp + 'Z').toISOString();
+        const touched = (await chain.gql(LP_MOVES_QUERY, { v: String(t.version), p: poolIds })).fungible_asset_activities;
+        pages++;
+        for (const { asset_type } of touched) moved.set(sender, { ...moved.get(sender), [normalizeAddress(asset_type)]: at });
+      }
+      if (page.length) after = String(page[page.length - 1].version);
+      if (page.length < PAGE) break;
+    }
     // LP in wallets, also when it arrived by transfer: every pool's primary stores (staked LP sits in the staking pools'
     // own, non-primary stores), each with its last change.
-    const [pools] = await chain.view(`${EARNIUM}::liquidity_pool::pools`, []);
     const lps = new Map<string, Record<string, string>>();
-    let pages = holders.pages + changed.pages + 1;
-    for (const pool of (pools as { inner: string }[]).map(p => normalizeAddress(p.inner))) {
-      let after = '';
+    for (const pool of poolIds) {
+      let from = '';
       for (;;) {
         const rows = (await chain.gql(`query($a:String!,$s:String!){ current_fungible_asset_balances(where:{asset_type:{_eq:$a}, is_primary:{_eq:true},
-          amount:{_gt:"0"}, storage_id:{_gt:$s}}, order_by:{storage_id:asc}, limit:${PAGE}){ owner_address storage_id last_transaction_timestamp } }`, { a: pool, s: after })).current_fungible_asset_balances;
+          amount:{_gt:"0"}, storage_id:{_gt:$s}}, order_by:{storage_id:asc}, limit:${PAGE}){ owner_address storage_id last_transaction_timestamp } }`, { a: pool, s: from })).current_fungible_asset_balances;
         pages++;
         for (const r of rows) {
           const owner = normalizeAddress(r.owner_address);
           lps.set(owner, { ...lps.get(owner), [pool]: new Date(r.last_transaction_timestamp + 'Z').toISOString() });
         }
         if (rows.length < PAGE) break;
-        after = rows[rows.length - 1].storage_id;
+        from = rows[rows.length - 1].storage_id;
       }
     }
-    const owners = new Set([...holders.candidates.map(c => c.owner), ...acted, ...lps.keys()]);
-    return { candidates: [...owners].map(owner => ({ owner, hint: { ...(acted.has(owner) ? { since } : {}), ...(lps.has(owner) ? { lps: lps.get(owner) } : {}) } })),
-      cursor: JSON.stringify({ r: holders.cursor, c: changed.cursor }), pages, incremental: true };
+    // Every candidate carries a hint (empty when it moved no LP after the closure began): a read without one is the check
+    // page's, which ages from the closure.
+    const owners = new Set([...holders.candidates.map(c => c.owner), ...moved.keys(), ...lps.keys()]);
+    return { candidates: [...owners].map(owner => ({ owner, hint: { ...(moved.has(owner) ? { moved: moved.get(owner) } : {}), ...(lps.has(owner) ? { lps: lps.get(owner) } : {}) } })),
+      cursor: JSON.stringify({ r: holders.cursor, v: after }), pages, incremental: true };
   },
 };
 

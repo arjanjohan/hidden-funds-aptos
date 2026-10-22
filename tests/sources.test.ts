@@ -844,6 +844,9 @@ describe('econia accounts', () => {
     expect(later.positions[0].claimableSince).toBe('2026-10-27T03:17:00.000Z');
     const earlier = await econiaIdleAccounts.read(context(chain(accounts)), OWNER, { since: '2025-01-01T00:00:00.000Z' });
     expect(earlier.positions[0].claimableSince).toBe(ECONIA_ARCHIVED_AT);
+    // A fill dates only the market it happened in.
+    const fill = await econiaIdleAccounts.read(context(chain([...accounts, account('8', { quote: '6' })])), OWNER, { markets: { 8: '2026-10-27T03:17:00.000Z' } });
+    expect(fill.positions.map(p => [p.locator, p.claimableSince])).toEqual([['market-7', ECONIA_ARCHIVED_AT], ['market-8', '2026-10-27T03:17:00.000Z']]);
   });
 
   it('counts coins resting in open orders (Econia is closed), cancelling them before the withdrawal', async () => {
@@ -914,14 +917,21 @@ describe('auro closed positions', () => {
     expect(other.positions[0].claimableSince).toBe(AURO_CLOSED_AT);
   });
 
-  it('leaves the age unknown for a position that still had debt at the version the repayment scan reached', async () => {
-    // At version 90 (the scan's) the position had debt; at the read's version 100 it is repaid.
+  it('leaves the age unknown for a position that changed after the version the enumeration scans reached', async () => {
+    // At version 90 (the scans') the position differed from the read's version 100: repaid, withdrawn from, or held by
+    // someone else since.
     const c = chain();
-    const atScan = { ...c, resource: async (address: string, type: string, version?: string) =>
-      version === '90' && type.endsWith('::lending_pool::UserPosition') ? { deposit_shares: { data: [] }, debt_shares: { data: [{ key: { inner: POOL }, value: '1' }] } }
-        : c.resource(address, type) };
-    const r = await auroClosedPositions.read(context(atScan), OWNER, { tokens: [NFT], w: '90' });
-    expect(r.positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined });
+    const at90 = (then: { position?: object; owner?: string }) => ({ ...c, resource: async (address: string, type: string, version?: string) =>
+      version === '90' && type.endsWith('::lending_pool::UserPosition') && then.position ? then.position
+        : version === '90' && type === '0x1::object::ObjectCore' && then.owner ? { owner: then.owner } : c.resource(address, type) });
+    const current = await c.resource(NFT, `x::lending_pool::UserPosition`);
+    for (const then of [{ position: { ...current, debt_shares: { data: [{ key: { inner: POOL }, value: '1' }] } } },
+      { position: { ...current, deposit_shares: { data: [{ key: { inner: POOL }, value: '300' }] } } }, { owner: addr('e9') }]) {
+      const r = await auroClosedPositions.read(context(at90(then)), OWNER, { tokens: [NFT], w: '90' });
+      expect(r.positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined });
+    }
+    // Unchanged since the scans, or scanned at the read's version: dated as usual.
+    expect((await auroClosedPositions.read(context(c), OWNER, { tokens: [NFT], w: '90' })).positions[0].claimableSince).toBe(AURO_CLOSED_AT);
     expect((await auroClosedPositions.read(context(c), OWNER, { tokens: [NFT], w: '100' })).positions[0].claimableSince).toBe(AURO_CLOSED_AT);
   });
 
@@ -1037,9 +1047,11 @@ describe('earnium closed lp', () => {
       ['router::remove_liquidity_entry', [APT, KAPT, 'false', '500', '990', '1485', OWNER]],
     ]);
     expect(r.positions[1].steps).toEqual([]);
-    // An owner who acted after the closure is aged from that run.
-    const later = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '100', staked: '0', unlock: '0' } })), OWNER, { since: '2026-12-01T00:00:00.000Z' });
+    // LP the owner moved after the closure is aged from that call; a call in another pool does not re-date it.
+    const later = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '100', staked: '0', unlock: '0' } })), OWNER, { moved: { [POOL]: '2026-12-01T00:00:00.000Z' } });
     expect(later.positions[0].claimableSince).toBe('2026-12-01T00:00:00.000Z');
+    const other = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '100', staked: '0', unlock: '0' } })), OWNER, { moved: { [addr('e9')]: '2026-12-01T00:00:00.000Z' } });
+    expect(other.positions[0].claimableSince).toBe(EARNIUM_CLOSED_AT);
   });
 
   it('blocks a stake still locked, and leaves out LP locked forever', async () => {
