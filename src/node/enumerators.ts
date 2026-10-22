@@ -282,7 +282,7 @@ export const auroClosedEnumerator: Enumerator = {
       if (page.length < PAGE) break;
       from = page[page.length - 1].token_data_id;
     }
-    const candidates = [...owners].map(([owner, o]) => ({ owner, hint: { tokens: o.tokens.sort(), ...(Object.keys(o.changed).length ? { changed: o.changed } : {}) } }));
+    const candidates = [...owners].map(([owner, o]) => ({ owner, hint: { tokens: o.tokens.sort(), ...(Object.keys(o.changed).length ? { changed: o.changed } : {}), w: String(indexed) } }));
     // Kept whole (a few accounts per repayment, which are rare): a position the ownership index has not caught up on
     // still finds its date in a later run.
     return { candidates, cursor: JSON.stringify({ v: after, repaid }), pages };
