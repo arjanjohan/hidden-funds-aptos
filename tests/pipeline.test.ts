@@ -347,10 +347,12 @@ describe('aave enumerator', () => {
 });
 
 describe('econia enumerator', () => {
-  // Owner 1 rests an ask in market 7 (owner-controlled); owner 9's order is a custodian's and is ignored.
-  const econia = (asks: { maker: number; size: string }[]) => fakeChain({
+  // Owner 1 rests asks in market 7 (owner-controlled), and in market 8 unless told otherwise; owner 9's order is a
+  // custodian's and is ignored.
+  const econia = (asks: { maker: number; size: string; market?: string }[]) => fakeChain({
     gql: () => ({ user_transactions: [] }),
-    view: (_fn, args) => [{ asks: args[0] === '7' ? asks.map(a => ({ user: addr(a.maker), custodian_id: '0', market_id: '7', order_id: '11', remaining_size: a.size })) : [],
+    view: (_fn, args) => [{ asks: asks.filter(a => (a.market ?? '7') === args[0])
+      .map(a => ({ user: addr(a.maker), custodian_id: '0', market_id: args[0], order_id: '11', remaining_size: a.size })),
       bids: args[0] === '7' ? [{ user: addr(9), custodian_id: '6', market_id: '7', order_id: '12', remaining_size: '5' }] : [] }],
   });
 
@@ -361,13 +363,19 @@ describe('econia enumerator', () => {
     // Unchanged orders: no date.
     const same = await econiaIdleEnumerator.run(econia([{ maker: 1, size: '10' }]), first.cursor);
     expect(same.candidates).toEqual([{ owner: addr(1), hint: {} }]);
-    // Partly filled by a taker: dated from this run (the fake ledger's time).
+    // Partly filled by a taker: that market is dated from this run (the fake ledger's time).
     const partial = await econiaIdleEnumerator.run(econia([{ maker: 1, size: '4' }]), same.cursor);
-    expect(partial.candidates).toEqual([{ owner: addr(1), hint: { since: '2027-01-15T08:00:00.000Z' } }]);
+    expect(partial.candidates).toEqual([{ owner: addr(1), hint: { markets: { 7: '2027-01-15T08:00:00.000Z' } } }]);
     // Filled whole: no longer a maker, read once more with a date, then dropped.
     const gone = await econiaIdleEnumerator.run(econia([]), partial.cursor);
-    expect(gone.candidates).toEqual([{ owner: addr(1), hint: { since: '2027-01-15T08:00:00.000Z' } }]);
+    expect(gone.candidates).toEqual([{ owner: addr(1), hint: { markets: { 7: '2027-01-15T08:00:00.000Z' } } }]);
     expect((await econiaIdleEnumerator.run(econia([]), gone.cursor)).candidates).toEqual([]);
+  });
+
+  it('dates only the market whose orders filled', async () => {
+    const first = await econiaIdleEnumerator.run(econia([{ maker: 1, size: '10' }, { maker: 1, size: '3', market: '8' }]), undefined);
+    const r = await econiaIdleEnumerator.run(econia([{ maker: 1, size: '10' }, { maker: 1, size: '1', market: '8' }]), first.cursor);
+    expect(r.candidates).toEqual([{ owner: addr(1), hint: { markets: { 8: '2027-01-15T08:00:00.000Z' } } }]);
   });
 
   it('dates nobody from a cursor in an earlier shape', async () => {
@@ -387,9 +395,11 @@ describe('econia enumerator', () => {
 });
 
 describe('auro enumerator', () => {
-  // `indexed`: the account-transactions processor's watermark.
-  const auro = (indexed: string) => fakeChain({ gql: (query, vars) => {
-    if (query.includes('processor_status')) return { processor_status: [{ last_success_version: indexed, last_transaction_timestamp: '2026-10-21T00:00:00' }] };
+  // `indexed`: the account-transactions processor's watermark; `calls`: the user-transactions processor's (the same
+  // unless given).
+  const auro = (indexed: string, calls = indexed) => fakeChain({ gql: (query, vars) => {
+    if (query.includes('processor_status')) return { processor_status: [{ last_success_version: vars.p === 'user_transaction_processor' ? calls : indexed,
+      last_transaction_timestamp: '2026-10-21T00:00:00' }] };
     if (query.includes('current_token_ownerships_v2')) return { current_token_ownerships_v2: [
       { token_data_id: addr('f1'), owner_address: addr(1), last_transaction_timestamp: '2025-01-01T00:00:00' },
       { token_data_id: addr('f3'), owner_address: addr(1), last_transaction_timestamp: '2026-06-01T00:00:00' },
@@ -413,9 +423,12 @@ describe('auro enumerator', () => {
     expect((await auroClosedEnumerator.run(auro('5200000000'), r.cursor)).candidates[0].hint).toMatchObject({ changed: { [addr('f1')]: '2026-05-07T16:32:48.000Z' } });
   });
 
-  it('leaves a call the account index has not reached for a later run', async () => {
+  it('leaves a call either index has not reached for a later run', async () => {
     const early = await auroClosedEnumerator.run(auro('5050000000'), undefined);
     expect(JSON.parse(early.cursor!)).toEqual({ v: '5067106504', repaid: {} });
+    const callsBehind = await auroClosedEnumerator.run(auro('5200000000', '5050000000'), undefined);
+    expect(JSON.parse(callsBehind.cursor!)).toEqual({ v: '5067106504', repaid: {} });
+    expect(callsBehind.candidates[0].hint).toMatchObject({ w: '5050000000' });
     expect((await auroClosedEnumerator.run(auro('5200000000'), early.cursor)).candidates[0].hint).toMatchObject({ changed: { [addr('f1')]: '2026-05-07T16:32:48.000Z' } });
   });
 });
