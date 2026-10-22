@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RequestCapReached } from '../src/node/client.ts';
-import { aaveFrozenEnumerator, animeswapClosedEnumerator, canopyFrozenEnumerator, earniumClosedEnumerator, auroClosedEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
+import { aaveFrozenEnumerator, animeswapClosedEnumerator, canopyFrozenEnumerator, earniumClosedEnumerator, houstonClosedEnumerator, auroClosedEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
 import { ANIMESWAP_POOLS } from '../src/shared/sources/animeswap-closed.ts';
 import { CANOPY_REWARDS_STATE } from '../src/shared/sources/canopy-rewards.ts';
 import { fetchPrices } from '../src/node/prices.ts';
@@ -506,5 +506,29 @@ describe('canopy frozen enumerator', () => {
       { owner: addr(1), hint: { at: { [addr('51')]: '2026-10-01T00:00:00.000Z' }, w: '250000000' } },
       { owner: addr(2), hint: { v: { [addr('51')]: '200000000', [addr('53')]: '200000005' }, w: '250000000' } },
     ]);
+  });
+});
+
+describe('houston enumerator', () => {
+  it('lists everyone who added liquidity, and dates the pairs a liquidity call after the closure changed', async () => {
+    const PAIR = '<0x1::aptos_coin::AptosCoin, 0x2::c::D>', OTHER = '<0x3::e::F, 0x1::aptos_coin::AptosCoin>';
+    const W = '0x7ab72b249ec24f76fe66b6de19dcee1e3d3361db5c2cccfaa48ea8659060a1bd::position::PositionWallet';
+    const c = fakeChain({
+      gql: (query, vars) => {
+        if (query.includes('processor_status')) return { processor_status: [{ last_success_version: '7715000500', last_transaction_timestamp: '2026-10-22T00:00:00' }] };
+        // Owner 2 removed liquidity in PAIR after the closure began; its OTHER wallet did not change.
+        if (query.includes('entry_function_module_name:{_eq:"liquidity_manager"}, version')) return { user_transactions: vars.a === '7715000000'
+          ? [{ version: '7715000100', sender: addr(2), timestamp: '2026-10-22T10:00:00' }] : [] };
+        return { user_transactions: vars.f === 'add_liquidity' && vars.after === '0' ? [{ version: '5', sender: addr(1) }, { version: '6', sender: addr(2) }] : [] };
+      },
+    });
+    const wallets = { ...c, resources: async (_address: string, version?: string) => [{ type: `${W}${PAIR}`, data: { positions: [{ liquidity: version === '7715000099' ? '9' : '4' }] } },
+      { type: `${W}${OTHER}`, data: { positions: [{ liquidity: '1' }] } }] };
+    const r = await houstonClosedEnumerator.run(wallets, undefined);
+    expect(r.candidates).toEqual([
+      { owner: addr(1), hint: { w: '7715000500' } },
+      { owner: addr(2), hint: { moved: { [PAIR]: '2026-10-22T10:00:00.000Z' }, w: '7715000500' } },
+    ]);
+    expect(r.incremental).toBeFalsy();
   });
 });

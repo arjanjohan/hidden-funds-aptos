@@ -5,6 +5,7 @@ import { AMAPT_COIN } from './sources/auro-closed.ts';
 import { CANOPY_ASSETS } from './sources/canopy-frozen.ts';
 import { APT, MOVE } from './sources/delegation.ts';
 import { EDOG, GUI } from './sources/econia-idle.ts';
+import { HOUSTON_COINS } from './sources/houston-closed.ts';
 import { FROZEN_MARKETS } from './sources/echelon-frozen.ts';
 import { KAPT, STKAPT } from './sources/kofi-receipts.ts';
 import { LZ_COINS } from './sources/layerzero-claimable.ts';
@@ -33,6 +34,8 @@ export const ASSETS: Record<string, { symbol: string; decimals: number }> = {
   [PREMKL]: { symbol: 'PreMKL', decimals: 6 },
   // Coins in the AnimeSwap pools that hold ~99% of its value (whUSDC, APT and LayerZero coins are above).
   ...Object.fromEntries(ANIMESWAP_COINS.map(c => [c.coin, { symbol: c.symbol, decimals: c.decimals }])),
+  // Coins in HoustonSwap's pools.
+  ...Object.fromEntries(HOUSTON_COINS.map(c => [c.coin, { symbol: c.symbol, decimals: c.decimals }])),
   // Assets of Canopy's vaults (Movement).
   ...Object.fromEntries(CANOPY_ASSETS.map(c => [c.asset, { symbol: c.symbol, decimals: c.decimals }])),
 };

@@ -7,6 +7,7 @@ import { APT, delegation, MOVE, movementDelegation } from '../src/shared/sources
 import { EARNIUM, EARNIUM_CLOSED_AT, earniumClosedLp } from '../src/shared/sources/earnium-closed.ts';
 import { ANIMESWAP, ANIMESWAP_CLOSED_AT, ANIMESWAP_POOLS, animeswapClosedLp, isqrt, pairOf } from '../src/shared/sources/animeswap-closed.ts';
 import { AURO_CLOSED_AT, AURO_DAO, AURO_ROUTER, auroClosedPositions } from '../src/shared/sources/auro-closed.ts';
+import { burnAmounts, HOUSTON, HOUSTON_CLOSED_AT, HOUSTON_POOLS, houstonClosedLp, sqrtPriceAt, tickOf } from '../src/shared/sources/houston-closed.ts';
 import { echelonFrozenMarkets, FROZEN_MARKETS } from '../src/shared/sources/echelon-frozen.ts';
 import { ECONIA, ECONIA_ARCHIVED_AT, ECONIA_COINS, econiaIdleAccounts } from '../src/shared/sources/econia-idle.ts';
 import { ASSETS } from '../src/shared/assets.ts';
@@ -1174,5 +1175,69 @@ describe('canopy frozen vaults', () => {
 
   it('leaves out a vault that is open to deposits', async () => {
     expect((await canopyFrozenVaults.read(context(chain({ [SUSDA]: { wallet: '7', open: true } })), OWNER)).positions).toEqual([]);
+  });
+});
+
+describe('houston closed lp', () => {
+  const USDC_COIN = '0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC';
+  const PAIR = `<0x1::aptos_coin::AptosCoin, ${USDC_COIN}>`;
+  const neg = (t: number) => ((1n << 63n) + BigInt(t)).toString();
+  const Q64 = 2 ** 64;
+  // Float references: √(1.0001^tick), and the burn amounts of liquidity L over [a, b) at price p.
+  const sqrtF = (t: number) => 1.0001 ** (t / 2);
+  const close = (got: bigint, want: number) => expect(Math.abs(Number(got) - want) / Math.max(want, 1)).toBeLessThan(1e-9);
+
+  it('decodes signed ticks and prices them like 1.0001^tick', () => {
+    expect([tickOf('120'), tickOf(neg(120)), tickOf('0')]).toEqual([120n, -120n, 0n]);
+    expect(sqrtPriceAt(0n)).toBe(1n << 64n);
+    for (const t of [1, 120, 27660, -58680, 443580, -443580]) close(sqrtPriceAt(BigInt(t)), sqrtF(t) * Q64);
+  });
+
+  it('splits a range into its two coins by where the price sits', () => {
+    const L = 10n ** 12n, [a, b] = [-1200, 2400];
+    const below = burnAmounts(L, BigInt(a), BigInt(b), -5000n, sqrtPriceAt(-5000n));
+    close(below[0], 1e12 * (sqrtF(b) - sqrtF(a)) / (sqrtF(a) * sqrtF(b)));
+    expect(below[1]).toBe(0n);
+    const above = burnAmounts(L, BigInt(a), BigInt(b), 9000n, sqrtPriceAt(9000n));
+    expect(above[0]).toBe(0n);
+    close(above[1], 1e12 * (sqrtF(b) - sqrtF(a)));
+    const p = sqrtF(300), inside = burnAmounts(L, BigInt(a), BigInt(b), 300n, sqrtPriceAt(300n));
+    close(inside[0], 1e12 * (sqrtF(b) - p) / (p * sqrtF(b)));
+    close(inside[1], 1e12 * (p - sqrtF(a)));
+  });
+
+  const position = (o: { id?: string; liquidity?: string; owedX?: string } = {}) => ({ id: o.id ?? '3', lower_tick: { v: neg(1200) }, upper_tick: { v: '2400' }, fee_tier: '0',
+    liquidity: o.liquidity ?? '1000000000000', tokens_owed_x: o.owedX ?? '0', tokens_owed_y: '0', tokens_stored_x: { value: '0' }, tokens_stored_y: { value: '0' } });
+  const wallet = (positions: unknown[]) => [{ type: `${HOUSTON}::position::PositionWallet${PAIR}`, data: { positions } }, { type: '0x1::account::Account', data: {} }];
+  // The pool sits at tick 300; reserves cover the default position unless told otherwise.
+  const chain = (positions: unknown[], reserveY = '10000000000000') => fakeChain({
+    resources: () => wallet(positions),
+    resource: (address, type) => address === HOUSTON_POOLS && type === `${HOUSTON}::pool::Pool${PAIR}` ? { fee_tier: { data: [{ key: '0', value: {
+      tick_latest: { v: '300' }, sqrt_price_latest: { v: sqrtPriceAt(300n).toString() }, reserve_x: { value: '10000000000000' }, reserve_y: { value: reserveY } } }] } } : null,
+  });
+
+  it('counts each coin of a position at its burn amount from the closure, removed whole with a 1% minimum', async () => {
+    const r = await houstonClosedLp.read(context(chain([position({ owedX: '7' })])), OWNER, { w: '100' });
+    expect(r.complete).toBe(true);
+    const [x, y] = burnAmounts(10n ** 12n, -1200n, 2400n, 300n, sqrtPriceAt(300n));
+    expect(r.positions.map(p => [p.asset, p.expectedPayout[0].raw])).toEqual([[APT, String(x + 7n)], [USDC_COIN, String(y)]]);
+    expect(r.positions[0]).toMatchObject({ status: 'recoverable', claimableSince: HOUSTON_CLOSED_AT, ageBasis: 'protocol_closure', locator: `${PAIR}#3`,
+      steps: [{ function: `${HOUSTON}::liquidity_manager::remove_liquidity${PAIR}`,
+        arguments: [OWNER, neg(1200), '2400', '0', '1000000000000', String(x * 99n / 100n), String(y * 99n / 100n), '18446744073709551615'] }] });
+    expect(r.positions[1].steps).toEqual([]);
+  });
+
+  it('blocks a position its pool cannot pay, and leaves the age unknown for a pair that changed after the scans', async () => {
+    const short = await houstonClosedLp.read(context(chain([position()], '5')), OWNER);
+    expect(short.positions.map(p => [p.status, p.blockers[0]?.code, p.expectedPayout])).toEqual([['blocked', 'reserve_short', []], ['blocked', 'reserve_short', []]]);
+    // At version 90 (the scans') the wallet held a smaller position.
+    const c = chain([position()]);
+    const at90 = { ...c, resources: async (address: string, version?: string) => version === '90' ? wallet([position({ liquidity: '5' })]) : c.resources(address) };
+    expect((await houstonClosedLp.read(context(at90), OWNER, { w: '90' })).positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined });
+    const same = { ...c, resources: async (address: string) => c.resources(address) };
+    expect((await houstonClosedLp.read(context(same), OWNER, { w: '90' })).positions[0].claimableSince).toBe(HOUSTON_CLOSED_AT);
+    // A pair changed after the closure is aged from that change.
+    const later = await houstonClosedLp.read(context(c), OWNER, { moved: { [PAIR]: '2026-12-01T00:00:00.000Z' } });
+    expect(later.positions[0].claimableSince).toBe('2026-12-01T00:00:00.000Z');
   });
 });

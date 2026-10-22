@@ -91,6 +91,8 @@ export interface ChainReader {
   view(fn: string, args: unknown[], typeArgs?: string[], ledgerVersion?: string): Promise<any[]>;
   /** Null when the resource does not exist. */
   resource(address: string, type: string, ledgerVersion?: string): Promise<any | null>;
+  /** Every resource of an account (`[]` when it has none); null when they do not fit one page. */
+  resources(address: string, ledgerVersion?: string): Promise<{ type: string; data: any }[] | null>;
   /** Account authentication key and sequence number; null when the address has no account. */
   account(address: string): Promise<{ authentication_key: string; sequence_number: string } | null>;
   /** A table entry; null when the key is absent. */
