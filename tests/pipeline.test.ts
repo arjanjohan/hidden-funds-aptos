@@ -452,22 +452,29 @@ describe('animeswap enumerator', () => {
 });
 
 describe('earnium enumerator', () => {
-  it('lists everyone who added or staked liquidity and every wallet holding LP; dates calls after the closure and LP changes', async () => {
-    const POOL = addr('e1');
+  it('lists everyone who added or staked liquidity and every wallet holding LP; dates the pools whose LP a call after the closure moved', async () => {
+    const POOL = addr('e1'), OTHER = addr('e2');
     const c = fakeChain({
-      view: () => [[{ inner: POOL }]],
-      gql: (query, vars) => query.includes('current_fungible_asset_balances')
-        ? { current_fungible_asset_balances: vars.a === POOL && vars.s === '' ? [{ owner_address: addr(3), storage_id: addr('a3'), last_transaction_timestamp: '2026-11-01T00:00:00' }] : [] }
-        : { user_transactions: vars.f === 'stake' && vars.after === '0' ? [{ version: '5', sender: addr(1) }]
-          : vars.f === 'unstake' && vars.after === '7706000000' ? [{ version: '7706000100', sender: addr(2) }] : [] },
+      view: () => [[{ inner: POOL }, { inner: OTHER }]],
+      gql: (query, vars) => {
+        if (query.includes('processor_status')) return { processor_status: [{ last_success_version: '7706000500', last_transaction_timestamp: '2026-10-21T00:00:00' }] };
+        if (query.includes('current_fungible_asset_balances')) return { current_fungible_asset_balances: vars.a === POOL && vars.s === ''
+          ? [{ owner_address: addr(3), storage_id: addr('a3'), last_transaction_timestamp: '2026-11-01T00:00:00' }] : [] };
+        // Owner 2 unstaked from POOL (its LP moved), then claimed rewards (no LP moved); owner 4's call is past the watermark.
+        if (query.includes('fungible_asset_activities')) return { fungible_asset_activities: vars.v === '7706000100' ? [{ asset_type: POOL }, { asset_type: POOL }] : [] };
+        if (query.includes('_or:')) return { user_transactions: vars.a === '7706000000' ? [{ version: '7706000100', sender: addr(2), timestamp: '2026-10-21T10:00:00' },
+          { version: '7706000200', sender: addr(2), timestamp: '2026-10-21T11:00:00' }, ...(BigInt(vars.w as string) >= 7_706_000_600n ? [{ version: '7706000600', sender: addr(4), timestamp: '2026-10-21T12:00:00' }] : [])] : [] };
+        return { user_transactions: vars.f === 'stake' && vars.after === '0' ? [{ version: '5', sender: addr(1) }, { version: '6', sender: addr(2) }] : [] };
+      },
     });
     const r = await earniumClosedEnumerator.run(c, undefined);
     expect(r.candidates).toEqual([
       { owner: addr(1), hint: {} },
-      { owner: addr(2), hint: { since: '2027-01-15T08:00:00.000Z' } },
+      { owner: addr(2), hint: { moved: { [POOL]: '2026-10-21T10:00:00.000Z' } } },
       // Holds LP it never added or staked itself (a transfer in).
       { owner: addr(3), hint: { lps: { [POOL]: '2026-11-01T00:00:00.000Z' } } },
     ]);
+    expect(JSON.parse(r.cursor!)).toMatchObject({ v: '7706000200' });
     expect(r.incremental).toBe(true);
   });
 });
