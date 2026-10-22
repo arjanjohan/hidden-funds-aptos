@@ -1,6 +1,7 @@
-// APT escrowed in expired Topaz NFT bids that were never cancelled. Topaz ceased operations on 2024-08-21; a bid's APT
-// stays in Topaz's tables until the bidder cancels it, also after its deadline. A bid whose deadline has not passed can
-// still be filled by calling the contract, so it is an open order (rule R4) and is not counted:
+// APT escrowed in Topaz NFT bids that were never cancelled. Topaz ceased operations on 2024-08-21; a bid's APT stays in
+// Topaz's tables until the bidder cancels it, also after its deadline. Expired bids have ended (aged from the deadline).
+// Bids not yet expired are open orders, which count too since Topaz is closed (R4, decided 2026-10-21): aged from the
+// shutdown when placed before it, unknown otherwise (bid ids are sequential, so the id tells):
 // - collection bids: collection_marketplace::Bids<APT> (bid id → Bid with its coins), cancel<APT>(bid id);
 // - token bids: bid_any::CoinEscrow<APT> (bid id → coins), cancel_bid<APT>(bid id).
 // Each module keeps an Index (bidder → bid ids), so a bidder's bids are found on chain without the indexer.
@@ -15,6 +16,11 @@ const SOURCE = 'topaz-bids';
 /** A bidder whose indexed bids total less than this (0.25 APT, about $1) is not verified on chain: listed as
  *  indexer_only, which keeps them out of every total. Most bids are dust. */
 export const TOPAZ_VERIFY_MIN = 25_000_000n;
+/** End of the day Topaz's notice names (it gives a date only). */
+export const TOPAZ_CLOSED_AT = '2024-08-21T23:59:59Z';
+/** Each module's MarketplaceData.nonce at version 1,642,611,992 (the shutdown day): bid ids below it were placed before;
+ *  bids placed later that day have higher ids, so their age stays unknown. */
+export const TOPAZ_NONCE_AT_CLOSE = { c: 312_038n, a: 271_091n };
 
 export const TOPAZ_KINDS = {
   c: { label: 'collection-bid', index: `${TOPAZ}::collection_marketplace::Index`, store: `${TOPAZ}::collection_marketplace::Bids<${APT_COIN}>`,
@@ -44,19 +50,27 @@ export function topazTables(ctx: ReadContext): Promise<Record<TopazKind, { index
 /** BCS key of a u64 table key, as the indexer stores it. */
 export const u64Key = (id: string | bigint) => '0x' + BigInt(id).toString(16).padStart(16, '0').match(/../g)!.reverse().join('');
 
+/** Deadlines are microseconds, but some bids store milliseconds, which read as 1970: a deadline before Topaz existed
+ *  (2022) is not a usable date, and the bid is treated as having none (open, aged from the shutdown). */
+const TOPAZ_FIRST_DEADLINE = Date.parse('2022-01-01T00:00:00Z') / 1000;
 /** Expired: the deadline has passed, so the bid can no longer be filled. */
 const expired = (ctx: ReadContext, deadline: number | undefined) =>
-  deadline !== undefined && deadline > 0 && deadline <= ctx.ledger.timestampSecs;   // 0: no deadline set, an open order
+  deadline !== undefined && deadline >= TOPAZ_FIRST_DEADLINE && deadline <= ctx.ledger.timestampSecs;   // 0: none set
 
-/** An expired bid's position; it ended on its deadline. */
-function position(ctx: ReadContext, owner: string, kind: TopazKind, id: string, raw: string, deadline: number, confidence: Position['confidence']): Position {
+/** A bid's age: an expired bid ended on its deadline; an open one counts from the shutdown if placed before it. */
+function age(ctx: ReadContext, kind: TopazKind, id: string, deadline: number | undefined): Pick<Position, 'claimableSince' | 'ageBasis'> {
+  if (expired(ctx, deadline)) return { claimableSince: iso(deadline!), ageBasis: 'onchain_maturity' };
+  return BigInt(id) < TOPAZ_NONCE_AT_CLOSE[kind] ? { claimableSince: TOPAZ_CLOSED_AT, ageBasis: 'protocol_closure' } : { claimableSince: undefined, ageBasis: 'unknown' };
+}
+
+/** A funded bid's position. */
+function position(ctx: ReadContext, owner: string, kind: TopazKind, id: string, raw: string, deadline: number | undefined, confidence: Position['confidence']): Position {
   const k = TOPAZ_KINDS[kind];
   const locator = `${k.label}:${id}`;
   const value = [{ asset: APT, raw }];
   return {
     ...positionIds(SOURCE, owner, locator, 'principal'), source: SOURCE, owner, locator, positionKind: 'principal', asset: APT,
-    claimableSince: confidence === 'indexer_only' ? undefined : iso(deadline),
-    ageBasis: confidence === 'indexer_only' ? 'unknown' : 'onchain_maturity',
+    ...(confidence === 'indexer_only' ? { claimableSince: undefined, ageBasis: 'unknown' as const } : age(ctx, kind, id, deadline)),
     provenance: { reader: confidence === 'indexer_only' ? 'indexer current_table_items' : `${k.store}`, ledgerVersion: ctx.ledger.version },
     grossClaim: value, expectedPayout: value, payoutBasis: 'view', status: 'recoverable', blockers: [],
     confidence, observedAt: iso(ctx.ledger.timestampSecs),
@@ -69,9 +83,9 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: TopazHint): Pro
   const version = ctx.ledger.version;
   const kinds = Object.keys(TOPAZ_KINDS) as TopazKind[];
   if (hint) {
-    const ended = kinds.flatMap(k => Object.entries(hint[k] ?? {}).filter(([, b]) => BigInt(b.raw) > 0n && expired(ctx, b.deadline)).map(([id, b]) => ({ k, id, b })));
-    if (ended.reduce((s, e) => s + BigInt(e.b.raw), 0n) < TOPAZ_VERIFY_MIN) {
-      const positions = ended.map(e => position(ctx, owner, e.k, e.id, e.b.raw, e.b.deadline!, 'indexer_only'));
+    const funded = kinds.flatMap(k => Object.entries(hint[k] ?? {}).filter(([, b]) => BigInt(b.raw) > 0n).map(([id, b]) => ({ k, id, b })));
+    if (funded.reduce((s, e) => s + BigInt(e.b.raw), 0n) < TOPAZ_VERIFY_MIN) {
+      const positions = funded.map(e => position(ctx, owner, e.k, e.id, e.b.raw, e.b.deadline, 'indexer_only'));
       return { positions, complete: true, errors: [], ledgerVersion: version };
     }
   }
@@ -82,10 +96,10 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: TopazHint): Pro
     const tables = await topazTables(ctx);
     for (const kind of kinds) {
       const k = TOPAZ_KINDS[kind];
-      // With the enumeration hint, only the bids it lists as funded and expired are read (a deadline never changes,
-      // and escrow only shrinks). Without one (the check page), the bidder's ids come from Topaz's own index.
+      // With the enumeration hint, only the bids it lists as funded are read (escrow only shrinks). Without one (the
+      // check page), the bidder's ids come from Topaz's own index.
       const candidates: { id: string; deadline?: number }[] = hint
-        ? Object.entries(hint[kind] ?? {}).filter(([, b]) => BigInt(b.raw) > 0n && (b.deadline === undefined || expired(ctx, b.deadline))).map(([id, b]) => ({ id, deadline: b.deadline }))
+        ? Object.entries(hint[kind] ?? {}).filter(([, b]) => BigInt(b.raw) > 0n).map(([id, b]) => ({ id, deadline: b.deadline }))
         : ((await ctx.chain.tableItem(tables[kind].index, 'address', 'vector<u64>', owner, version)) ?? []).map((id: unknown) => ({ id: String(id) }));
       const found = await mapLimit(candidates, 3, async ({ id, deadline: known }): Promise<Position | null> => {
         try {
@@ -101,8 +115,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: TopazHint): Pro
           // Topaz's per-bidder index lists some ids under the wrong bidder (ids 1, 4 and 9 under several), so a bid
           // counts only when its own record names this owner. Hinted token bids carry their buyer from enumeration.
           if (buyer !== undefined ? normalizeAddress(buyer) !== owner : !hint) return null;
-          if (!expired(ctx, deadline)) return null;   // an open order (R4), or no deadline to tell
-          return position(ctx, owner, kind, id, raw.toString(), deadline!, 'verified_view');
+          return position(ctx, owner, kind, id, raw.toString(), deadline, 'verified_view');
         } catch (err) {
           failed++;
           errors.push(`${k.label} ${id}: ${String(err).slice(0, 200)}`);
@@ -121,18 +134,20 @@ export const topazBids: SourceDef<TopazHint> = {
   id: SOURCE,
   chain: 'aptos',
   protocol: 'Topaz',
-  title: 'Expired Topaz NFT bid never cancelled',
-  summary: 'Topaz, an Aptos NFT marketplace, shut down in August 2024. APT you put into a bid stays in Topaz\'s contract after the bid expires, until you cancel it.',
+  title: 'Topaz NFT bid never cancelled',
+  summary: 'Topaz, an Aptos NFT marketplace, shut down in August 2024. APT you put into a bid stays in Topaz\'s contract, expired or not, until you cancel it.',
   category: 'closed_app',
-  inclusionRule: 'R2 ended position: the bid\'s deadline passed (and Topaz ceased operations on 2024-08-21). Bids not yet expired are open orders (R4) and are not counted.',
+  inclusionRule: 'R2: Topaz ceased operations on 2024-08-21. Expired bids have ended (aged from the deadline); bids not yet expired are open orders in a closed protocol, which count (R4, decided 2026-10-21), aged from the shutdown when placed before it.',
   protocolStatus: {
     state: 'closed',
     evidence: 'Topaz announced it ceased operations on 2024-08-21 (homepage notice; aptos.dev lists Topaz as deprecated). The contract still accepts cancels.',
     checkedAt: '2026-10-19',
-    effectiveAt: '2024-08-21T00:00:00Z',
+    effectiveAt: TOPAZ_CLOSED_AT,
   },
   refresh: { nonZero: 'monthly', zero: 'monthly' },
-  headlineAgeBases: ['onchain_maturity'],
+  // Version 2 (2026-10-21): open bids count. Stored bidders are all re-read once.
+  version: 2,
+  headlineAgeBases: ['onchain_maturity', 'protocol_closure'],
   howTo: [
     'Topaz\'s site no longer works, so cancel from the bidding account directly:',
     `collection bids: call ${TOPAZ_KINDS.c.cancel}(bid id);`,

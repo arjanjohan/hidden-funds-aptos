@@ -24,7 +24,7 @@ Sources (evidence for each in [docs/sources.md](docs/sources.md)):
 | `aave-frozen-reserves` | Aptos | Supply left in Aave's Aptos reserves once Aave freezes them under its wind-down; counts nothing until then |
 | `econia-idle-accounts` | Aptos | Coins left idle in Econia market accounts after Econia Labs archived the order book (September 2025) |
 | `auro-closed-positions` | Aptos | Collateral left in debt-free Auro Finance positions after the website shut down (April 2026) |
-| `topaz-bids` | Aptos | APT still escrowed in expired bids on Topaz, an NFT marketplace that closed in August 2024 |
+| `topaz-bids` | Aptos | APT still escrowed in bids on Topaz, an NFT marketplace that closed in August 2024 |
 | `layerzero-claimable` | Aptos | Tokens bridged in through LayerZero (lzUSDC, lzUSDT, lzWETH, lzWBTC, lzUSDD, CAKE, BTC.b) that arrived but were never claimed |
 | `movement-native-delegation` | Movement | Unstaked MOVE whose lockup ended, never withdrawn |
 | `movement-inactive-validator` | Movement | MOVE still staked with a validator that left the set |
