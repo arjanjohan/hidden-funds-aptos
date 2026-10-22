@@ -74,8 +74,8 @@ export const PROTOCOLS: ProtocolEntry[] = [
     reason: 'Aave is winding down Aptos by freezing every reserve; the source counts supply once a reserve freezes. None is frozen yet.', sources: ['aave-frozen-reserves'], defillama: 'aave-aptos' },
 
   // Waiting on a decision
-  { id: 'aries-markets', name: 'Aries Markets', chains: [...A], category: 'Lending', status: 'needs_decision', checkedAt: '2026-10-19', issue: 3,
-    reason: 'Reserves were moved out in 2026; deposits can only show as "may not work", at ~285K reads a week.', defillama: 'aries-markets' },
+  { id: 'aries-markets', name: 'Aries Markets', chains: [...A], category: 'Lending', status: 'implemented', checkedAt: '2026-10-22',
+    reason: 'Wound down in July 2026 and most reserve cash moved out: deposits are read on the check page only (decided 2026-10-22), at the protocol\'s current quote; no dashboard totals (re-reading ~455K profiles would cost ~285K reads a run).', sources: ['aries-wound-down'], defillama: 'aries-markets' },
   { id: 'portal', name: 'Wormhole (Portal)', chains: [...A], category: 'Bridge', status: 'needs_decision', checkedAt: '2026-10-19', issue: 1,
     reason: 'Transfers to Aptos never redeemed: a check-page lookup via the Wormhole API, or a pipeline source?', defillama: 'portal' },
   { id: 'layerzero-v2', name: 'LayerZero v2 OFTs and Stargate', chains: [...A, ...M], category: 'Bridge', status: 'needs_decision', checkedAt: '2026-10-19', issue: 2,

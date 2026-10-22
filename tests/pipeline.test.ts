@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RequestCapReached } from '../src/node/client.ts';
+import { SOURCES } from '../src/shared/sources/index.ts';
+import { ENUMERATORS } from '../src/node/enumerators.ts';
 import { aaveFrozenEnumerator, animeswapClosedEnumerator, canopyFrozenEnumerator, earniumClosedEnumerator, houstonClosedEnumerator, auroClosedEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
 import { ANIMESWAP_POOLS } from '../src/shared/sources/animeswap-closed.ts';
 import { CANOPY_REWARDS_STATE } from '../src/shared/sources/canopy-rewards.ts';
@@ -530,5 +532,11 @@ describe('houston enumerator', () => {
       { owner: addr(2), hint: { moved: { [PAIR]: '2026-10-22T10:00:00.000Z' }, w: '7715000500' } },
     ]);
     expect(r.incremental).toBeFalsy();
+  });
+});
+
+describe('check-only sources', () => {
+  it('have no enumerator, and every other source has one', () => {
+    for (const s of SOURCES) expect(ENUMERATORS.some(e => e.sourceId === s.id)).toBe(!s.checkOnly);
   });
 });
