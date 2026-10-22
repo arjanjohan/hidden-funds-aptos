@@ -204,6 +204,8 @@ Each source page also states the largest single wallet's share of its 90+ day to
 
 ## Sized and not added
 
+- **Aptos ecosystem directory (aptosnetwork.com/ecosystem/directory, downloaded 2026-10-22):** its 128 featured projects (up to 6 per category) were compared with this list. DeFi, bridges, marketplaces, stablecoins and payments are covered or hold no user claims: Ekiden is live (added); the rest are exchanges, custodians, on/off ramps, asset managers' tokenized funds, wallets, tooling and media. Circle's CCTP is in the bridges table.
+- **Movement's AirdropSystem (`0x4500…7f01`, 8.1M MOVE):** an operator pushes airdrops to recipients (`process_airdrop`, admin only); nothing waits for a claim, so the balance is the distributor's own.
 - **Echelon farming rewards (Aptos):** 5 of 7 reward programs have ended: USDC 2025-08-23, Amnis amAPT 2025-10-13, Kofi kAPT 2026-02-21, Goblin stAPT 2026-04-12, Thala sthAPT 2026-08-17. Unclaimed amounts are bounded by what the package holds to pay them: 3,540 USDC and 95 kAPT (~$3.6K). Reading every Echelon supplier for that is not worth it. Skipped.
 - **Echelon farming rewards (Movement):** the only reward ("Move Coin") last ran 2026-05-18 → 06-02, so every unclaimed reward is from an ended period. But Echelon holds only 296K MOVE (~$2.1K) to pay them, which caps the total. Too small for a new enumerator (stakers are senders of Echelon's `scripts::supply*`).
 - **Meridian farming (Movement):** staked LP is live principal; the extra rewards are MOVE. Not sized further.
