@@ -234,8 +234,8 @@ export const PROTOCOLS: ProtocolEntry[] = [
     reason: 'Its staking holds ~16.5M of BlueMove\'s own MOVE token (staking_move_earn_move / _nft), which sells for ~405 APT (~$315; Panora, 2026-10-22; every market together pays at most ~460 APT), so small whether or not stakes have ended.' },
   { id: 'poly-network', name: 'Poly Network', chains: [...A], category: 'Bridge', status: 'not_checked', defillama: 'poly-network', dead: '2024-09-30',
     reason: 'bridge.poly.network does not answer (2026-10-21); bridged tokens are wallet balances (R1), claim storage not checked.' },
-  { id: 'streamflow', name: 'Streamflow', chains: [...A], category: 'Payments', status: 'not_checked', defillama: 'streamflow',
-    reason: 'Live (app.streamflow.finance up, 2026-10-21); its Aptos total comes only from Streamflow\'s own stats API, contract not located.' },
+  { id: 'streamflow', name: 'Streamflow', chains: [...A], category: 'Payments', status: 'too_small', checkedAt: '2026-10-22', defillama: 'streamflow',
+    reason: 'Live, but streams that ended and were never withdrawn (an ended position) are small: in a 1-in-5 sample of its 2,869 Aptos streams (`0x9009…51b0::protocol`), 219 ended 90+ days ago with funds left, 176 of them a test coin; scaled up ~56 APT plus PROPS that Panora quotes at ~191 APT, ~$190, and two memecoins with no route anywhere.' },
   { id: 'movefast', name: 'MoveFast', chains: [...A], category: 'Launchpad', status: 'not_checked', defillama: 'movefast',
     reason: 'No official domain found (2026-10-21).' },
 
