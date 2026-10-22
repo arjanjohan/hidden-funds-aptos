@@ -109,8 +109,9 @@ export const CANOPY_ASSETS = ([
   ['0xe699e6c1733462632821b6e5b954c0ed3aa9ad1efb70b6ce92616952ade89258', 'sUSDa', 8],
 ] as [string, string, number][]).map(([address, symbol, decimals]) => ({ asset: `movement:${address}`, symbol, decimals }));
 
-/** Enumeration hint: when the owner's share store last changed (indexer), and the version its staking row last did. */
-export type CanopyFrozenHint = { at?: string; v?: string };
+/** Enumeration hint: when each of the owner's share stores last changed, by shares token (indexer), and the version its
+ *  staking row last changed. */
+export type CanopyFrozenHint = { at?: Record<string, string>; v?: string };
 
 interface VaultInfo { address: string; shares: string; asset: string }
 
@@ -167,7 +168,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: CanopyFrozenHin
       const strategies = ((map as any).data as any[]).map(e => normalizeAddress(e.key.inner));
       // Frozen, so no new deposits: aged from the freeze, or from the owner's own later change where it is known.
       const restaked = hint?.v && Number(hint.v) > (info?.frozenVersion ?? Infinity) ? await stakedAt() : null;
-      const since = info ? [info.frozenAt, hint?.at, restaked !== null ? iso(restaked) : undefined]
+      const since = info ? [info.frozenAt, hint?.at?.[token], restaked !== null ? iso(restaked) : undefined]
         .filter((d): d is string => !!d).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a)) : undefined;
       const value = [{ asset: `movement:${vault.asset}`, raw: String(assets) }];
       const check = info?.check;

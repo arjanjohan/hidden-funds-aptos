@@ -687,7 +687,7 @@ export const canopyEndedRewardsEnumerator: Enumerator = {
 
 // Canopy vault shares (Movement): every store holding a vault's shares token (the staking pool's own store left out:
 // its shares belong to the stakers), and every staker in multi_rewards (shares are staked there; the read checks which).
-// Store holders carry their store's last change, stakers their staking row's version, for aging.
+// Store holders carry each store's last change by shares token, stakers their staking row's version, for aging.
 export const canopyFrozenEnumerator: Enumerator = {
   sourceId: 'canopy-frozen-vaults',
   processor: 'fungible_asset_processor',
@@ -700,18 +700,18 @@ export const canopyFrozenEnumerator: Enumerator = {
       shares.push(...(page as any).vaults.map((v: any) => normalizeAddress(v.shares_address)));
       if ((page as any).vaults.length < 100) break;
     }
-    const hints = new Map<string, { at?: string; v?: string }>();
+    const hints = new Map<string, { at?: Record<string, string>; v?: string }>();
     let pages = 1;
     let after = '';
     for (;;) {
       const rows = (await chain.gql(`query($a:[String!]!,$s:String!){ current_fungible_asset_balances(where:{asset_type:{_in:$a}, amount:{_gt:"0"},
-        storage_id:{_gt:$s}}, order_by:{storage_id:asc}, limit:${PAGE}){ owner_address storage_id last_transaction_timestamp } }`, { a: shares, s: after })).current_fungible_asset_balances;
+        storage_id:{_gt:$s}}, order_by:{storage_id:asc}, limit:${PAGE}){ owner_address asset_type storage_id last_transaction_timestamp } }`, { a: shares, s: after })).current_fungible_asset_balances;
       pages++;
       for (const r of rows) {
-        const owner = normalizeAddress(r.owner_address);
+        const owner = normalizeAddress(r.owner_address), token = normalizeAddress(r.asset_type);
         if (owner === CANOPY_REWARDS_STATE) continue;
         const at = new Date(r.last_transaction_timestamp + 'Z').toISOString(), prev = hints.get(owner) ?? {};
-        if (!prev.at || at > prev.at) hints.set(owner, { ...prev, at });
+        if (!prev.at?.[token] || at > prev.at[token]) hints.set(owner, { ...prev, at: { ...prev.at, [token]: at } });
       }
       if (rows.length < PAGE) break;
       after = rows[rows.length - 1].storage_id;

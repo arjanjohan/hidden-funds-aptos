@@ -469,11 +469,11 @@ describe('canopy frozen enumerator', () => {
         // The staking table, walked in 16 key ranges: both stakers sit in the first.
         ? { current_table_items: vars.a === '0x0' ? [{ key: addr(1), last_transaction_version: '7' }, { key: addr(2), last_transaction_version: '9' }] : [] }
         : { current_fungible_asset_balances: [
-          { owner_address: addr(1), storage_id: addr('a1'), last_transaction_timestamp: '2026-10-01T00:00:00' },
-          { owner_address: CANOPY_REWARDS_STATE, storage_id: addr('a2'), last_transaction_timestamp: '2026-10-01T00:00:00' }] },
+          { owner_address: addr(1), asset_type: addr('51'), storage_id: addr('a1'), last_transaction_timestamp: '2026-10-01T00:00:00' },
+          { owner_address: CANOPY_REWARDS_STATE, asset_type: addr('51'), storage_id: addr('a2'), last_transaction_timestamp: '2026-10-01T00:00:00' }] },
     });
     expect((await canopyFrozenEnumerator.run(c, undefined)).candidates).toEqual([
-      { owner: addr(1), hint: { at: '2026-10-01T00:00:00.000Z', v: '7' } },
+      { owner: addr(1), hint: { at: { [addr('51')]: '2026-10-01T00:00:00.000Z' }, v: '7' } },
       { owner: addr(2), hint: { v: '9' } },
     ]);
   });

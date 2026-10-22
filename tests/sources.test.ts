@@ -1092,7 +1092,7 @@ describe('canopy frozen vaults', () => {
 
   it('counts shares in the wallet and staked in a frozen vault, unstaking first; blocked where withdrawing aborts', async () => {
     // The staking row (version 5) changed long before the freeze, so its time is not looked up.
-    const r = await canopyFrozenVaults.read(context(chain({ [MOVE0]: { wallet: '50', staked: '100' } })), OWNER, { at: '2026-01-01T00:00:00.000Z', v: '5' });
+    const r = await canopyFrozenVaults.read(context(chain({ [MOVE0]: { wallet: '50', staked: '100' } })), OWNER, { at: { [share(MOVE0)]: '2026-01-01T00:00:00.000Z' }, v: '5' });
     expect(r.complete).toBe(true);
     expect(r.positions).toHaveLength(1);
     expect(r.positions[0]).toMatchObject({ locator: MOVE0, status: 'blocked', blockers: [{ code: 'withdrawal_aborts' }], grossClaim: [{ raw: '300' }], expectedPayout: [],
@@ -1102,8 +1102,11 @@ describe('canopy frozen vaults', () => {
   });
 
   it('is recoverable where withdrawing works, aged from a later change of the owner\'s shares', async () => {
-    const r = await canopyFrozenVaults.read(context(chain({ [SUSDA]: { wallet: '7' } })), OWNER, { at: '2026-10-20T00:00:00.000Z' });
+    const r = await canopyFrozenVaults.read(context(chain({ [SUSDA]: { wallet: '7' } })), OWNER, { at: { [share(SUSDA)]: '2026-10-20T00:00:00.000Z' } });
     expect(r.positions[0]).toMatchObject({ status: 'recoverable', expectedPayout: [{ raw: '14' }], claimableSince: '2026-10-20T00:00:00.000Z' });
+    // A change to another vault's shares does not re-date this one.
+    const other = await canopyFrozenVaults.read(context(chain({ [SUSDA]: { wallet: '7' } })), OWNER, { at: { [share(MOVE0)]: '2026-10-20T00:00:00.000Z' } });
+    expect(other.positions[0].claimableSince).toBe('2026-10-16T14:40:46Z');
     expect(r.positions[0].steps).toHaveLength(1);
     // MovePosition strategies need a price packet the Canopy app supplies; counted as recoverable.
     const packet = await canopyFrozenVaults.read(context(chain({ [RSETH]: { staked: '3' } })), OWNER, {});
