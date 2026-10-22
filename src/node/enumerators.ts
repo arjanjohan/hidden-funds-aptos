@@ -689,12 +689,17 @@ export const canopyEndedRewardsEnumerator: Enumerator = {
 
 // Canopy vault shares (Movement): every store holding a vault's shares token (the staking pool's own store left out:
 // its shares belong to the stakers), and every staker in multi_rewards (shares are staked there; the read checks which).
-// Store holders carry each store's last change by shares token, stakers their staking row's version, for aging.
+// Store holders carry each store's last change by shares token, stakers the version of their last stake or withdrawal
+// by shares token (from multi_rewards' events since the first freeze: the staking row is one per staker, so its version
+// does not say which shares changed), for aging.
+const CANOPY_STAKES_FROM = 156_180_000;   // just before the first freeze (2026-06-16)
+const STAKE_EVENTS_QUERY = `query($t:[String!]!,$v:bigint!,$i:bigint!){ events(where:{indexed_type:{_in:$t}, _or:[{transaction_version:{_gt:$v}},
+  {transaction_version:{_eq:$v}, event_index:{_gt:$i}}]}, order_by:[{transaction_version:asc},{event_index:asc}], limit:${PAGE}){ transaction_version event_index data } }`;
 export const canopyFrozenEnumerator: Enumerator = {
   sourceId: 'canopy-frozen-vaults',
   processor: 'fungible_asset_processor',
-  alsoProcessors: ['default_processor'],
-  scope: `stores holding any ${CANOPY_VAULTS}::vault shares token (current_fungible_asset_balances), plus stakers in ${CANOPY_REWARDS}::multi_rewards (user_staked_balances)`,
+  alsoProcessors: ['default_processor', 'events_processor'],
+  scope: `stores holding any ${CANOPY_VAULTS}::vault shares token (current_fungible_asset_balances), plus stakers in ${CANOPY_REWARDS}::multi_rewards (user_staked_balances) with their stakes and withdrawals from version ${CANOPY_STAKES_FROM}`,
   async run(chain) {
     const shares: string[] = [];
     for (let offset = 0; ; offset += 100) {
@@ -702,7 +707,7 @@ export const canopyFrozenEnumerator: Enumerator = {
       shares.push(...(page as any).vaults.map((v: any) => normalizeAddress(v.shares_address)));
       if ((page as any).vaults.length < 100) break;
     }
-    const hints = new Map<string, { at?: Record<string, string>; v?: string }>();
+    const hints = new Map<string, { at?: Record<string, string>; v?: Record<string, string> }>();
     let pages = 1;
     let after = '';
     for (;;) {
@@ -723,9 +728,23 @@ export const canopyFrozenEnumerator: Enumerator = {
     const table = await tableRows(chain, normalizeAddress(state.user_staked_balances.handle), undefined);
     for (const r of table.rows) {
       const owner = normalizeAddress(r.key);
-      hints.set(owner, { ...hints.get(owner), v: String(r.last_transaction_version) });
+      hints.set(owner, hints.get(owner) ?? {});
     }
-    return { candidates: [...hints].map(([owner, hint]) => ({ owner, hint })), pages: pages + table.pages };
+    pages += table.pages;
+    let v = String(CANOPY_STAKES_FROM), i = '-1';
+    for (;;) {
+      const events = (await chain.gql(STAKE_EVENTS_QUERY, { t: ['StakeEvent', 'WithdrawEvent', 'EmergencyWithdrawEvent'].map(e => `${CANOPY_REWARDS}::multi_rewards::${e}`), v, i })).events;
+      pages++;
+      for (const e of events) {
+        const owner = normalizeAddress(e.data.user), token = normalizeAddress(e.data.staking_token.inner), h = hints.get(owner);
+        // Owners neither staking nor holding shares now have nothing to age.
+        if (h) hints.set(owner, { ...h, v: { ...h.v, [token]: String(e.transaction_version) } });
+      }
+      if (events.length < PAGE) break;
+      const last = events[events.length - 1];
+      v = String(last.transaction_version); i = String(last.event_index);
+    }
+    return { candidates: [...hints].map(([owner, hint]) => ({ owner, hint })), pages };
   },
   sanity: async () => ({ check: 'none', ok: null, detail: 'no contract total: shares are spread over wallets and the staking pool' }),
 };

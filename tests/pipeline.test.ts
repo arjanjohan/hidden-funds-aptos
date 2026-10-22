@@ -481,20 +481,25 @@ describe('earnium enumerator', () => {
 });
 
 describe('canopy frozen enumerator', () => {
-  it('lists share holders with their store\'s last change and stakers with their row version, leaving out the staking pool', async () => {
+  it('lists share holders with their store\'s last change and stakers with their last stake or withdrawal by shares token, leaving out the staking pool', async () => {
     const c = fakeChain({
       view: () => [{ vaults: [{ shares_address: addr('51'), vault_address: addr('52') }] }],
       resource: () => ({ user_staked_balances: { handle: addr('99') } }),
       gql: (query, vars) => query.includes('current_table_items')
         // The staking table, walked in 16 key ranges: both stakers sit in the first.
         ? { current_table_items: vars.a === '0x0' ? [{ key: addr(1), last_transaction_version: '7' }, { key: addr(2), last_transaction_version: '9' }] : [] }
+        : query.includes('events')
+        // Owner 2 staked shares 51, then withdrew shares 53; owner 3 has left (neither staking nor holding).
+        ? { events: vars.v === '156180000' ? [{ transaction_version: '200000000', event_index: 0, data: { user: addr(2), staking_token: { inner: addr('51') } } },
+          { transaction_version: '200000005', event_index: 1, data: { user: addr(2), staking_token: { inner: addr('53') } } },
+          { transaction_version: '200000006', event_index: 0, data: { user: addr(3), staking_token: { inner: addr('51') } } }] : [] }
         : { current_fungible_asset_balances: [
           { owner_address: addr(1), asset_type: addr('51'), storage_id: addr('a1'), last_transaction_timestamp: '2026-10-01T00:00:00' },
           { owner_address: CANOPY_REWARDS_STATE, asset_type: addr('51'), storage_id: addr('a2'), last_transaction_timestamp: '2026-10-01T00:00:00' }] },
     });
     expect((await canopyFrozenEnumerator.run(c, undefined)).candidates).toEqual([
-      { owner: addr(1), hint: { at: { [addr('51')]: '2026-10-01T00:00:00.000Z' }, v: '7' } },
-      { owner: addr(2), hint: { v: '9' } },
+      { owner: addr(1), hint: { at: { [addr('51')]: '2026-10-01T00:00:00.000Z' } } },
+      { owner: addr(2), hint: { v: { [addr('51')]: '200000000', [addr('53')]: '200000005' } } },
     ]);
   });
 });

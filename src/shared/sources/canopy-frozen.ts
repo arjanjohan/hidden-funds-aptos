@@ -109,9 +109,9 @@ export const CANOPY_ASSETS = ([
   ['0xe699e6c1733462632821b6e5b954c0ed3aa9ad1efb70b6ce92616952ade89258', 'sUSDa', 8],
 ] as [string, string, number][]).map(([address, symbol, decimals]) => ({ asset: `movement:${address}`, symbol, decimals }));
 
-/** Enumeration hint: when each of the owner's share stores last changed, by shares token (indexer), and the version its
- *  staking row last changed. */
-export type CanopyFrozenHint = { at?: Record<string, string>; v?: string };
+/** Enumeration hint, by shares token: when the owner's share store last changed (`at`, indexer), and the version of its
+ *  last stake or withdrawal of those shares in Canopy's rewards pools (`v`). */
+export type CanopyFrozenHint = { at?: Record<string, string>; v?: Record<string, string> };
 
 interface VaultInfo { address: string; shares: string; asset: string }
 
@@ -149,8 +149,8 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: CanopyFrozenHin
     // Shares in the wallet: from the indexer, checked on chain below. An enumerated owner without a store time holds none.
     const held = hint && !hint.at ? [] : await gqlAll(ctx.chain, SHARES_QUERY, { o: owner, a: [...vaults.keys()] }, 'current_fungible_asset_balances', 'storage_id');
     const inWallet = new Set(held.map((r: any) => normalizeAddress(r.asset_type)));
-    // The staking row's time, looked up only when it changed after a vault's freeze (rare).
-    const stakedAt = () => once(ctx, `canopy-row:${owner}:${hint?.v}`, () => transactionTime(ctx.chain, hint!.v!));
+    // A stake or withdrawal's time, looked up only when it came after the vault's freeze (rare).
+    const stakedAt = (v: string) => once(ctx, `canopy-tx:${v}`, () => transactionTime(ctx.chain, v));
     const found = await mapLimit([...new Set([...stakedTokens, ...inWallet])], 4, async (token): Promise<Position[]> => {
       const vault = vaults.get(token)!;
       if (!(await frozen(ctx, vault.address))) return [];
@@ -167,7 +167,8 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: CanopyFrozenHin
       const info = FROZEN_VAULTS.get(vault.address);
       const strategies = ((map as any).data as any[]).map(e => normalizeAddress(e.key.inner));
       // Frozen, so no new deposits: aged from the freeze, or from the owner's own later change where it is known.
-      const restaked = hint?.v && Number(hint.v) > (info?.frozenVersion ?? Infinity) ? await stakedAt() : null;
+      const stakeChange = hint?.v?.[token];
+      const restaked = stakeChange && Number(stakeChange) > (info?.frozenVersion ?? Infinity) ? await stakedAt(stakeChange) : null;
       const since = info ? [info.frozenAt, hint?.at?.[token], restaked !== null ? iso(restaked) : undefined]
         .filter((d): d is string => !!d).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a)) : undefined;
       const value = [{ asset: `movement:${vault.asset}`, raw: String(assets) }];
