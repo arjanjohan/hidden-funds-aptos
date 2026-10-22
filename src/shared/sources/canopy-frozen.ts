@@ -76,6 +76,9 @@ const BLOCKED: Record<string, string> = {
 };
 
 /** Display identity of the vaults' assets other than MOVE (symbol from the vault's name, decimals from the vault). */
+/** Kelp's rsETH on Movement (priced: CoinGecko lists this address). */
+export const RSETH = '0x51ffc9885233adf3dd411078cad57535ed1982013dc82d9d6c433a55f2e0035d';
+
 export const CANOPY_ASSETS = ([
   ['0x83121c9f9b0527d1f056e21a950d6bf3b9e9e2e8353d0e95ccea726713cbea39', 'USDC.e', 6],
   ['0x447721a30109c662dde9c73a0c2c9c9c459fb5e5a9c92f03c50fa69737f5d08d', 'USDT.e', 6],

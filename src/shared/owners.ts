@@ -13,11 +13,11 @@ export async function ownerKind(ctx: ReadContext, owner: string): Promise<OwnerK
   const key = `owner-kind:${owner}`;
   const cached = await ctx.memo.get(key);
   if (cached) return cached as OwnerKind;
-  const account = await ctx.chain.account(owner);
-  // Objects have no account resource. An address with neither is a key-derived account that never sent a transaction.
-  const kind: OwnerKind = account
-    ? (ZERO_KEY.test(account.authentication_key) ? 'resource_account' : 'user')
-    : (await ctx.chain.resource(owner, '0x1::object::ObjectCore')) ? 'object' : 'user';
+  // An object can also carry an account resource (to hold coins), with its own address as the key; nobody holds a key
+  // for an object address, so ObjectCore decides first. An address with neither is a key-derived account that never
+  // sent a transaction.
+  const [account, core] = await Promise.all([ctx.chain.account(owner), ctx.chain.resource(owner, '0x1::object::ObjectCore')]);
+  const kind: OwnerKind = core ? 'object' : account && ZERO_KEY.test(account.authentication_key) ? 'resource_account' : 'user';
   await ctx.memo.set(key, kind);
   return kind;
 }

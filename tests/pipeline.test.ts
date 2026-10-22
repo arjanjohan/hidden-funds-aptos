@@ -126,12 +126,12 @@ describe('market evidence', () => {
 });
 
 describe('owner rule', () => {
-  it('keeps positions held by a resource account visible but unknown', async () => {
+  it('keeps positions held by a resource account visible, as contract-held', async () => {
     const state = new State(':memory:');
     await runSource(source(async o => ({ positions: [position(o)], complete: true, errors: [], ledgerVersion: '1' })),
       enumerator([addr(1)]), state, chain(freshWatermark, '0x' + '0'.repeat(64)), { hit: false });
     const [p] = state.positionsOf('t');
-    expect(p.status).toBe('unknown');
+    expect(p.status).toBe('contract_held');
     expect(p.blockers.map(b => b.code)).toEqual(['unsupported_owner']);
   });
 

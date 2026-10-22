@@ -9,7 +9,10 @@ const statuses = [
   ['recoverable', 'You can claim'],
   ['team_gated', 'Needs the team'],
   ['blocked', 'May not work'],
+  ['contract_held', 'Held by a contract'],
 ] as const;
+// Snapshots from before a status existed have no bucket for it.
+const EMPTY = { usd: 0, positions: 0, unpriced: 0 };
 const views = [
   { key: 'both', label: 'Both', sources: snapshot?.sources ?? [] },
   { key: 'aptos', label: 'Aptos', sources: (snapshot?.sources ?? []).filter(s => s.chain === 'aptos') },
@@ -40,9 +43,9 @@ const views = [
         {statuses.map(([key, label]) => (
           <div class="card">
             <span class="muted">{label}</span>
-            <b>{usd(snapshot.sources.reduce((s, x) => s + x.totals.byStatus[key].usd, 0))}</b>
-            <span class="muted">{count(snapshot.sources.reduce((s, x) => s + x.totals.byStatus[key].positions, 0))} positions{(() => {
-              const unpriced = snapshot.sources.reduce((s, x) => s + x.totals.byStatus[key].unpriced, 0);
+            <b>{usd(snapshot.sources.reduce((s, x) => s + (x.totals.byStatus[key] ?? EMPTY).usd, 0))}</b>
+            <span class="muted">{count(snapshot.sources.reduce((s, x) => s + (x.totals.byStatus[key] ?? EMPTY).positions, 0))} positions{(() => {
+              const unpriced = snapshot.sources.reduce((s, x) => s + (x.totals.byStatus[key] ?? EMPTY).unpriced, 0);
               return unpriced ? `, ${count(unpriced)} without a price (not in this value)` : '';
             })()}</span>
           </div>

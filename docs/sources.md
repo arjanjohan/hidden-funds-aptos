@@ -29,9 +29,9 @@ Native delegation and Thala are documented in [phase0-report.md](https://github.
 
 **Owner rule (all sources):** after each read, the pipeline classifies the owner once and memoizes it.
 - An account with a zero authentication key is a **resource account**, controlled by a program.
-- An address with no account resource but with `ObjectCore` is an **object**.
-- Positions held by either type stay listed but become `unknown`, with blocker `unsupported_owner`, so they never reach the headline.
-- The cost is 1 request per ordinary owner, ever.
+- An address with `ObjectCore` is an **object**, also when it carries an account resource too (objects do, to hold coins, with their own address as the key; nobody holds a key for an object address). Until 2026-10-22 such objects were taken for ordinary accounts; Canopy's rsETH pre-deposit holder was one.
+- Positions held by either type stay listed and count apart as `contract_held` (decided 2026-10-22), with blocker `unsupported_owner`, so they never reach the headline.
+- The cost is 2 requests per owner (account and `ObjectCore`), ever.
 
 Each source page also states the largest single wallet's share of its 90+ day total. No address is published.
 
@@ -87,7 +87,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - Matured tokens count, payout amAPT 1:1 in APT (confirmed by simulation).
 - **Result (with the owner rule):** $944K recoverable, of which **$938K is aged ≥ 90 days**, across 397 owners (267 with ≥ $10).
   - The largest wallet, an ordinary account with 415 transactions, holds 1.08M APT matured since 2025-11-26: **88% of the headline**.
-  - 4 positions (~$304K, mostly one resource account at 388K APT) are `unknown` (`unsupported_owner`).
+  - 4 positions (~$304K, mostly one resource account at 388K APT) are held by contracts (`unsupported_owner`; `contract_held` since 2026-10-22).
 - **Sanity:** matured tokens found = 1,634,658 APT, which is **99.08%** of `withdrawal::total_pending_withdrawal` (all open tokens, matured or not).
 - **Recovery:** `router::withdraw_entry(token)`. 10 of 10 sampled simulations, including the largest token, paid exactly the expected amount.
 - **Backlog spotted:** the same wallets hold "Amnis Season 2 Airdrop" ($AMI Claim) and "Amnis Reward Voucher" NFTs. These are possible unclaimed-airdrop sources; their status needs research.
@@ -196,10 +196,10 @@ Each source page also states the largest single wallet's share of its 90+ day to
   - Aborts in the strategy: `EINSUFFICIENT_BALANCE` (WETH.e-13, LBTC, four Meridian LP vaults), `EUNKNOWN_STRATEGY` (seven Meridian LP vaults, not supported by the router). `blocked`.
   - Vaults with no holder to simulate with (MOVE-1, SolvBTC, rsETH-32 and other dust vaults): `unknown`.
   - The check is a table in the source; re-simulate when Canopy changes anything.
-- **Not counted here:** the rsETH vault's shares (233.5 rsETH, ~$635K) and the rsETH-WETH LP vault's are held by Canopy's pre-deposit contract (`0xbc59…::single_asset_base_deployer` / dual-asset), on behalf of contributors who claim with `claim_relevant_assets_with_move_address`. Contract-held, so the owner check leaves them out; contributions never claimed there are a separate lead.
+- **Held by a contract:** the rsETH vault's shares (233.5 rsETH, ~$635K) and the rsETH-WETH LP vault's are held by Canopy's pre-deposit contract (`0xbc59…::single_asset_base_deployer` / dual-asset), on behalf of contributors who claim with `claim_relevant_assets_with_move_address`. Counted as `contract_held` (decided 2026-10-22): shown with the vault's other holdings, never in the headline. rsETH is priced with CoinGecko's `kelp-dao-restaked-eth`, whose Movement platform address is this asset. Contributions never claimed there are a separate lead.
 - **Rehearsal (2026-10-21, Movement's public endpoints):**
   - Sized from aggregates (staked shares in the staking pool's stores plus wallet shares, valued with `shares_to_amount`): stakers and wallets hold **~1.22M MOVE (~$9.2K at $0.00755)**, all in vaults whose withdrawal aborts, so `blocked`. Recoverable and priced: ~$15 (sUSDa). The rest is Meridian and LS05 LP tokens, which have no price here.
-  - The source's read on every wallet holder plus 200 stakers: positions in 30 vaults, each with the status above; owners that are contracts (the pre-deposit holders) are `unknown` through the owner check.
+  - The source's read on every wallet holder plus 200 stakers: positions in 30 vaults, each with the status above; owners that are contracts (the pre-deposit holders) are `contract_held` through the owner check.
 - **Cost:** enumeration is ~80 indexer pages (the staking table in 16 key ranges, plus share holders). A read is one positions view, one staked-balance view per subscribed vault token and one wallet view per held token, then two views per position; ~7.5K stakers, refreshed monthly, all on Movement's public endpoints.
 
 ## Sized and not added
@@ -243,7 +243,7 @@ Each source page also states the largest single wallet's share of its 90+ day to
 - **Validator-owned stake pools** (not delegation pools; re-sized 2026-10-20, 378 pools):
   - Two resource-account pools outside the validator set hold **14.4M and 4.1M APT** of active stake, with lockups ending 2026-10-31 and 10-22. They look like institutional `staking_contract`/vesting pools between validator setups, not abandoned funds, and would roughly double the headline. Not counted without evidence of abandonment.
   - Active validators hold small withdrawable inactive stakes (334–3,410 APT each): normal operator flow.
-  - About 30 small pools outside the set hold 1.5–855 APT each, with lockups that ended in 2023–2026. Owners are `staking_contract` or vesting resource accounts (the owner rule makes them `unknown`); tracing each to its staker or shareholders is not worth it at this size.
+  - About 30 small pools outside the set hold 1.5–855 APT each, with lockups that ended in 2023–2026. Owners are `staking_contract` or vesting resource accounts (the owner rule makes them `contract_held`); tracing each to its staker or shareholders is not worth it at this size.
 - **Moar farming rewards:** paid in Moar's own token, which has no CoinGecko price, so the value would be unpriced. Skipped.
 - **Amnis "$AMI Claim" NFTs:** a marker with an `is_claimed` flag; the tokens were paid through an off-chain claim portal. No on-chain claim exists.
 - **"Amnis Reward Voucher" NFTs:** phishing. They point to `pamnis.com`, and the creator account has no contract.

@@ -17,14 +17,19 @@ function source(confidence: Position['confidence']): SourceDef {
 }
 
 describe('readClassified', () => {
-  it('marks positions of a resource account unknown, as the pipeline does', async () => {
-    const chain = fakeChain({ account: () => ({ authentication_key: '0x' + '0'.repeat(64), sequence_number: '0' }) });
+  it('marks positions of a resource account contract-held, as the pipeline does', async () => {
+    const chain = fakeChain({ account: () => ({ authentication_key: '0x' + '0'.repeat(64), sequence_number: '0' }), resource: () => null });
     const r = await readClassified(source('verified_view'), context(chain), OWNER);
-    expect(r.positions[0]).toMatchObject({ status: 'unknown', blockers: [{ code: 'unsupported_owner' }] });
+    expect(r.positions[0]).toMatchObject({ status: 'contract_held', blockers: [{ code: 'unsupported_owner' }] });
+  });
+
+  it('treats an object with an account resource as an object, not a person', async () => {
+    const chain = fakeChain({ account: () => ({ authentication_key: OWNER, sequence_number: '0' }), resource: (_a, type) => type === '0x1::object::ObjectCore' ? { owner: addr('bc') } : null });
+    expect((await readClassified(source('verified_view'), context(chain), OWNER)).positions[0].status).toBe('contract_held');
   });
 
   it('leaves an ordinary account\'s positions claimable', async () => {
-    const chain = fakeChain({ account: () => ({ authentication_key: OWNER, sequence_number: '3' }) });
+    const chain = fakeChain({ account: () => ({ authentication_key: OWNER, sequence_number: '3' }), resource: () => null });
     expect((await readClassified(source('verified_view'), context(chain), OWNER)).positions[0].status).toBe('recoverable');
   });
 

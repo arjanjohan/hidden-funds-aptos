@@ -19,7 +19,7 @@ const RETRIES = 9;
 const THIRD_PARTIES = [...new Set(SOURCES.flatMap(s => (s.thirdParty ? [s.thirdParty] : [])))];
 const OPT_IN_KEY = 'check:third-party';
 const STATUS: Record<Position['status'], string> = {
-  recoverable: 'You can claim', team_gated: 'Needs the team', blocked: 'May not work', unknown: 'Unknown',
+  recoverable: 'You can claim', team_gated: 'Needs the team', blocked: 'May not work', contract_held: 'Held by a contract', unknown: 'Unknown',
 };
 
 type Row = { address: string; results: { sourceId: string; result: ReadResult }[] };

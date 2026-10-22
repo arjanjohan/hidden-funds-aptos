@@ -61,13 +61,13 @@ function bucket(positions: Position[], value: (p: Position) => number | null): B
 export type OwnerKind = 'user' | 'resource_account' | 'object';
 
 /** Only an ordinary account can sign the recovery itself. Positions held by resource accounts (protocol-controlled)
- *  or by objects stay visible but count as unknown. */
+ *  or by objects are counted apart as contract-held (decided 2026-10-22), never in the headline. */
 export function applyOwnerKind(positions: Position[], kind: OwnerKind): Position[] {
   if (kind === 'user') return positions;
   const detail = kind === 'resource_account'
     ? 'Held by a resource account (program-controlled), not by a person who can sign the recovery.'
     : 'Held by an object, not directly by an account.';
-  return positions.map(p => ({ ...p, status: 'unknown', blockers: [...p.blockers, { code: 'unsupported_owner', detail }] }));
+  return positions.map(p => ({ ...p, status: 'contract_held', blockers: [...p.blockers, { code: 'unsupported_owner', detail }] }));
 }
 
 export interface SourceTotals {
@@ -95,7 +95,7 @@ export function sourceTotals(source: Pick<SourceDef, 'headlineAgeBases'>, all: P
     const age = ageDays(p, nowSecs);
     return age !== null && age >= days && headlineAge(source, p) === eligible;
   });
-  const statuses: Status[] = ['recoverable', 'team_gated', 'blocked', 'unknown'];
+  const statuses: Status[] = ['recoverable', 'team_gated', 'blocked', 'contract_held', 'unknown'];
   const bases: AgeBasis[] = ['onchain_maturity', 'protocol_closure', 'position_interaction', 'unknown'];
   return {
     face: bucket(positions, p => usd(p.grossClaim, prices)),
