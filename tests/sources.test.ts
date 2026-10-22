@@ -998,6 +998,17 @@ describe('animeswap closed lp', () => {
     expect(later.positions[0].claimableSince).toBe('2026-12-01T00:00:00.000Z');
   });
 
+  it('leaves the age unknown for LP that changed after the indexer watermark the store time was taken at', async () => {
+    // At version 90 (the watermark) the owner held 40 LP; at the read's version 100 it holds 100.
+    const c = chain();
+    const at90 = (held: string) => ({ ...c, view: async (fn: string, args: unknown[], typeArgs: string[], version?: string) =>
+      version === '90' && fn === '0x1::coin::balance' ? [held] : c.view(fn, args, typeArgs) });
+    const changed = await animeswapClosedLp.read(context(at90('40')), OWNER, { lps: { [LP]: '2024-01-02T03:04:05.000Z' }, w: '90' });
+    expect(changed.positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined, status: 'recoverable' });
+    const same = await animeswapClosedLp.read(context(at90('100')), OWNER, { lps: { [LP]: '2024-01-02T03:04:05.000Z' }, w: '90' });
+    expect(same.positions[0].claimableSince).toBe(ANIMESWAP_CLOSED_AT);
+  });
+
   it('mints the DAO fee in LP first when the pool grew since the last mint', async () => {
     // root k 1,414,213 vs 1,000,000: fee LP = 1000 x 414,213 / (1,414,213 x 5 + 1,000,000) = 51, so 100 of 1,051 LP.
     const r = await animeswapClosedLp.read(context(chain({ kLast: '1000000000000' })), OWNER, { lps: { [LP]: '2024-01-02T03:04:05.000Z' } });
@@ -1052,6 +1063,19 @@ describe('earnium closed lp', () => {
     expect(later.positions[0].claimableSince).toBe('2026-12-01T00:00:00.000Z');
     const other = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '100', staked: '0', unlock: '0' } })), OWNER, { moved: { [addr('e9')]: '2026-12-01T00:00:00.000Z' } });
     expect(other.positions[0].claimableSince).toBe(EARNIUM_CLOSED_AT);
+  });
+
+  it('leaves the age unknown for a pool whose holdings changed after the version the enumeration scans reached', async () => {
+    // At version 90 (the scans') the owner had 100 LP staked in POOL and 50 in OTHER; at the read's version 100 it has
+    // moved POOL's to its wallet, while OTHER is unchanged.
+    const OTHER = addr('e2');
+    const now: Held = { [POOL]: { wallet: '100', staked: '0', unlock: '0' }, [OTHER]: { wallet: '50', staked: '0', unlock: '0' } };
+    const c = chain(now, [POOL, OTHER]), then = chain({ ...now, [POOL]: { wallet: '0', staked: '100', unlock: '0' } }, [POOL, OTHER]);
+    const at90 = { ...c, view: async (fn: string, args: unknown[], typeArgs: string[], version?: string) =>
+      version === '90' ? then.view(fn, args, typeArgs) : c.view(fn, args, typeArgs) };
+    const r = await earniumClosedLp.read(context(at90), OWNER, { w: '90' });
+    expect(r.positions.map(p => [p.locator, p.ageBasis, p.claimableSince])).toEqual([
+      [POOL, 'unknown', undefined], [POOL, 'unknown', undefined], [OTHER, 'protocol_closure', EARNIUM_CLOSED_AT], [OTHER, 'protocol_closure', EARNIUM_CLOSED_AT]]);
   });
 
   it('blocks a stake still locked, and leaves out LP locked forever', async () => {
