@@ -10,8 +10,10 @@ import { SOURCES } from '../../shared/sources/index.ts';
 import type { Memo, Position, ReadContext, ReadResult } from '../../shared/types.ts';
 import { date, short, units, usd } from '../lib/format.ts';
 
-/** Wallets the public Aptos API serves one browser in one 5-minute rate-limit window, so a check never waits. */
-const MAX_ANONYMOUS = 3;
+/** Wallets the public Aptos API serves one browser in one 5-minute rate-limit window, so a check never waits. The
+ *  fullnode decides it: 40,000 compute units per IP per window, and a wallet's reads cost ~17–27K (21–43 calls at ~680
+ *  each, measured 2026-10-22); the indexer's three shared lookups (~2K a wallet) allow ~22. */
+const MAX_ANONYMOUS = 2;
 /** With the visitor's own Geomi key the limit is the key's, far above the public one. */
 const MAX_WITH_KEY = 50;
 const KEY_STORE = 'geomi-api-key';
