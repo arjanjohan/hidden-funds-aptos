@@ -61,7 +61,7 @@ const basisLabel: Record<string, string> = {
     <p class="muted">Not in these numbers: {usd(t.agedEstimated.ge90.usd)} in {count(t.agedEstimated.ge90.positions)} positions whose age is only an estimate.</p>
   )}
   <p class="muted">
-    Age basis of claimable positions:
+    Age basis of claimable positions:{' '}
     {Object.entries(t.byAgeBasis).filter(([, b]) => b.positions).map(([k, b]) => `${basisLabel[k]}: ${count(b.positions)}`).join(' · ')}
   </p>
 
