@@ -440,12 +440,22 @@ describe('animeswap enumerator', () => {
 });
 
 describe('earnium enumerator', () => {
-  it('lists everyone who added or staked liquidity, and dates those who acted after the closure began', async () => {
-    const c = fakeChain({ gql: (_q, vars) => ({ user_transactions:
-      vars.f === 'stake' && vars.after === '0' ? [{ version: '5', sender: addr(1) }]
-      : vars.f === 'unstake' && vars.after === '7706000000' ? [{ version: '7706000100', sender: addr(2) }] : [] }) });
+  it('lists everyone who added or staked liquidity and every wallet holding LP; dates calls after the closure and LP changes', async () => {
+    const POOL = addr('e1');
+    const c = fakeChain({
+      view: () => [[{ inner: POOL }]],
+      gql: (query, vars) => query.includes('current_fungible_asset_balances')
+        ? { current_fungible_asset_balances: vars.a === POOL && vars.s === '' ? [{ owner_address: addr(3), storage_id: addr('a3'), last_transaction_timestamp: '2026-11-01T00:00:00' }] : [] }
+        : { user_transactions: vars.f === 'stake' && vars.after === '0' ? [{ version: '5', sender: addr(1) }]
+          : vars.f === 'unstake' && vars.after === '7706000000' ? [{ version: '7706000100', sender: addr(2) }] : [] },
+    });
     const r = await earniumClosedEnumerator.run(c, undefined);
-    expect(r.candidates).toEqual([{ owner: addr(1), hint: {} }, { owner: addr(2), hint: { since: '2027-01-15T08:00:00.000Z' } }]);
+    expect(r.candidates).toEqual([
+      { owner: addr(1), hint: {} },
+      { owner: addr(2), hint: { since: '2027-01-15T08:00:00.000Z' } },
+      // Holds LP it never added or staked itself (a transfer in).
+      { owner: addr(3), hint: { lps: { [POOL]: '2026-11-01T00:00:00.000Z' } } },
+    ]);
     expect(r.incremental).toBe(true);
   });
 });

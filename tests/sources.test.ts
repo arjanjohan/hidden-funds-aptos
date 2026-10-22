@@ -1050,6 +1050,16 @@ describe('earnium closed lp', () => {
     expect(forever.positions).toEqual([]);
   });
 
+  it('ages wallet LP from its last change and a stake that unlocked after the closure from its unlock', async () => {
+    const received = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '100', staked: '0', unlock: '0' } })), OWNER, { lps: { [POOL]: '2026-11-02T00:00:00.000Z' } });
+    expect(received.positions[0].claimableSince).toBe('2026-11-02T00:00:00.000Z');
+    // Unlocked on 2026-09-21, before the closure: the closure date stays. Unlocked on 2026-11-18, after it: from then.
+    const before = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '0', staked: '400', unlock: '1790000000' } })), OWNER, {});
+    expect(before.positions[0].claimableSince).toBe(EARNIUM_CLOSED_AT);
+    const after = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '0', staked: '400', unlock: '1795000000' } })), OWNER, {});
+    expect(after.positions[0].claimableSince).toBe(new Date(1_795_000_000_000).toISOString());
+  });
+
   it('reads the pools 20 at a time', async () => {
     const pools = Array.from({ length: 25 }, (_, i) => addr(`e${i + 10}`));
     const c = chain({ [pools[24]]: { wallet: '1', staked: '0', unlock: '0' } }, pools);

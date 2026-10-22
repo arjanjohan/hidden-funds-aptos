@@ -924,9 +924,10 @@ export const econiaIdleEnumerator: Enumerator = {
   },
 };
 
-// Earnium: everyone who added liquidity or staked it (directly or through the router), ever; LP received by transfer and
-// never added or staked by its holder is missed. Calls after the closure day began (adding, removing, staking, unstaking,
-// claiming) put the run's time in the caller's hint, so liquidity used after the closure is aged from the run that saw it.
+// Earnium: everyone who added liquidity or staked it (directly or through the router), ever, and every wallet holding
+// LP (current primary stores per pool, transfers included). Calls after the closure day began (adding, removing,
+// staking, unstaking, claiming) put the run's time in the caller's hint, so liquidity used after the closure is aged
+// from the run that saw it; wallet LP also carries its store's last change.
 const EARNIUM_CHANGES_FROM = 7_706_000_000;   // 2026-10-21, before the closure's end of day
 const EARNIUM_ADD = ['add_liquidity_entry', 'add_liquidity_coin_entry', 'add_liquidity_both_coins_entry', 'add_liquidity_and_stake_entry',
   'add_liquidity_and_stake_coin_entry', 'add_liquidity_and_stake_both_coins_entry'];
@@ -952,9 +953,28 @@ export const earniumClosedEnumerator: Enumerator = {
     // check page's, which ages from the closure.
     const since = iso(ledger.timestampSecs);
     const acted = new Set(changed.candidates.map(c => c.owner));
-    const owners = new Set([...holders.candidates.map(c => c.owner), ...acted]);
-    return { candidates: [...owners].map(owner => ({ owner, hint: acted.has(owner) ? { since } : {} })),
-      cursor: JSON.stringify({ r: holders.cursor, c: changed.cursor }), pages: holders.pages + changed.pages, incremental: true };
+    // LP in wallets, also when it arrived by transfer: every pool's primary stores (staked LP sits in the staking pools'
+    // own, non-primary stores), each with its last change.
+    const [pools] = await chain.view(`${EARNIUM}::liquidity_pool::pools`, []);
+    const lps = new Map<string, Record<string, string>>();
+    let pages = holders.pages + changed.pages + 1;
+    for (const pool of (pools as { inner: string }[]).map(p => normalizeAddress(p.inner))) {
+      let after = '';
+      for (;;) {
+        const rows = (await chain.gql(`query($a:String!,$s:String!){ current_fungible_asset_balances(where:{asset_type:{_eq:$a}, is_primary:{_eq:true},
+          amount:{_gt:"0"}, storage_id:{_gt:$s}}, order_by:{storage_id:asc}, limit:${PAGE}){ owner_address storage_id last_transaction_timestamp } }`, { a: pool, s: after })).current_fungible_asset_balances;
+        pages++;
+        for (const r of rows) {
+          const owner = normalizeAddress(r.owner_address);
+          lps.set(owner, { ...lps.get(owner), [pool]: new Date(r.last_transaction_timestamp + 'Z').toISOString() });
+        }
+        if (rows.length < PAGE) break;
+        after = rows[rows.length - 1].storage_id;
+      }
+    }
+    const owners = new Set([...holders.candidates.map(c => c.owner), ...acted, ...lps.keys()]);
+    return { candidates: [...owners].map(owner => ({ owner, hint: { ...(acted.has(owner) ? { since } : {}), ...(lps.has(owner) ? { lps: lps.get(owner) } : {}) } })),
+      cursor: JSON.stringify({ r: holders.cursor, c: changed.cursor }), pages, incremental: true };
   },
 };
 
