@@ -7,7 +7,7 @@ import { APT, delegation, MOVE, movementDelegation } from '../src/shared/sources
 import { EARNIUM, EARNIUM_CLOSED_AT, earniumClosedLp } from '../src/shared/sources/earnium-closed.ts';
 import { ANIMESWAP, ANIMESWAP_CLOSED_AT, ANIMESWAP_POOLS, animeswapClosedLp, isqrt, pairOf } from '../src/shared/sources/animeswap-closed.ts';
 import { ARIES, ARIES_CLOSED_AT, ariesWoundDown, reserveType } from '../src/shared/sources/aries-wound-down.ts';
-import { AURO_CLOSED_AT, AURO_DAO, AURO_ROUTER, auroClosedPositions } from '../src/shared/sources/auro-closed.ts';
+import { AURO_CLOSED_AT, AURO_COLLECTION, AURO_DAO, AURO_ROUTER, auroClosedPositions } from '../src/shared/sources/auro-closed.ts';
 import { keccak256 } from '../src/shared/keccak.ts';
 import { portalTransfer, WH_CORE, WH_TOKEN_BRIDGE, wormholeUnredeemed } from '../src/shared/sources/wormhole-unredeemed.ts';
 import { burnAmounts, HOUSTON, HOUSTON_CLOSED_AT, HOUSTON_POOLS, houstonClosedLp, sqrtPriceAt, tickOf } from '../src/shared/sources/houston-closed.ts';
@@ -895,7 +895,7 @@ describe('auro closed positions', () => {
       if (fn === '0x1::primary_fungible_store::balance' && args[0] === AURO_DAO && args[1] === addr('a8')) return [o.held ?? '1000'];
       throw new Error(fn);
     },
-    gql: () => ({ current_token_ownerships_v2: [{ token_data_id: NFT }] }),
+    gql: () => ({ current_token_ownerships_v2: [{ token_data_id: NFT, current_token_data: { collection_id: AURO_COLLECTION } }] }),
   });
 
   it('counts a debt-free position from the shutdown date, withdrawn whole with the exact share amount', async () => {

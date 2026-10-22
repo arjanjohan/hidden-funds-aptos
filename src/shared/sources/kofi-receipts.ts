@@ -3,6 +3,7 @@
 // value; quote failed or no provider → unknown (market_check_unavailable).
 import { iso, positionIds } from '../accounting.ts';
 import { mapLimit, normalizeAddress, once, transactionTime } from '../chain.ts';
+import { assetId, ownedBalances } from '../owned.ts';
 import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
 import { APT } from './delegation.ts';
 import { KOFI } from './kofi-withdrawals.ts';
@@ -16,9 +17,6 @@ const RATE_SCALE = 100_000_000n;   // rewards_manager::get_exchange_rate: kAPT p
 /** Last version at which each receipt store changed, from enumeration; used to date positions acquired later. */
 export type ReceiptHint = { versions: Record<string, number> };
 
-const STORES_QUERY = `query($o:String!){ current_fungible_asset_balances(where:{owner_address:{_eq:$o}, is_primary:{_eq:true},
-  asset_type:{_in:["${KAPT}","${STKAPT}"]}}){ asset_type last_transaction_version } }`;
-
 const TOKENS = [
   { asset: KAPT, symbol: 'kAPT', entry: 'request_withdrawal_entry' },
   { asset: STKAPT, symbol: 'stkAPT', entry: 'unstake_and_request_withdrawal_entry' },
@@ -28,9 +26,9 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: ReceiptHint): P
   const owner = normalizeAddress(ownerInput);
   const version = ctx.ledger.version;
   try {
-    const versions: Record<string, number> = hint?.versions ?? Object.fromEntries(
-      (await ctx.chain.gql(STORES_QUERY, { o: owner })).current_fungible_asset_balances
-        .map((r: any) => [normalizeAddress(r.asset_type), Number(r.last_transaction_version)]));
+    const versions: Record<string, number> = hint?.versions ?? Object.fromEntries((await ownedBalances(ctx, owner))
+      .filter(r => r.is_primary && (TOKENS as readonly { asset: string }[]).some(t => t.asset === assetId(r.asset_type)))
+      .map(r => [assetId(r.asset_type), Number(r.last_transaction_version)]));
     const rate = await once(ctx, `kofi-rate:${version}`, async () =>
       BigInt((await ctx.chain.view(`${KOFI}::rewards_manager::get_exchange_rate`, [], [], version))[0]));
     const query = (asset: string) => ({ asset, decimals: 8, redemptionPerToken: asset === KAPT ? 1 : Number(rate) / Number(RATE_SCALE) });

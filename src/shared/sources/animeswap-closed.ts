@@ -3,7 +3,8 @@
 // rule from that day. The pools still work (aggregators still route swaps through them), so an LP holder can remove
 // liquidity directly. LP is a Coin (`LPCoinV1::LPCoin<X, Y>`), held in a CoinStore or its paired fungible-asset store.
 import { iso, positionIds } from '../accounting.ts';
-import { gqlAll, mapLimit, normalizeAddress, once } from '../chain.ts';
+import { mapLimit, normalizeAddress, once } from '../chain.ts';
+import { ownedBalances } from '../owned.ts';
 import type { Amount, ChainReader, Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
 import { APT } from './delegation.ts';
 
@@ -100,13 +101,10 @@ const pool = (ctx: ReadContext, lp: string) => once<Pool>(ctx, `animeswap-pool:$
     locked: !!state.locked, kLast: BigInt(state.k_last) };
 });
 
-const LPS_QUERY = `query($o:String!,$p:String!,$after:String!){ current_fungible_asset_balances(where:{owner_address:{_eq:$o},
-  asset_type:{_like:$p}, amount:{_gt:"0"}, storage_id:{_gt:$after}}, order_by:{storage_id:asc}, limit:100){ asset_type storage_id last_transaction_timestamp } }`;
-
 /** The owner's LP coin types and when each store last changed, from the indexer (the check page has no hint). The
  *  indexer files a migrated store under its coin type too. */
 async function lpsOf(ctx: ReadContext, owner: string): Promise<Record<string, string>> {
-  const rows = await gqlAll(ctx.chain, LPS_QUERY, { o: owner, p: `${ANIMESWAP_LP_PREFIX}%` }, 'current_fungible_asset_balances', 'storage_id');
+  const rows = (await ownedBalances(ctx, owner)).filter(r => r.asset_type.startsWith(ANIMESWAP_LP_PREFIX));
   const lps: Record<string, string> = {};
   for (const r of rows) {
     const at = new Date(r.last_transaction_timestamp + 'Z').toISOString();

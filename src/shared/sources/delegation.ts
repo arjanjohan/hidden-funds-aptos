@@ -1,7 +1,8 @@
 // Native delegation stake that finished unlocking but was never withdrawn. Same framework module on Aptos and
 // Movement. Evidence and measurements: docs/phase0-report.md §1.
 import { iso, positionIds } from '../accounting.ts';
-import { gqlAll, mapLimit, normalizeAddress, once, transactionTime } from '../chain.ts';
+import { mapLimit, normalizeAddress, once, transactionTime } from '../chain.ts';
+import { ownedPools } from '../owned.ts';
 import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
 
 export const APT = '0x000000000000000000000000000000000000000000000000000000000000000a';
@@ -15,11 +16,6 @@ export const NATIVE = {
 } as const;
 
 export type DelegationHint = { pools: string[]; version?: number };
-
-// Indexer rows go stale (a fully redeemed share entry is deleted on chain but can stay indexed),
-// so they only name candidate pools; amounts always come from get_stake.
-const POOLS_QUERY = `query($d:String!,$after:String!){ current_delegator_balances(where:{delegator_address:{_eq:$d},
-  pool_type:{_eq:"inactive_shares"}, shares:{_gt:"0"}, pool_address:{_gt:$after}}, distinct_on:pool_address, order_by:{pool_address:asc}, limit:100){ pool_address } }`;
 
 const UNLOCK_QUERY = `query($d:String!,$p:String!){ delegated_staking_activities(where:{delegator_address:{_eq:$d}, pool_address:{_eq:$p},
   event_type:{_in:["0x1::delegation_pool::UnlockStake","0x1::delegation_pool::UnlockStakeEvent"]}},
@@ -68,8 +64,8 @@ async function read(ctx: ReadContext, SOURCE: string, asset: string, ownerInput:
   const version = ctx.ledger.version;
   const errors: string[] = [];
   let failedPools = 0;
-  const pools: string[] = hint?.pools.map(normalizeAddress) ??
-    (await gqlAll(ctx.chain, POOLS_QUERY, { d: owner }, 'current_delegator_balances', 'pool_address')).map((r: any) => normalizeAddress(r.pool_address));
+  // Indexer rows only name candidate pools; amounts always come from get_stake.
+  const pools: string[] = hint?.pools.map(normalizeAddress) ?? await ownedPools(ctx, owner, 'inactive_shares');
 
   const perPool = await mapLimit(pools, 4, async pool => {
     try {
