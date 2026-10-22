@@ -6,7 +6,7 @@ import { AURO_CLOSED_AT, AURO_COLLECTION, AURO_ROUTER } from '../shared/sources/
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
 import { AAVE, type AaveHint, aaveReserves, findFreeze } from '../shared/sources/aave-frozen.ts';
 import { ECHELON, FROZEN_MARKETS } from '../shared/sources/echelon-frozen.ts';
-import { ECONIA, ECONIA_COIN_MARKETS, type EconiaHint, KANA_ECONIA_WRAPPER } from '../shared/sources/econia-idle.ts';
+import { ECONIA, ECONIA_COIN_MARKETS, KANA_ECONIA_WRAPPER } from '../shared/sources/econia-idle.ts';
 import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
 import { KOFI } from '../shared/sources/kofi-withdrawals.ts';
 import { CAKE, type ClaimableHint, claimableHandle, LZ_COINS } from '../shared/sources/layerzero-claimable.ts';
@@ -776,10 +776,11 @@ const noContractTotal: Enumerator['sanity'] = async () =>
 // through its own entry functions is missed until it is listed here. Deposits, withdrawals and orders mark an owner
 // changed; those only matter after an owner's first read, which comes after this source was added (2026-10-20), so
 // their scan starts there. A fill of a resting order is sent by the taker, so makers are taken from the coin markets'
-// open orders each run: current makers and last run's are re-read (an account with open orders does not count, and the
-// one whose order filled is read again in the run after). A changed owner's hint carries the run's time (owner-wide for
-// its own calls, per market for its resting orders), so a balance that became idle after the archive date is aged from
-// that run, never from the archive.
+// open orders each run: current makers and last run's are re-read (a fill moves coins between base and quote, and the
+// account whose order filled is read again in the run after). An owner's own call puts the run's time in its hint for
+// every market (the scan does not see which one), and a change to its open orders it did not make (a fill, whole or
+// partial) for that market only, so a balance that changed after the archive date is aged from the run that saw it,
+// never from the archive.
 const ECONIA_CHANGES_FROM = 7_696_900_000;
 const ECONIA_REGISTRATIONS: EntryFunction[] = [
   ...['register_market_account', 'register_market_account_generic_base'].map(name => ({ contract: ECONIA, module: 'user', name })),
@@ -801,36 +802,45 @@ export const econiaIdleEnumerator: Enumerator = {
   ...econiaSenders,
   scope: `${econiaSenders.scope}; plus owner-controlled makers with open orders in coin markets ${ECONIA_COIN_MARKETS[0]}-${ECONIA_COIN_MARKETS.at(-1)}`,
   async run(chain, cursor) {
-    let stored: { r?: string; c?: string; m?: Record<string, string[]> } = {};
+    let stored: { r?: string; c?: string; m?: Record<string, string> } = {};
     try { stored = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: rescan */ }
     if (typeof stored !== 'object' || stored === null) stored = {};
     const ledger = await chain.ledger();
     const registered = await senders(chain, ECONIA_REGISTRATIONS, stored.r);
     const changed = await senders(chain, ECONIA_CHANGES, stored.c);
-    // Makers by owner, with the markets they rest orders in: now, and last run (whose orders may have filled since).
-    const makers: Record<string, string[]> = {};
+    // Each maker's open orders now (market, order id, remaining size), and last run's: an order that filled, in whole
+    // or in part, moved coins between base and quote.
+    const orders = new Map<string, string[]>();
     for (const market of ECONIA_COIN_MARKETS) {
-      const [orders] = await chain.view(`${ECONIA}::market::get_open_orders_all`, [market]);
-      for (const o of [...orders.asks, ...orders.bids]) {
-        if (o.custodian_id !== '0') continue;
-        const owner = normalizeAddress(o.user);
-        makers[owner] = [...new Set([...(makers[owner] ?? []), market])];
+      const [open] = await chain.view(`${ECONIA}::market::get_open_orders_all`, [market]);
+      for (const o of [...open.asks, ...open.bids]) if (o.custodian_id === '0') {
+        const maker = normalizeAddress(o.user);
+        orders.set(maker, [...(orders.get(maker) ?? []), `${o.market_id}:${o.order_id}:${o.remaining_size}`]);
       }
     }
-    const previous = typeof stored.m === 'object' && stored.m !== null && !Array.isArray(stored.m) ? stored.m : {};
+    const makers = Object.fromEntries([...orders].map(([maker, list]) => [maker, list.sort().join(',')]));
+    // Only this shape is compared: any other (an earlier cursor's maker list) counts as no previous orders, which dates nobody.
+    const previous: Record<string, string> = stored.m && typeof stored.m === 'object' && !Array.isArray(stored.m)
+      ? Object.fromEntries(Object.entries(stored.m).filter(([, v]) => typeof v === 'string')) : {};
+    // The owner's own calls date all its balances from this run, and changes to its orders since last run the balances
+    // in that market. Every candidate carries a hint (empty when nothing changed): a read without one is the check
+    // page's, which cannot tell whether a balance changed after the archive date.
     const since = iso(ledger.timestampSecs);
-    // The owner's own calls date all of its balances (the indexer does not say which market a call touched); a maker's
-    // order dates only the market it rests in.
-    const hints = new Map<string, EconiaHint>();
-    for (const c of changed.candidates) hints.set(c.owner, { since });
-    for (const [owner, markets] of [...Object.entries(previous), ...Object.entries(makers)]) {
-      const hint = hints.get(owner) ?? {};
-      hints.set(owner, { ...hint, markets: { ...hint.markets, ...Object.fromEntries(markets.map(m => [m, since])) } });
+    const acted = new Set(changed.candidates.map(c => c.owner));
+    const byMarket = (list: string) => {
+      const m = new Map<string, string>();
+      for (const o of list ? list.split(',') : []) { const id = o.slice(0, o.indexOf(':')); m.set(id, m.has(id) ? `${m.get(id)},${o}` : o); }
+      return m;
+    };
+    const filled = new Map<string, string[]>();
+    for (const maker of Object.keys(previous)) {
+      const before = byMarket(previous[maker]), now = byMarket(makers[maker] ?? '');
+      const markets = [...before.keys()].filter(id => before.get(id) !== now.get(id));
+      if (markets.length) filled.set(maker, markets);
     }
-    const owners = new Set([...registered.candidates.map(c => c.owner), ...hints.keys()]);
-    // Every candidate carries a hint (empty when nothing changed): a read without one is the check page's, which cannot
-    // tell whether a balance changed after the archive date.
-    return { candidates: [...owners].map(owner => ({ owner, hint: hints.get(owner) ?? {} })),
+    const owners = new Set([...registered.candidates.map(c => c.owner), ...acted, ...Object.keys(makers), ...Object.keys(previous)]);
+    return { candidates: [...owners].map(owner => ({ owner, hint: { ...(acted.has(owner) ? { since } : {}),
+        ...(filled.has(owner) ? { markets: Object.fromEntries(filled.get(owner)!.map(id => [id, since])) } : {}) } })),
       cursor: JSON.stringify({ r: registered.cursor, c: changed.cursor, m: makers }),
       pages: registered.pages + changed.pages + ECONIA_COIN_MARKETS.length, incremental: true };
   },

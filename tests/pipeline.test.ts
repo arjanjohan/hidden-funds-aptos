@@ -346,23 +346,42 @@ describe('aave enumerator', () => {
 });
 
 describe('econia enumerator', () => {
-  // Owner 1 rests an ask in market 7 (owner-controlled); owner 9's order is a custodian's and is ignored.
-  const econia = (makers: number[]) => fakeChain({
+  // Owner 1 rests asks in market 7 (owner-controlled), and in market 8 unless told otherwise; owner 9's order is a
+  // custodian's and is ignored.
+  const econia = (asks: { maker: number; size: string; market?: string }[]) => fakeChain({
     gql: () => ({ user_transactions: [] }),
-    view: (_fn, args) => [{ asks: args[0] === '7' ? makers.map(n => ({ user: addr(n), custodian_id: '0' })) : [], bids: args[0] === '7' ? [{ user: addr(9), custodian_id: '6' }] : [] }],
+    view: (_fn, args) => [{ asks: asks.filter(a => (a.market ?? '7') === args[0])
+      .map(a => ({ user: addr(a.maker), custodian_id: '0', market_id: args[0], order_id: '11', remaining_size: a.size })),
+      bids: args[0] === '7' ? [{ user: addr(9), custodian_id: '6', market_id: '7', order_id: '12', remaining_size: '5' }] : [] }],
   });
 
-  it('re-reads makers with open orders, and last run\'s makers once more after their orders are gone, dated from the run', async () => {
-    // A maker's hint carries the run's time: a balance its fill frees is aged from then, not from the archive date.
-    const since = new Date(1_800_000_000 * 1000).toISOString();
-    // The date applies to the market the order rests in only, so the maker's other balances keep their age.
-    const first = await econiaIdleEnumerator.run(econia([1]), undefined);
-    expect(first.candidates).toEqual([{ owner: addr(1), hint: { markets: { 7: since } } }]);
+  it('re-reads makers, and dates a maker from the run that sees its orders change without it', async () => {
+    const first = await econiaIdleEnumerator.run(econia([{ maker: 1, size: '10' }]), undefined);
+    expect(first.candidates).toEqual([{ owner: addr(1), hint: {} }]);
     expect(first.incremental).toBe(true);
-    // The order filled (the taker sent that transaction): owner 1 is no longer a maker but is read once more.
-    const second = await econiaIdleEnumerator.run(econia([]), first.cursor);
-    expect(second.candidates).toEqual([{ owner: addr(1), hint: { markets: { 7: since } } }]);
-    expect((await econiaIdleEnumerator.run(econia([]), second.cursor)).candidates).toEqual([]);
+    // Unchanged orders: no date.
+    const same = await econiaIdleEnumerator.run(econia([{ maker: 1, size: '10' }]), first.cursor);
+    expect(same.candidates).toEqual([{ owner: addr(1), hint: {} }]);
+    // Partly filled by a taker: that market is dated from this run (the fake ledger's time).
+    const partial = await econiaIdleEnumerator.run(econia([{ maker: 1, size: '4' }]), same.cursor);
+    expect(partial.candidates).toEqual([{ owner: addr(1), hint: { markets: { 7: '2027-01-15T08:00:00.000Z' } } }]);
+    // Filled whole: no longer a maker, read once more with a date, then dropped.
+    const gone = await econiaIdleEnumerator.run(econia([]), partial.cursor);
+    expect(gone.candidates).toEqual([{ owner: addr(1), hint: { markets: { 7: '2027-01-15T08:00:00.000Z' } } }]);
+    expect((await econiaIdleEnumerator.run(econia([]), gone.cursor)).candidates).toEqual([]);
+  });
+
+  it('dates only the market whose orders filled', async () => {
+    const first = await econiaIdleEnumerator.run(econia([{ maker: 1, size: '10' }, { maker: 1, size: '3', market: '8' }]), undefined);
+    const r = await econiaIdleEnumerator.run(econia([{ maker: 1, size: '10' }, { maker: 1, size: '1', market: '8' }]), first.cursor);
+    expect(r.candidates).toEqual([{ owner: addr(1), hint: { markets: { 8: '2027-01-15T08:00:00.000Z' } } }]);
+  });
+
+  it('dates nobody from a cursor in an earlier shape', async () => {
+    for (const m of [[addr(1)], { [addr(1)]: ['7'] }]) {
+      const r = await econiaIdleEnumerator.run(econia([{ maker: 1, size: '10' }]), JSON.stringify({ m }));
+      expect(r.candidates).toEqual([{ owner: addr(1), hint: {} }]);
+    }
   });
 
   it('gives an owner who only registered an empty hint, so the read keeps the archive date', async () => {

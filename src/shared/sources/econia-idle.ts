@@ -1,8 +1,8 @@
-// Econia (Aptos order book): coins left idle in Econia market accounts. Econia Labs archived the protocol's repository
-// on 2025-09-08 (GitHub banner), the last order was placed on 2025-09-01 and the last deposit on 2025-07-24; since then
-// the only activity is users withdrawing. Counted as deprecated from the archive date (decided 2026-10-20).
-// Only accounts the owner controls (custodian 0) and without open orders count (R4): custodian accounts (Fliq, Kana)
-// need their custodian to withdraw, and open orders are live use.
+// Econia (Aptos order book): coins left in Econia market accounts. Econia Labs archived the protocol's repository on
+// 2025-09-08 (GitHub banner), the last order was placed on 2025-09-01 and the last deposit on 2025-07-24; since then the
+// only activity is users withdrawing. Counted as deprecated from the archive date (decided 2026-10-20). Since Econia is
+// closed, coins resting in open orders count too (R4, decided 2026-10-21): cancel the orders, then withdraw. Only
+// accounts the owner controls (custodian 0) count: custodian accounts (Fliq, Kana) need their custodian to withdraw.
 import { iso, positionIds } from '../accounting.ts';
 import { normalizeAddress, once } from '../chain.ts';
 import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
@@ -39,8 +39,11 @@ function marketInfo(ctx: ReadContext, id: string): Promise<MarketInfo> {
   });
 }
 
-/** Enumeration hint: the time of the run that saw the owner act (`since`: a deposit, withdrawal or order of its own,
- *  market unknown) and, per market, the last run that saw a resting order of its there (`markets`). */
+/**
+ * Enumeration hint: `since`, the time of the run that saw the owner act (a deposit, withdrawal or order of its own; the
+ * scan does not see which market, so it dates them all); `markets`, per market, the time of the run that saw the
+ * owner's orders there change without it (a fill).
+ */
 export interface EconiaHint { since?: string; markets?: Record<string, string> }
 
 async function read(ctx: ReadContext, ownerInput: string, hint?: EconiaHint): Promise<ReadResult> {
@@ -48,15 +51,20 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: EconiaHint): Pr
   const version = ctx.ledger.version;
   // A balance that changed after the archive date has been idle only since then: the latest of the dates that apply.
   // Without the enumeration hint (the check page) a later change cannot be ruled out, so the age is unknown.
-  const since = (market: string) => hint && [ECONIA_ARCHIVED_AT, hint.since, hint.markets?.[market]]
+  const sinceIn = (market: string) => hint && [ECONIA_ARCHIVED_AT, hint.since, hint.markets?.[market]]
     .filter((d): d is string => !!d).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a));
   try {
     const [accounts] = await ctx.chain.view(`${ECONIA}::user::get_market_accounts`, [owner], [], version);
-    const idle = (accounts as any[]).filter(a => a.custodian_id === '0' && !a.asks.length && !a.bids.length);
+    const own = (accounts as any[]).filter(a => a.custodian_id === '0');
     const positions: Position[] = [];
-    for (const a of idle) {
-      const market = await marketInfo(ctx, a.market_id);
-      const sides = [{ coin: market.base, amount: BigInt(a.base_available) }, { coin: market.quote, amount: BigInt(a.quote_available) }];
+    for (const a of own) {
+      const market = await marketInfo(ctx, a.market_id), since = sinceIn(a.market_id);
+      // Totals include coins resting in open orders; cancelling them (asks: side true, bids: false) frees them first.
+      const cancels = [...(a.asks.length ? [true] : []), ...(a.bids.length ? [false] : [])].map(side => ({
+        function: `${ECONIA}::market::cancel_all_orders_user`, arguments: [a.market_id, String(side)], prerequisites: [], expectedOutputs: [] }));
+      const sides = [{ coin: market.base, amount: BigInt(a.base_total) }, { coin: market.quote, amount: BigInt(a.quote_total) }];
+      // The cancels free both sides at once, so they are listed with the market's first position only.
+      let cancelled = false;
       for (const { coin, amount } of sides) {
         if (!coin || amount === 0n) continue;
         const asset = payoutAsset(coin);
@@ -64,14 +72,16 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: EconiaHint): Pr
         const locator = `market-${a.market_id}`;
         positions.push({
           ...positionIds(SOURCE, owner, locator, 'principal', asset), source: SOURCE, owner, locator, positionKind: 'principal', asset,
-          claimableSince: since(a.market_id), ageBasis: hint ? 'protocol_closure' : 'unknown',
+          claimableSince: since, ageBasis: hint ? 'protocol_closure' : 'unknown',
           provenance: { reader: `${ECONIA}::user::get_market_accounts`, ledgerVersion: version },
           grossClaim: value, expectedPayout: value, payoutBasis: 'view',
           status: 'recoverable', blockers: [],
           confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
           // Arguments are (market id, amount): simulated; the reverse order aborts.
-          steps: [{ function: `${ECONIA}::user::withdraw_to_coinstore<${coin}>`, arguments: [a.market_id, amount.toString()], prerequisites: [], expectedOutputs: value }],
+          steps: [...(cancelled ? [] : cancels), { function: `${ECONIA}::user::withdraw_to_coinstore<${coin}>`, arguments: [a.market_id, amount.toString()],
+            prerequisites: cancelled && cancels.length ? [`cancel_all_orders_user for market ${a.market_id} (listed with its other side)`] : [], expectedOutputs: value }],
         });
+        cancelled = true;
       }
     }
     return { positions, complete: true, errors: [], ledgerVersion: version };
@@ -84,19 +94,23 @@ export const econiaIdleAccounts: SourceDef<EconiaHint> = {
   id: SOURCE,
   chain: 'aptos',
   protocol: 'Econia',
-  title: 'Econia market accounts left idle',
-  summary: 'Econia, an on-chain order book, is no longer maintained: its team archived the code in September 2025 and nobody has traded since. Coins you deposited into an Econia market account and never withdrew are still there.',
+  title: 'Econia market accounts left behind',
+  summary: 'Econia, an on-chain order book, is no longer maintained: its team archived the code in September 2025 and nobody has traded since. Coins you deposited into an Econia market account, or left in open orders, are still there.',
   category: 'closed_app',
-  inclusionRule: 'R2: Econia is deprecated (Econia Labs archived the repository on 2025-09-08; no order since 2025-09-01); the archive date is the effective date. R4: accounts with open orders, and accounts run by a custodian, are left out. Decided 2026-10-20.',
+  inclusionRule: 'R2: Econia is deprecated (Econia Labs archived the repository on 2025-09-08; no order since 2025-09-01); the archive date is the effective date (decided 2026-10-20). R4: coins in open orders count since Econia is closed (decided 2026-10-21); accounts run by a custodian are left out.',
   protocolStatus: {
     state: 'deprecated',
     evidence: 'github.com/econia-labs/econia: "This repository was archived by the owner on Sep 8, 2025." Last limit order 2025-07-25, last market order 2025-09-01, last deposit 2025-07-24; only withdrawals since (checked 2026-10-20). PitchBook lists Econia Labs as out of business.',
     checkedAt: '2026-10-20',
   },
+  // Version 2 (2026-10-21): coins in open orders count. Stored owners are all re-read once, so one whose balance was
+  // only in orders (stored as nothing) is picked up.
+  version: 2,
   refresh: { nonZero: 'monthly', zero: 'never' },
   headlineAgeBases: ['protocol_closure'],
   howTo: [
-    `Call ${ECONIA}::user::withdraw_to_coinstore<coin type>(market id, amount) from the account, once per coin and market.`,
+    `If the account has open orders, call ${ECONIA}::market::cancel_all_orders_user(market id, side) first (asks: true, bids: false).`,
+    `Then call ${ECONIA}::user::withdraw_to_coinstore<coin type>(market id, amount) from the account, once per coin and market.`,
   ],
   officialUrl: 'https://github.com/econia-labs/econia',
   read,
