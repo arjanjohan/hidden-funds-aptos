@@ -899,7 +899,9 @@ export const econiaIdleEnumerator: Enumerator = {
 // LP (current primary stores per pool, transfers included). A call after the closure day began that moved a pool's LP
 // (adding, removing, staking, unstaking; in a wallet's store or a staking pool's) dates that pool's LP for its sender
 // from the call's time, so liquidity used after the closure is aged from then; wallet LP also carries its store's last
-// change. Reward claims move no LP and date nothing.
+// change. Reward claims move no LP and date nothing. A full scan every run (~140 pages): a wallet that sent all its LP
+// away drops out and is re-read, and every hint carries this run's watermark, against which the read checks that
+// nothing changed after the scans.
 const EARNIUM_CHANGES_FROM = 7_706_000_000;   // 2026-10-21, before the closure's end of day
 const EARNIUM_ADD = ['add_liquidity_entry', 'add_liquidity_coin_entry', 'add_liquidity_both_coins_entry', 'add_liquidity_and_stake_entry',
   'add_liquidity_and_stake_coin_entry', 'add_liquidity_and_stake_both_coins_entry'];
@@ -916,20 +918,19 @@ const LP_MOVES_QUERY = `query($v:bigint!,$p:[String!]!){ fungible_asset_activiti
 const earniumSenders = entrySenders('earnium-closed-lp', EARNIUM_HOLDERS, noContractTotal);
 export const earniumClosedEnumerator: Enumerator = {
   ...earniumSenders,
+  alsoProcessors: ['fungible_asset_processor'],
   scope: `${earniumSenders.scope}; plus every wallet holding LP, and Earnium calls from version ${EARNIUM_CHANGES_FROM} with the pools whose LP they moved`,
-  async run(chain, cursor) {
-    let stored: { r?: string; v?: string } = {};
-    try { stored = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: rescan */ }
-    if (typeof stored !== 'object' || stored === null) stored = {};
-    const holders = await senders(chain, EARNIUM_HOLDERS, stored.r);
+  async run(chain) {
+    // Calls and the LP they moved come from two processors: scan only what both have indexed. Taken before the scans,
+    // so everything they read is at least this recent.
+    const indexed = String([await processorWatermark(chain, 'user_transaction_processor'), await processorWatermark(chain, 'fungible_asset_processor')]
+      .map(m => BigInt(m.version)).reduce((a, b) => (a < b ? a : b)));
+    const holders = await senders(chain, EARNIUM_HOLDERS, undefined);
     const [pools] = await chain.view(`${EARNIUM}::liquidity_pool::pools`, []);
     const poolIds = (pools as { inner: string }[]).map(p => normalizeAddress(p.inner));
     let pages = holders.pages + 1;
-    // Calls and the LP they moved come from two processors: scan only what both have indexed.
-    const indexed = String([await processorWatermark(chain, 'user_transaction_processor'), await processorWatermark(chain, 'fungible_asset_processor')]
-      .map(m => BigInt(m.version)).reduce((a, b) => (a < b ? a : b)));
     const moved = new Map<string, Record<string, string>>();
-    let after = stored.v ?? String(EARNIUM_CHANGES_FROM);
+    let after = String(EARNIUM_CHANGES_FROM);
     for (;;) {
       const page = (await chain.gql(EARNIUM_CALLS_QUERY, { a: after, w: indexed })).user_transactions;
       pages++;
@@ -959,11 +960,10 @@ export const earniumClosedEnumerator: Enumerator = {
         from = rows[rows.length - 1].storage_id;
       }
     }
-    // Every candidate carries a hint (empty when it moved no LP after the closure began): a read without one is the check
-    // page's, which ages from the closure.
+    // Every candidate carries a hint: a read without one is the check page's, which ages from the closure.
     const owners = new Set([...holders.candidates.map(c => c.owner), ...moved.keys(), ...lps.keys()]);
-    return { candidates: [...owners].map(owner => ({ owner, hint: { ...(moved.has(owner) ? { moved: moved.get(owner) } : {}), ...(lps.has(owner) ? { lps: lps.get(owner) } : {}) } })),
-      cursor: JSON.stringify({ r: holders.cursor, v: after }), pages, incremental: true };
+    return { candidates: [...owners].map(owner => ({ owner, hint: { ...(moved.has(owner) ? { moved: moved.get(owner) } : {}),
+        ...(lps.has(owner) ? { lps: lps.get(owner) } : {}), w: indexed } })), pages };
   },
 };
 

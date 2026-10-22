@@ -468,13 +468,15 @@ describe('earnium enumerator', () => {
       },
     });
     const r = await earniumClosedEnumerator.run(c, undefined);
+    // Every hint carries the version the scans reached.
     expect(r.candidates).toEqual([
-      { owner: addr(1), hint: {} },
-      { owner: addr(2), hint: { moved: { [POOL]: '2026-10-21T10:00:00.000Z' } } },
+      { owner: addr(1), hint: { w: '7706000500' } },
+      { owner: addr(2), hint: { moved: { [POOL]: '2026-10-21T10:00:00.000Z' }, w: '7706000500' } },
       // Holds LP it never added or staked itself (a transfer in).
-      { owner: addr(3), hint: { lps: { [POOL]: '2026-11-01T00:00:00.000Z' } } },
+      { owner: addr(3), hint: { lps: { [POOL]: '2026-11-01T00:00:00.000Z' }, w: '7706000500' } },
     ]);
-    expect(JSON.parse(r.cursor!)).toMatchObject({ v: '7706000200' });
-    expect(r.incremental).toBe(true);
+    // A full scan every run: a wallet that sent all its LP away drops out, and is re-read as gone.
+    expect(r.incremental).toBeFalsy();
+    expect(earniumClosedEnumerator.alsoProcessors).toEqual(['fungible_asset_processor']);
   });
 });

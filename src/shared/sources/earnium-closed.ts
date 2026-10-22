@@ -20,8 +20,9 @@ const POOLS_PER_CALL = 20;
 const SOURCE = 'earnium-closed-lp';
 
 /** Enumeration hint, per pool: when an Earnium call of the owner's last moved the pool's LP after the closure began
- *  (`moved`), and when the LP in its wallet last changed (`lps`, a transfer in included). */
-export type EarniumHint = { moved?: Record<string, string>; lps?: Record<string, string> };
+ *  (`moved`), and when the LP in its wallet last changed (`lps`, a transfer in included); and the version the
+ *  enumeration's scans reached (`w`). */
+export type EarniumHint = { moved?: Record<string, string>; lps?: Record<string, string>; w?: string };
 
 /** Every pool, once per ledger version. */
 export const earniumPools = (ctx: ReadContext) => once(ctx, `earnium-pools:${ctx.ledger.version}`, async () =>
@@ -45,12 +46,11 @@ const poolInfo = (ctx: ReadContext, pool: string) => once(ctx, `earnium-pool:${p
 
 interface Holding { pool: string; wallet: bigint; staked: bigint; unlock: bigint }
 
-async function holdings(ctx: ReadContext, owner: string): Promise<Holding[]> {
-  const pools = await earniumPools(ctx);
+async function holdings(ctx: ReadContext, owner: string, pools: string[], version: string): Promise<Holding[]> {
   const out: Holding[] = [];
   for (let i = 0; i < pools.length; i += POOLS_PER_CALL) {
     const batch = pools.slice(i, i + POOLS_PER_CALL);
-    const [info] = await ctx.chain.view(`${EARNIUM}::liquidity_stake_pool::user_info`, [owner, batch], [], ctx.ledger.version);
+    const [info] = await ctx.chain.view(`${EARNIUM}::liquidity_stake_pool::user_info`, [owner, batch], [], version);
     (info as any[]).forEach((u, j) => {
       const h = { pool: batch[j], wallet: BigInt(u.wallet_balance), staked: BigInt(u.staked), unlock: BigInt(u.unlock_time) };
       if (h.wallet + h.staked > 0n) out.push(h);
@@ -65,8 +65,18 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: EarniumHint): P
   const errors: string[] = [];
   let failed = 0;
   let held: Holding[];
-  try { held = await holdings(ctx, owner); } catch (err) {
+  try { held = await holdings(ctx, owner, await earniumPools(ctx), version); } catch (err) {
     return { positions: [], complete: false, errors: [`user_info: ${String(err).slice(0, 200)}`], ledgerVersion: version };
+  }
+  // A pool whose holdings differ from those at the version the enumeration's scans reached changed after them (a call
+  // or transfer they have not seen): its age is unknown until a later run dates it.
+  const unscanned = new Set<string>();
+  if (hint?.w && Number(hint.w) < Number(version) && held.length) {
+    const then = await holdings(ctx, owner, held.map(h => h.pool), hint.w).catch(() => null);
+    for (const h of held) {
+      const t = then?.find(x => x.pool === h.pool);
+      if (!t || t.wallet !== h.wallet || t.staked !== h.staked || t.unlock !== h.unlock) unscanned.add(h.pool);
+    }
   }
   // The pools still take liquidity, so LP the owner moved after the closure is aged from that call, wallet LP from its
   // last change (LP received later is aged from then), and a stake that unlocked after the closure from its unlock.
@@ -77,7 +87,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: EarniumHint): P
       const stakedFree = h.unlock === LOCKED_FOREVER || BigInt(ctx.ledger.timestampSecs) < h.unlock ? 0n : h.staked;
       const lockedUntil = h.staked > 0n && stakedFree === 0n && h.unlock !== LOCKED_FOREVER ? h.unlock : null;
       const liquidity = h.wallet + stakedFree;
-      const since = latest(EARNIUM_CLOSED_AT, hint?.moved?.[h.pool], h.wallet > 0n ? hint?.lps?.[h.pool] : undefined,
+      const since = unscanned.has(h.pool) ? undefined : latest(EARNIUM_CLOSED_AT, hint?.moved?.[h.pool], h.wallet > 0n ? hint?.lps?.[h.pool] : undefined,
         stakedFree > 0n && h.unlock > 0n ? iso(Number(h.unlock)) : undefined);
       const p = await poolInfo(ctx, h.pool);
       const parts: { lp: bigint; blocked: boolean }[] = [
@@ -103,7 +113,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: EarniumHint): P
         let first = true;
         for (const o of outputs) if (o.raw !== '0') positions.push({
           ...positionIds(SOURCE, owner, locator, 'principal', o.asset), source: SOURCE, owner, locator, positionKind: 'principal', asset: o.asset,
-          claimableSince: since, ageBasis: 'protocol_closure',
+          claimableSince: since, ageBasis: since ? 'protocol_closure' : 'unknown',
           provenance: { reader: `${EARNIUM}::liquidity_stake_pool::user_info`, ledgerVersion: version },
           grossClaim: [o], expectedPayout: part.blocked ? [] : [o], payoutBasis: 'view',
           status: part.blocked ? 'blocked' : 'recoverable', blockers,
