@@ -15,6 +15,9 @@ const MAX_ADDRESSES = 20;
 const SOURCE_CONCURRENCY = 4;
 /** Enough retries to outlast the public API's 5-minute rate-limit window (2+4+…+60 s ≈ 5 min). */
 const RETRIES = 9;
+/** Sources that send the address to a third party: read only when the visitor opts in. */
+const THIRD_PARTIES = [...new Set(SOURCES.flatMap(s => (s.thirdParty ? [s.thirdParty] : [])))];
+const OPT_IN_KEY = 'check:third-party';
 const STATUS: Record<Position['status'], string> = {
   recoverable: 'You can claim', team_gated: 'Needs the team', blocked: 'May not work', unknown: 'Unknown',
 };
@@ -49,6 +52,9 @@ export default function Check({ prices: published, markets }: { prices: PriceBoo
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const running = useRef(false);   // blocks a second click before the disabled button renders
+  // Remembered in this browser only; storage can be unavailable (private windows), so it falls back to off.
+  const [thirdParty, setThirdParty] = useState(() => { try { return localStorage.getItem(OPT_IN_KEY) === '1'; } catch { return false; } });
+  const sources = SOURCES.filter(s => !s.thirdParty || thirdParty);
   const { addresses, invalid } = parse(text);
 
   async function run() {
@@ -63,7 +69,7 @@ export default function Check({ prices: published, markets }: { prices: PriceBoo
       // One anonymous reader and ledger pin per network; sources read on their own chain. A network that cannot be
       // reached only fails its own sources.
       const contexts = new Map<string, ReadContext>(), unreachable = new Map<string, string>();
-      for (const network of new Set(SOURCES.map(s => s.chain))) {
+      for (const network of new Set(sources.map(s => s.chain))) {
         const chain = createReader({ network, retries: RETRIES, onWait: (_label, ms, status) => {
           if (status === 429) setNotice(`The public ${NETWORKS[network].name} API is rate-limiting this browser; continuing in ${Math.ceil(ms / 1000)} s…`);
         } });
@@ -79,7 +85,7 @@ export default function Check({ prices: published, markets }: { prices: PriceBoo
       for (const [i, address] of addresses.entries()) {
         setBusy(`Checking ${i + 1} of ${addresses.length}…`);
         // A source that fails is reported on its own; the others still answer.
-        const results = await mapLimit(SOURCES, SOURCE_CONCURRENCY, async s => {
+        const results = await mapLimit(sources, SOURCE_CONCURRENCY, async s => {
           const ctx = contexts.get(s.chain);
           if (!ctx) return { sourceId: s.id, result: { positions: [], complete: false, errors: [unreachable.get(s.chain)!], ledgerVersion: '0' } };
           // Same read and owner classification as the pipeline: a resource account or object cannot sign a claim.
@@ -103,6 +109,12 @@ export default function Check({ prices: published, markets }: { prices: PriceBoo
       <textarea value={text} onChange={e => setText(e.target.value)} rows={5} placeholder="0x… one address per line"
         style={{ width: '100%', font: '14px ui-monospace, monospace', padding: 10, borderRadius: 8, border: '1px solid var(--line)', background: 'var(--card)', color: 'var(--fg)' }} />
       {invalid.length > 0 && <p className="muted">Not an Aptos address: {invalid.slice(0, 3).join(', ')}{invalid.length > 3 ? '…' : ''}</p>}
+      {THIRD_PARTIES.length > 0 && <p className="muted"><label>
+        <input type="checkbox" checked={thirdParty} disabled={!!busy} onChange={e => {
+          setThirdParty(e.target.checked);
+          try { localStorage.setItem(OPT_IN_KEY, e.target.checked ? '1' : '0'); } catch { /* not remembered */ }
+        }} /> Also look up bridge transfers with {THIRD_PARTIES.join(' and ')}. This sends the addresses you check to them.
+      </label></p>}
       <p><button className="button" onClick={run} disabled={!!busy}>{busy || `Check ${addresses.length || ''} wallet${addresses.length === 1 ? '' : 's'}`}</button></p>
       {notice && <p className="muted" role="status">{notice}</p>}
       {error && <p style={{ color: 'var(--bad)' }}>{error}</p>}

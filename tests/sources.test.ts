@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ownerKind } from '../src/shared/owners.ts';
 import { AAVE, aaveFrozenReserves, AAVE_UNFROZEN_AT, USDC } from '../src/shared/sources/aave-frozen.ts';
 import { canopyEndedRewards } from '../src/shared/sources/canopy-rewards.ts';
@@ -8,6 +8,8 @@ import { EARNIUM, EARNIUM_CLOSED_AT, earniumClosedLp } from '../src/shared/sourc
 import { ANIMESWAP, ANIMESWAP_CLOSED_AT, ANIMESWAP_POOLS, animeswapClosedLp, isqrt, pairOf } from '../src/shared/sources/animeswap-closed.ts';
 import { ARIES, ARIES_CLOSED_AT, ariesWoundDown, reserveType } from '../src/shared/sources/aries-wound-down.ts';
 import { AURO_CLOSED_AT, AURO_DAO, AURO_ROUTER, auroClosedPositions } from '../src/shared/sources/auro-closed.ts';
+import { keccak256 } from '../src/shared/keccak.ts';
+import { portalTransfer, WH_CORE, WH_TOKEN_BRIDGE, wormholeUnredeemed } from '../src/shared/sources/wormhole-unredeemed.ts';
 import { burnAmounts, HOUSTON, HOUSTON_CLOSED_AT, HOUSTON_POOLS, houstonClosedLp, sqrtPriceAt, tickOf } from '../src/shared/sources/houston-closed.ts';
 import { echelonFrozenMarkets, FROZEN_MARKETS } from '../src/shared/sources/echelon-frozen.ts';
 import { ECONIA, ECONIA_ARCHIVED_AT, ECONIA_COINS, econiaIdleAccounts } from '../src/shared/sources/econia-idle.ts';
@@ -1296,5 +1298,60 @@ describe('aries wound down', () => {
   it('leaves out a profile with debt', async () => {
     expect((await ariesWoundDown.read(context(chain({ loans: [APT_INFO], loanShare: '5' })), OWNER)).positions).toEqual([]);
     expect((await ariesWoundDown.read(context(chain({ loans: [APT_INFO], loanShare: '0' })), OWNER)).positions).toHaveLength(2);
+  });
+});
+
+describe('keccak256', () => {
+  it('matches the standard vectors, across a block boundary too', () => {
+    const hex = (b: Uint8Array) => Buffer.from(b).toString('hex');
+    expect(hex(keccak256(new Uint8Array()))).toBe('c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470');
+    expect(hex(keccak256(new TextEncoder().encode('abc')))).toBe('4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45');
+    expect(hex(keccak256(new Uint8Array(200).fill(7)))).toBe('4143ef737e81b990c8b604140712d1b0667457ad90b65918a9fa319d00c5b361');
+  });
+});
+
+describe('wormhole unredeemed', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const be = (v: bigint | number, len: number) => Uint8Array.from({ length: len }, (_, i) => Number((BigInt(v) >> BigInt(8 * (len - 1 - i))) & 0xffn));
+  const addrBytes = (a: string) => Uint8Array.from(Buffer.from(a.slice(2).padStart(64, '0'), 'hex'));
+  // A Portal transfer of 1.5 APT (native to Aptos, chain 22) to `to`, signed by guardian set `set` (no signatures).
+  const vaa = (to: string, set = 7) => Buffer.from(new Uint8Array([1, ...be(set, 4), 0, ...be(1_700_000_000, 4), ...be(0, 4), ...be(2, 2), ...new Uint8Array(32), ...be(9, 8), 15,
+    1, ...be(150_000_000, 32), ...addrBytes('0xa'), ...be(22, 2), ...addrBytes(to), ...be(22, 2), ...be(0, 32)])).toString('base64');
+  const chain = (consumed = false) => fakeChain({
+    resource: (address, type) => type === `${WH_TOKEN_BRIDGE}::state::State` ? { consumed_vaas: { elems: { handle: addr('c1') } }, wrapped_infos: { handle: addr('c2') }, native_infos: { handle: addr('c3') } }
+      : type === `${WH_CORE}::state::WormholeState` ? { guardian_set_index: { number: '7' } } : null,
+    tableItem: (handle) => handle === addr('c1') ? (consumed ? { dummy_field: false } : null)
+      : handle === addr('c3') ? { account_address: '0x1', module_name: '0x' + Buffer.from('aptos_coin').toString('hex'), struct_name: '0x' + Buffer.from('AptosCoin').toString('hex') } : null,
+    view: () => ['8'],
+  });
+  const api = (raw: string[]) => vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ operations: raw.map((r, i) => ({ id: `2/emitter/${i}`, vaa: { raw: r } })) }))));
+
+  it('decodes a Portal transfer from a VAA', () => {
+    const t = portalTransfer(Uint8Array.from(Buffer.from(vaa(OWNER), 'base64')))!;
+    expect(t).toMatchObject({ guardianSet: 7, timestamp: 1_700_000_000, amount: 150_000_000n, tokenChain: 22, to: OWNER, toChain: 22 });
+  });
+
+  it('counts a transfer to the owner that the bridge never consumed, redeemed with its VAA', async () => {
+    api([vaa(OWNER), vaa(addr('dd'))]);
+    const r = await wormholeUnredeemed.read(context(chain()), OWNER);
+    expect(r.complete).toBe(true);
+    expect(r.positions).toHaveLength(1);
+    expect(r.positions[0]).toMatchObject({ asset: APT, status: 'recoverable', grossClaim: [{ raw: '150000000' }], positionKind: 'request',
+      claimableSince: new Date(1_700_000_000_000).toISOString(), ageBasis: 'onchain_maturity',
+      steps: [{ function: `${WH_TOKEN_BRIDGE}::complete_transfer::submit_vaa_and_register_entry<0x1::aptos_coin::AptosCoin>` }] });
+    expect(wormholeUnredeemed.thirdParty).toMatch(/Wormholescan/);
+  });
+
+  it('skips consumed transfers and needs the guardians for a VAA from an expired guardian set', async () => {
+    api([vaa(OWNER)]);
+    expect((await wormholeUnredeemed.read(context(chain(true)), OWNER)).positions).toEqual([]);
+    api([vaa(OWNER, 4)]);
+    expect((await wormholeUnredeemed.read(context(chain()), OWNER)).positions[0]).toMatchObject({ status: 'team_gated', expectedPayout: [], blockers: [{ code: 'guardian_set_expired' }] });
+  });
+
+  it('reports a failed lookup as incomplete', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 503 })));
+    const r = await wormholeUnredeemed.read(context(chain()), OWNER);
+    expect(r).toMatchObject({ complete: false, positions: [] });
   });
 });
