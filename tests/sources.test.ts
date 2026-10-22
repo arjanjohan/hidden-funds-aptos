@@ -1148,11 +1148,28 @@ describe('canopy frozen vaults', () => {
     // A stake of these shares after the freeze dates them from that transaction.
     const restaked = await canopyFrozenVaults.read(context(chain({ [SUSDA]: { staked: '7' } })), OWNER, { v: { [share(SUSDA)]: '300000000' } });
     expect(restaked.positions[0].claimableSince).toBe('2026-10-20T05:00:00.000Z');
+    // Its transaction not indexed yet: the time is unknown, so is the age.
+    const c = chain({ [SUSDA]: { staked: '7' } });
+    const unindexed = await canopyFrozenVaults.read(context({ ...c, gql: (async (q: string, v?: Record<string, unknown>) =>
+      q.includes('user_transactions') ? { user_transactions: [] } : c.gql(q, v)) as typeof c.gql }), OWNER, { v: { [share(SUSDA)]: '300000000' } });
+    expect(unindexed.positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined });
     expect(r.positions[0].steps).toHaveLength(1);
     // MovePosition strategies need a price packet the Canopy app supplies; counted as recoverable.
     const packet = await canopyFrozenVaults.read(context(chain({ [RSETH]: { staked: '3' } })), OWNER, {});
     expect(packet.positions[0]).toMatchObject({ status: 'recoverable', claimableSince: '2026-06-16T13:09:26Z' });
     expect(packet.positions[0].steps[1].prerequisites[0]).toMatch(/MovePosition/);
+  });
+
+  it('leaves the age unknown for shares that changed after the version the enumeration scans reached', async () => {
+    // At version 90 (the scans') the owner had 3 sUSDa shares in its wallet; at the read's version 100 it has 7.
+    const at90 = (wallet: string) => {
+      const c = chain({ [SUSDA]: { wallet: '7' } });
+      return { ...c, view: async (fn: string, args: unknown[], typeArgs: string[], version?: string) =>
+        version === '90' && fn === '0x1::primary_fungible_store::balance' ? [wallet] : c.view(fn, args, typeArgs) };
+    };
+    const hint = { at: { [share(SUSDA)]: '2026-01-01T00:00:00.000Z' }, w: '90' };
+    expect((await canopyFrozenVaults.read(context(at90('3')), OWNER, hint)).positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined });
+    expect((await canopyFrozenVaults.read(context(at90('7')), OWNER, hint)).positions[0].claimableSince).toBe('2026-10-16T14:40:46Z');
   });
 
   it('leaves out a vault that is open to deposits', async () => {

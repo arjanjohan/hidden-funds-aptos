@@ -700,7 +700,8 @@ const STAKE_EVENTS_QUERY = `query($t:[String!]!,$v:bigint!,$i:bigint!){ events(w
 export const canopyFrozenEnumerator: Enumerator = {
   sourceId: 'canopy-frozen-vaults',
   processor: 'fungible_asset_processor',
-  alsoProcessors: ['default_processor', 'events_processor'],
+  // The read looks up stake and withdrawal times in user transactions.
+  alsoProcessors: ['default_processor', 'events_processor', 'user_transaction_processor'],
   scope: `stores holding any ${CANOPY_VAULTS}::vault shares token (current_fungible_asset_balances), plus stakers in ${CANOPY_REWARDS}::multi_rewards (user_staked_balances) with their stakes and withdrawals from version ${CANOPY_STAKES_FROM}`,
   async run(chain) {
     const shares: string[] = [];
@@ -709,6 +710,10 @@ export const canopyFrozenEnumerator: Enumerator = {
       shares.push(...(page as any).vaults.map((v: any) => normalizeAddress(v.shares_address)));
       if ((page as any).vaults.length < 100) break;
     }
+    // Share stores and stakes come from two processors: the lower watermark, taken before the scans, is a version
+    // everything they read is at least as recent as.
+    const w = String([await processorWatermark(chain, 'fungible_asset_processor'), await processorWatermark(chain, 'events_processor')]
+      .map(m => BigInt(m.version)).reduce((a, b) => (a < b ? a : b)));
     const hints = new Map<string, { at?: Record<string, string>; v?: Record<string, string> }>();
     let pages = 1;
     let after = '';
@@ -746,7 +751,7 @@ export const canopyFrozenEnumerator: Enumerator = {
       const last = events[events.length - 1];
       v = String(last.transaction_version); i = String(last.event_index);
     }
-    return { candidates: [...hints].map(([owner, hint]) => ({ owner, hint })), pages };
+    return { candidates: [...hints].map(([owner, hint]) => ({ owner, hint: { ...hint, w } })), pages };
   },
   sanity: async () => ({ check: 'none', ok: null, detail: 'no contract total: shares are spread over wallets and the staking pool' }),
 };

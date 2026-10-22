@@ -110,8 +110,9 @@ export const CANOPY_ASSETS = ([
 ] as [string, string, number][]).map(([address, symbol, decimals]) => ({ asset: `movement:${address}`, symbol, decimals }));
 
 /** Enumeration hint, by shares token: when the owner's share store last changed (`at`, indexer), and the version of its
- *  last stake or withdrawal of those shares in Canopy's rewards pools (`v`). */
-export type CanopyFrozenHint = { at?: Record<string, string>; v?: Record<string, string> };
+ *  last stake or withdrawal of those shares in Canopy's rewards pools (`v`); and the version the enumeration's scans
+ *  reached (`w`). */
+export type CanopyFrozenHint = { at?: Record<string, string>; v?: Record<string, string>; w?: string };
 
 interface VaultInfo { address: string; shares: string; asset: string }
 
@@ -166,10 +167,16 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: CanopyFrozenHin
       ]);
       const info = FROZEN_VAULTS.get(vault.address);
       const strategies = ((map as any).data as any[]).map(e => normalizeAddress(e.key.inner));
-      // Frozen, so no new deposits: aged from the freeze, or from the owner's own later change where it is known.
+      // Frozen, so no new deposits: aged from the freeze, or from the owner's own later change where it is known. Shares
+      // that differ from those at the version the enumeration's scans reached changed after them, and a stake or
+      // withdrawal whose transaction is not indexed yet has no time: either way the age is unknown until a later run.
+      const unscanned = !!hint?.w && Number(hint.w) < Number(version) && await Promise.all([
+        inWallet.has(token) ? ctx.chain.view('0x1::primary_fungible_store::balance', [owner, token], ['0x1::fungible_asset::Metadata'], hint.w) : ['0'],
+        stakedTokens.has(token) ? ctx.chain.view(`${CANOPY_REWARDS}::multi_rewards::get_user_staked_balance`, [owner, token], [], hint.w) : ['0'],
+      ]).then(([[walletThen], [stakedThen]]) => String(walletThen) !== String(wallet) || String(stakedThen) !== String(staked), () => true);
       const stakeChange = hint?.v?.[token];
-      const restaked = stakeChange && Number(stakeChange) > (info?.frozenVersion ?? Infinity) ? await stakedAt(stakeChange) : null;
-      const since = info ? [info.frozenAt, hint?.at?.[token], restaked !== null ? iso(restaked) : undefined]
+      const restaked = stakeChange && Number(stakeChange) > (info?.frozenVersion ?? Infinity) ? await stakedAt(stakeChange) : undefined;
+      const since = info && !unscanned && restaked !== null ? [info.frozenAt, hint?.at?.[token], restaked !== undefined ? iso(restaked) : undefined]
         .filter((d): d is string => !!d).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a)) : undefined;
       const value = [{ asset: `movement:${vault.asset}`, raw: String(assets) }];
       const check = info?.check;

@@ -487,7 +487,9 @@ describe('canopy frozen enumerator', () => {
     const c = fakeChain({
       view: () => [{ vaults: [{ shares_address: addr('51'), vault_address: addr('52') }] }],
       resource: () => ({ user_staked_balances: { handle: addr('99') } }),
-      gql: (query, vars) => query.includes('current_table_items')
+      gql: (query, vars) => query.includes('processor_status')
+        ? { processor_status: [{ last_success_version: vars.p === 'events_processor' ? '250000000' : '260000000', last_transaction_timestamp: '2026-10-21T00:00:00' }] }
+        : query.includes('current_table_items')
         // The staking table, walked in 16 key ranges: both stakers sit in the first.
         ? { current_table_items: vars.a === '0x0' ? [{ key: addr(1), last_transaction_version: '7' }, { key: addr(2), last_transaction_version: '9' }] : [] }
         : query.includes('events')
@@ -500,8 +502,9 @@ describe('canopy frozen enumerator', () => {
           { owner_address: CANOPY_REWARDS_STATE, asset_type: addr('51'), storage_id: addr('a2'), last_transaction_timestamp: '2026-10-01T00:00:00' }] },
     });
     expect((await canopyFrozenEnumerator.run(c, undefined)).candidates).toEqual([
-      { owner: addr(1), hint: { at: { [addr('51')]: '2026-10-01T00:00:00.000Z' } } },
-      { owner: addr(2), hint: { v: { [addr('51')]: '200000000', [addr('53')]: '200000005' } } },
+      // Every hint carries the lower of the two processors' watermarks.
+      { owner: addr(1), hint: { at: { [addr('51')]: '2026-10-01T00:00:00.000Z' }, w: '250000000' } },
+      { owner: addr(2), hint: { v: { [addr('51')]: '200000000', [addr('53')]: '200000005' }, w: '250000000' } },
     ]);
   });
 });
