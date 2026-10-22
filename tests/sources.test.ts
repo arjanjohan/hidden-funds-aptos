@@ -912,6 +912,17 @@ describe('auro closed positions', () => {
     expect(other.positions[0].claimableSince).toBe(AURO_CLOSED_AT);
   });
 
+  it('leaves the age unknown for a position that still had debt at the version the repayment scan reached', async () => {
+    // At version 90 (the scan's) the position had debt; at the read's version 100 it is repaid.
+    const c = chain();
+    const atScan = { ...c, resource: async (address: string, type: string, version?: string) =>
+      version === '90' && type.endsWith('::lending_pool::UserPosition') ? { deposit_shares: { data: [] }, debt_shares: { data: [{ key: { inner: POOL }, value: '1' }] } }
+        : c.resource(address, type) };
+    const r = await auroClosedPositions.read(context(atScan), OWNER, { tokens: [NFT], w: '90' });
+    expect(r.positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined });
+    expect((await auroClosedPositions.read(context(c), OWNER, { tokens: [NFT], w: '100' })).positions[0].claimableSince).toBe(AURO_CLOSED_AT);
+  });
+
   it('leaves out positions with debt and position NFTs that moved', async () => {
     expect((await auroClosedPositions.read(context(chain({ debt: true })), OWNER, { tokens: [NFT] })).positions).toEqual([]);
     expect((await auroClosedPositions.read(context(chain({ owner: addr('e9') })), OWNER, { tokens: [NFT] })).positions).toEqual([]);

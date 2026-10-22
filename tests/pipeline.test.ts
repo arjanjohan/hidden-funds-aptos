@@ -405,8 +405,8 @@ describe('auro enumerator', () => {
   it('dates a position by an Auro call that touched it after the shutdown, whoever sent it, and by an ownership change after it', async () => {
     const r = await auroClosedEnumerator.run(auro('5200000000'), undefined);
     expect(r.candidates).toEqual([
-      { owner: addr(1), hint: { tokens: [addr('f1'), addr('f3')], changed: { [addr('f1')]: '2026-05-07T16:32:48.000Z', [addr('f3')]: '2026-06-01T00:00:00.000Z' } } },
-      { owner: addr(2), hint: { tokens: [addr('f2')] } },
+      { owner: addr(1), hint: { tokens: [addr('f1'), addr('f3')], changed: { [addr('f1')]: '2026-05-07T16:32:48.000Z', [addr('f3')]: '2026-06-01T00:00:00.000Z' }, w: '5200000000' } },
+      { owner: addr(2), hint: { tokens: [addr('f2')], w: '5200000000' } },
     ]);
     expect(JSON.parse(r.cursor!)).toMatchObject({ v: '5100000000', repaid: { [addr('f1')]: '2026-05-07T16:32:48.000Z' } });
     // The repayment is remembered across runs.
