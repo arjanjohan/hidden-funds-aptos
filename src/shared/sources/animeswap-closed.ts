@@ -31,8 +31,9 @@ export const ANIMESWAP_COINS = [
   { coin: '0x1000000fa32d122c18a6a31c009ce5e71674f22d06a581bb0a15575e6addadcc::usda::USDA', symbol: 'USDA', decimals: 6 },
 ];
 
-/** Enumeration hint: each LP coin type the owner holds, with the time its store last changed (indexer). */
-export type AnimeswapHint = { lps: Record<string, string> };
+/** Enumeration hint: each LP coin type the owner holds, with the time its store last changed (indexer), and the
+ *  fungible-asset processor's watermark when those times were taken. */
+export type AnimeswapHint = { lps: Record<string, string>; w?: string };
 
 /** `LPCoin<X, Y>` → [X, Y], splitting on the top-level comma (pool coins can be generic themselves). */
 export function pairOf(lp: string): [string, string] {
@@ -129,8 +130,11 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: AnimeswapHint):
       if (liquidity === 0n) return [];
       const [x, y] = pairOf(lp);
       const [ax, ay] = removal(p, liquidity, a);
-      // The pool keeps working, so LP added or received after the shutdown is aged from that change.
-      const since = Date.parse(changedAt) > Date.parse(ANIMESWAP_CLOSED_AT) ? changedAt : ANIMESWAP_CLOSED_AT;
+      // The pool keeps working, so LP added or received after the shutdown is aged from that change. A balance that
+      // differs from the one at the indexer's watermark changed after the store time was taken: unknown until a later run.
+      const unindexed = !!hint?.w && Number(hint.w) < Number(version) &&
+        (await ctx.chain.view('0x1::coin::balance', [owner], [lp], hint.w).catch(() => [null]))[0] !== held;
+      const since = unindexed ? undefined : Date.parse(changedAt) > Date.parse(ANIMESWAP_CLOSED_AT) ? changedAt : ANIMESWAP_CLOSED_AT;
       const blockers = [
         ...(p.locked ? [{ code: 'paused', detail: 'The pool is locked.' }] : []),
         // burn aborts when either side rounds to zero (ERR_INSUFFICIENT_LIQUIDITY_BURN).
@@ -144,7 +148,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: AnimeswapHint):
       // so only the first side carries the step: shown twice, it would tell the owner to burn the same LP twice.
       return outputs.filter(o => o.raw !== '0').map((o, i): Position => ({
         ...positionIds(SOURCE, owner, lp, 'principal', o.asset), source: SOURCE, owner, locator: lp, positionKind: 'principal', asset: o.asset,
-        claimableSince: since, ageBasis: 'protocol_closure',
+        claimableSince: since, ageBasis: since ? 'protocol_closure' : 'unknown',
         provenance: { reader: '0x1::coin::balance', ledgerVersion: version },
         grossClaim: [o], expectedPayout: blockers.length ? [] : [o], payoutBasis: 'derived',
         status: blockers.length ? 'blocked' : 'recoverable', blockers,
