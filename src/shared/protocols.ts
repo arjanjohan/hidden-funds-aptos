@@ -204,6 +204,8 @@ export const PROTOCOLS: ProtocolEntry[] = [
     reason: 'Live: obric.xyz is up (2026-10-21); its liquidity is in live use (R4).' },
   { id: 'tsunamix', name: 'TsunamiX (Tsunami Finance)', chains: [...A], category: 'Derivatives', status: 'not_left_behind', checkedAt: '2026-10-21', defillama: 'tsunamix', dead: 'yes',
     reason: 'Live despite DefiLlama\'s dead flag: tsunami.finance/trade serves the app (2026-10-21).' },
+  { id: 'avant', name: 'Avant (savUSD)', chains: [...M], category: 'Stablecoin', status: 'not_left_behind', checkedAt: '2026-10-22',
+    reason: 'On Movement only its staked avUSD (savUSD, `0xde6e…5642`) exists, created by a plain account with no modules: a bridged token held in wallets, with no withdrawal requests or cooldowns on Movement. Featured on Movement\'s ecosystem page.' },
   { id: 'vibrantx', name: 'VibrantX', chains: [...A], category: 'Yield Aggregator', status: 'not_left_behind', checkedAt: '2026-10-22',
     reason: 'Holds nothing itself: it acts from users\' own accounts, so its positions are their own lending profiles (Aries profiles named "vibrantx::aries_lending", read by aries-wound-down on the check page). vibrantx.finance redirects to vibrantxapp.finance, which answers 400 (2026-10-22).' },
   { id: 'ekiden', name: 'Ekiden', chains: [...A], category: 'Derivatives', status: 'not_left_behind', checkedAt: '2026-10-22',
