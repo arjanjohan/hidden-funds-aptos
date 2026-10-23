@@ -1352,21 +1352,26 @@ describe('wormhole unredeemed', () => {
   afterEach(() => vi.unstubAllGlobals());
   const be = (v: bigint | number, len: number) => Uint8Array.from({ length: len }, (_, i) => Number((BigInt(v) >> BigInt(8 * (len - 1 - i))) & 0xffn));
   const addrBytes = (a: string) => Uint8Array.from(Buffer.from(a.slice(2).padStart(64, '0'), 'hex'));
-  // A Portal transfer of 1.5 APT (native to Aptos, chain 22) to `to`, signed by guardian set `set` (no signatures).
-  const vaa = (to: string, set = 7) => Buffer.from(new Uint8Array([1, ...be(set, 4), 0, ...be(1_700_000_000, 4), ...be(0, 4), ...be(2, 2), ...new Uint8Array(32), ...be(9, 8), 15,
+  // A Portal transfer of 1.5 APT (native to Aptos, chain 22) to `to`, signed by guardian set `set` (no signatures), from
+  // emitter 0xe0 on chain 2.
+  const vaa = (to: string, set = 7, emitter = '0xe0') => Buffer.from(new Uint8Array([1, ...be(set, 4), 0, ...be(1_700_000_000, 4), ...be(0, 4), ...be(2, 2), ...addrBytes(emitter), ...be(9, 8), 15,
     1, ...be(150_000_000, 32), ...addrBytes('0xa'), ...be(22, 2), ...addrBytes(to), ...be(22, 2), ...be(0, 32)])).toString('base64');
-  const chain = (consumed = false) => fakeChain({
-    resource: (address, type) => type === `${WH_TOKEN_BRIDGE}::state::State` ? { consumed_vaas: { elems: { handle: addr('c1') } }, wrapped_infos: { handle: addr('c2') }, native_infos: { handle: addr('c3') } }
-      : type === `${WH_CORE}::state::WormholeState` ? { guardian_set_index: { number: '7' } } : null,
-    tableItem: (handle) => handle === addr('c1') ? (consumed ? { dummy_field: false } : null)
-      : handle === addr('c3') ? { account_address: '0x1', module_name: '0x' + Buffer.from('aptos_coin').toString('hex'), struct_name: '0x' + Buffer.from('AptosCoin').toString('hex') } : null,
+  // Guardian set 6 expires at `expiry6` (the ledger's time is 1,800,000,000); set 4 expired long ago.
+  const chain = (consumed = false, expiry6 = 1_700_000_000) => fakeChain({
+    resource: (address, type) => type === `${WH_TOKEN_BRIDGE}::state::State` ? { consumed_vaas: { elems: { handle: addr('c1') } }, wrapped_infos: { handle: addr('c2') },
+        native_infos: { handle: addr('c3') }, registered_emitters: { handle: addr('c4') } }
+      : type === `${WH_CORE}::state::WormholeState` ? { guardian_set_index: { number: '7' }, guardian_sets: { handle: addr('c5') } } : null,
+    tableItem: (handle, _k, _v, key) => handle === addr('c1') ? (consumed ? { dummy_field: false } : null)
+      : handle === addr('c3') ? { account_address: '0x1', module_name: '0x' + Buffer.from('aptos_coin').toString('hex'), struct_name: '0x' + Buffer.from('AptosCoin').toString('hex') }
+      : handle === addr('c5') ? { index: { number: key }, expiration_time: { number: String(key === '6' ? expiry6 : 1_600_000_000) } } : null,
     view: () => ['8'],
+    gql: (_q, v) => ({ current_table_items: v.h === addr('c4') && (v.k as { number: string }).number === '2' ? [{ decoded_value: { external_address: addr('e0') } }] : [] }),
   });
   const api = (raw: string[]) => vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ operations: raw.map((r, i) => ({ id: `2/emitter/${i}`, vaa: { raw: r } })) }))));
 
   it('decodes a Portal transfer from a VAA', () => {
     const t = portalTransfer(Uint8Array.from(Buffer.from(vaa(OWNER), 'base64')))!;
-    expect(t).toMatchObject({ guardianSet: 7, timestamp: 1_700_000_000, amount: 150_000_000n, tokenChain: 22, to: OWNER, toChain: 22 });
+    expect(t).toMatchObject({ guardianSet: 7, timestamp: 1_700_000_000, emitterChain: 2, emitter: addr('e0'), amount: 150_000_000n, tokenChain: 22, to: OWNER, toChain: 22 });
   });
 
   it('counts a transfer to the owner that the bridge never consumed, redeemed with its VAA', async () => {
@@ -1380,11 +1385,20 @@ describe('wormhole unredeemed', () => {
     expect(wormholeUnredeemed.thirdParty).toMatch(/Wormholescan/);
   });
 
-  it('skips consumed transfers and needs the guardians for a VAA from an expired guardian set', async () => {
+  it('skips consumed transfers and messages from an unregistered emitter', async () => {
     api([vaa(OWNER)]);
     expect((await wormholeUnredeemed.read(context(chain(true)), OWNER)).positions).toEqual([]);
+    api([vaa(OWNER, 7, '0xe1')]);
+    expect((await wormholeUnredeemed.read(context(chain()), OWNER)).positions).toEqual([]);
+  });
+
+  it('needs the guardians for a VAA from an expired guardian set, not from one still in its grace period', async () => {
     api([vaa(OWNER, 4)]);
     expect((await wormholeUnredeemed.read(context(chain()), OWNER)).positions[0]).toMatchObject({ status: 'team_gated', expectedPayout: [], blockers: [{ code: 'guardian_set_expired' }] });
+    api([vaa(OWNER, 6)]);
+    expect((await wormholeUnredeemed.read(context(chain()), OWNER)).positions[0].status).toBe('team_gated');
+    api([vaa(OWNER, 6)]);
+    expect((await wormholeUnredeemed.read(context(chain(false, 1_800_000_100)), OWNER)).positions[0]).toMatchObject({ status: 'recoverable', blockers: [] });
   });
 
   it('reports a failed lookup as incomplete', async () => {
