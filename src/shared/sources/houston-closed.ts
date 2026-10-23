@@ -113,9 +113,11 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: HoustonHint): P
         const [bx, by] = burnAmounts(liquidity, lower, upper, tier.tick, tier.sqrtPrice);
         // Fees the position has been credited (owed, or stored) are paid with it; fees accrued since its last update are
         // left out (no view computes them).
-        const ax = bx + BigInt(p.tokens_owed_x) + BigInt(p.tokens_stored_x.value), ay = by + BigInt(p.tokens_owed_y) + BigInt(p.tokens_stored_y.value);
-        // The pool pays from its reserves: a removal they cannot cover aborts (EINSUFFICIENT_BALANCE, simulated).
-        const short = ax > tier.reserveX || ay > tier.reserveY;
+        const fromPoolX = bx + BigInt(p.tokens_owed_x), fromPoolY = by + BigInt(p.tokens_owed_y);
+        const ax = fromPoolX + BigInt(p.tokens_stored_x.value), ay = fromPoolY + BigInt(p.tokens_stored_y.value);
+        // The pool pays the burn and owed fees from its reserves: a removal they cannot cover aborts (EINSUFFICIENT_BALANCE,
+        // simulated). Stored coins are held in the position itself, so they do not draw on the reserves.
+        const short = fromPoolX > tier.reserveX || fromPoolY > tier.reserveY;
         const blockers = short ? [{ code: 'reserve_short', detail: 'The pool holds less than this position is owed; removing it aborts.' }] : [];
         const outputs: Amount[] = [{ asset: x, raw: ax.toString() }, { asset: y, raw: ay.toString() }];
         const step = { function: `${HOUSTON}::liquidity_manager::remove_liquidity${pair}`,
@@ -123,11 +125,16 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: HoustonHint): P
             (bx * (10_000n - SLIPPAGE_BPS) / 10_000n).toString(), (by * (10_000n - SLIPPAGE_BPS) / 10_000n).toString(), NO_DEADLINE],
           prerequisites: [], expectedOutputs: outputs };
         const locator = `${pair}#${p.id}`;
-        // One position per side, so a priced side still counts when the other coin has no price. One removal pays both,
-        // so only the first side carries the step: shown twice, it would tell the owner to remove the same range twice.
+        // One position per side, so a priced side still counts when the other coin has no price: `principal` is what the
+        // pool pays (burn and owed fees), `fees` the coins stored in the position itself. One removal pays all of them,
+        // so only the first carries the step: shown twice, it would tell the owner to remove the same range twice.
+        const parts: [Position['positionKind'], Amount][] = [
+          ['principal', { asset: x, raw: fromPoolX.toString() }], ['principal', { asset: y, raw: fromPoolY.toString() }],
+          ['fees', { asset: x, raw: p.tokens_stored_x.value }], ['fees', { asset: y, raw: p.tokens_stored_y.value }],
+        ];
         let first = true;
-        for (const o of outputs) if (o.raw !== '0') positions.push({
-          ...positionIds(SOURCE, owner, locator, 'principal', o.asset), source: SOURCE, owner, locator, positionKind: 'principal', asset: o.asset,
+        for (const [kind, o] of parts) if (o.raw !== '0') positions.push({
+          ...positionIds(SOURCE, owner, locator, kind, o.asset), source: SOURCE, owner, locator, positionKind: kind, asset: o.asset,
           claimableSince: since, ageBasis: since ? 'protocol_closure' : 'unknown',
           provenance: { reader: `${WALLET}${pair}`, ledgerVersion: version },
           grossClaim: [o], expectedPayout: short ? [] : [o], payoutBasis: 'derived',

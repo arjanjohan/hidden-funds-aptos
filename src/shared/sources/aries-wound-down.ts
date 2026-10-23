@@ -47,13 +47,49 @@ async function walk(ctx: ReadContext, table: any, struct: 'Deposit' | 'Loan'): P
   return out;
 }
 
-/** A reserve's payout asset: the fungible asset behind an Aries wrapper coin, else the coin itself. */
+/** A reserve's payout asset, and whether it is withdrawn as a fungible asset: an Aries wrapper coin (registered with
+ *  `fa_to_coin_wrapper`) pays the fungible asset it wraps through `withdraw_fa`; any other coin, also one in Aries's own
+ *  package that is not registered, pays itself through `withdraw`. */
 const assetOfReserve = (ctx: ReadContext, type: string) => once(ctx, `aries-asset:${type}`, async () => {
-  if (!type.startsWith(`${ARIES}::`)) return assetOf(type);
-  const info = await ctx.chain.resource(ARIES, `${ARIES}::fa_to_coin_wrapper::WrapperCoinInfo<${type}>`, ctx.ledger.version);
-  if (!info) throw new Error(`Aries wrapper ${type} missing`);
-  return normalizeAddress(info.metadata.inner ?? info.metadata);
+  const info = type.startsWith(`${ARIES}::`) ? await ctx.chain.resource(ARIES, `${ARIES}::fa_to_coin_wrapper::WrapperCoinInfo<${type}>`, ctx.ledger.version) : null;
+  return info ? { asset: normalizeAddress(info.metadata.inner ?? info.metadata), fa: true } : { asset: assetOf(type), fa: false };
 });
+
+/** The first version after the wind-down's end of day (the block at 2026-08-01 00:00:00 UTC, read from the archive). */
+const ARIES_CLOSED_VERSION = '6554002069';
+const LATE_TXS_QUERY = `query($o:String!,$v:bigint!,$before:bigint!){ user_transactions(where:{sender:{_eq:$o}, version:{_gte:$v, _lt:$before}},
+  order_by:{version:desc}, limit:100){ version entry_function_id_str } }`;
+const DEPOSITS = new Set(['deposit', 'deposit_fa'].map(f => `${ARIES}::controller::${f}`));
+/** Owners with more transactions since the wind-down than this many pages are not searched: their age is unknown. */
+const LATE_PAGES = 10;
+
+/** Waits briefly for the indexer's transactions to reach the read's version (it trails the fullnode by seconds). */
+const indexedThrough = (ctx: ReadContext) => once(ctx, `aries-indexed:${ctx.ledger.version}`, async () => {
+  for (let i = 0; i < INDEX_TRIES; i++) {
+    const [row] = (await ctx.chain.gql(`query{ processor_status(where:{processor:{_eq:"user_transaction_processor"}}){ last_success_version } }`)).processor_status;
+    if (row && BigInt(row.last_success_version) >= BigInt(ctx.ledger.version)) return true;
+    if (i < INDEX_TRIES - 1) await new Promise(r => setTimeout(r, INDEX_WAIT_MS));
+  }
+  return false;
+});
+const INDEX_TRIES = 6, INDEX_WAIT_MS = 2_000;
+
+/** Whether the owner deposited into Aries after the wind-down (Aries still takes deposits): its deposits are then not all
+ *  from before it, so their ages are unknown. Its transactions since then, newest first (filtering by function
+ *  times out; by sender and version it does not). An indexer that has not reached the read's version could miss the
+ *  newest: then it counts as a late deposit too. */
+async function depositedLate(ctx: ReadContext, owner: string): Promise<boolean> {
+  if (!(await indexedThrough(ctx))) return true;
+  let before = String(BigInt(ctx.ledger.version) + 1n);
+  for (let page = 0; page < LATE_PAGES; page++) {
+    const rows: { version: string; entry_function_id_str: string | null }[] =
+      (await ctx.chain.gql(LATE_TXS_QUERY, { o: owner, v: ARIES_CLOSED_VERSION, before })).user_transactions;
+    if (rows.some(r => r.entry_function_id_str && DEPOSITS.has(r.entry_function_id_str))) return true;
+    if (rows.length < 100) return false;
+    before = String(rows[rows.length - 1].version);
+  }
+  return true;
+}
 
 const reserveState = (ctx: ReadContext, type: string) => once(ctx, `aries-reserve:${type}:${ctx.ledger.version}`, async () => {
   const [s] = await ctx.chain.view(`${ARIES}::reserve::reserve_state`, [], [type], ctx.ledger.version);
@@ -77,8 +113,11 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
     const rows: { key: string; value: { account: string } }[] = registry?.profile_signers?.data ?? [];
     if (rows.length > MAX_PROFILES) errors.push(`only ${MAX_PROFILES} of ${rows.length} Aries profiles read`);
     for (const row of rows.slice(0, MAX_PROFILES)) {
-      // Profile names are stored with a "profile" prefix; the views and the withdrawal take the bare name.
-      const name = row.key.startsWith('profile') ? row.key.slice('profile'.length) : null;
+      // Profile names are stored with a "profile" prefix; the views and the withdrawal take the bare name. The key is a
+      // Move String (the API renders it as text, e.g. "profileMain Account"); a hex rendering is decoded too, which no
+      // text key can be mistaken for since every one starts with "profile".
+      const key = /^0x[0-9a-f]*$/i.test(row.key) ? utf8(row.key) : row.key;
+      const name = key.startsWith('profile') ? key.slice('profile'.length) : null;
       if (name === null) { errors.push(`unrecognised Aries profile key ${row.key}`); continue; }
       const profile = await ctx.chain.resource(row.value.account, `${ARIES}::profile::Profile`, version);
       if (!profile) { errors.push(`Aries profile ${name} missing`); continue; }
@@ -91,6 +130,8 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
       if (debt) continue;
       // Each reserve is read on its own: one that fails leaves the others readable.
       const supplied: { type: string; quote: bigint | null }[] = [];
+      // Reserves whose deposit could not be read: still supplied as far as the oracle check below knows.
+      const unread: string[] = [];
       for (const type of await walk(ctx, profile.deposited_reserves, 'Deposit')) {
         try {
           const [lp, underlying] = await ctx.chain.view(`${ARIES}::profile::profile_deposit`, [owner, name], [type], version);
@@ -99,21 +140,23 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
           // The quote overflows where the reserve records more than its loans plus cash: the contract cannot quote it,
           // or pay it (phase 0: 2 of ~200 sampled users).
           if (/overflow|ARITHMETIC_ERROR/i.test(String(err))) supplied.push({ type, quote: null });
-          else errors.push(`Aries ${name || '(main)'}/${type}: ${String(err).slice(0, 200)}`);
+          else { unread.push(type); errors.push(`Aries ${name || '(main)'}/${type}: ${String(err).slice(0, 200)}`); }
         }
       }
       for (const { type, quote } of supplied) {
         if (quote === 0n) continue;
         try {
-          const [asset, state] = await Promise.all([assetOfReserve(ctx, type), reserveState(ctx, type)]);
-          // After a withdrawal the contract values what the profile still supplies: only the last reserve left leaves
-          // without a fresh price.
-          const stale = (await Promise.all(supplied.filter(s => s.type !== type).map(s => priced(ctx, s.type)))).some(p => !p);
-          const blocker = quote === null ? { code: 'reserve_accounting_negative', detail: 'Aries cannot quote this deposit: the reserve records more than its loans plus cash, so the quote (and a withdrawal) aborts.' }
+          const [{ asset, fa }, state] = await Promise.all([assetOfReserve(ctx, type), reserveState(ctx, type)]);
+          // The reserve's own blockers first: they decide without reading any other reserve's oracle.
+          const local = quote === null ? { code: 'reserve_accounting_negative', detail: 'Aries cannot quote this deposit: the reserve records more than its loans plus cash, so the quote (and a withdrawal) aborts.' }
             : !state.redeem ? { code: 'paused', detail: 'Redemption is disabled for this reserve.' }
             : state.cash < quote ? { code: 'reserves_removed', detail: 'Aries\'s admin moved this reserve\'s cash out (2026-06-26 to 08-17); it holds less than this deposit\'s quote.' }
-            : stale ? { code: 'stale_oracle', detail: 'This profile also supplies a reserve whose oracle price is stale; withdrawing aborts until only this reserve is left.' }
             : null;
+          // After a withdrawal the contract values what the profile still supplies: only the last reserve left leaves
+          // without a fresh price.
+          const others = [...supplied.filter(s => s.type !== type).map(s => s.type), ...unread];
+          const stale = !local && (await Promise.all(others.map(t => priced(ctx, t)))).some(p => !p);
+          const blocker = local ?? (stale ? { code: 'stale_oracle', detail: 'This profile also supplies a reserve whose oracle price is stale; withdrawing aborts until only this reserve is left.' } : null);
           const value: Amount[] = quote === null ? [] : [{ asset, raw: quote.toString() }];
           const locator = `${name || '(main)'}/${type}`;
           positions.push({
@@ -124,7 +167,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
             status: blocker ? 'blocked' : 'recoverable', blockers: blocker ? [blocker] : [],
             confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
             // u64 max withdraws everything the profile supplies to the reserve.
-            steps: [{ function: `${ARIES}::controller::${type.startsWith(`${ARIES}::`) ? 'withdraw_fa' : 'withdraw'}<${type}>`,
+            steps: [{ function: `${ARIES}::controller::${fa ? 'withdraw_fa' : 'withdraw'}<${type}>`,
               arguments: [hex(name), U64_MAX, 'false'], prerequisites: [], expectedOutputs: blocker ? [] : value }],
           });
         } catch (err) {
@@ -132,6 +175,9 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
         }
       }
     }
+    // Aged from the wind-down, unless the owner deposited after it (also when the lookup fails: unknown, not wrong).
+    if (positions.length && await depositedLate(ctx, owner).catch(() => true))
+      for (const p of positions) Object.assign(p, { claimableSince: undefined, ageBasis: 'unknown' });
   } catch (err) {
     return { positions, complete: false, errors: [...errors, String(err).slice(0, 300)], ledgerVersion: version };
   }
