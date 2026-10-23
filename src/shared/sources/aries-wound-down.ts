@@ -100,8 +100,11 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
     const rows: { key: string; value: { account: string } }[] = registry?.profile_signers?.data ?? [];
     if (rows.length > MAX_PROFILES) errors.push(`only ${MAX_PROFILES} of ${rows.length} Aries profiles read`);
     for (const row of rows.slice(0, MAX_PROFILES)) {
-      // Profile names are stored with a "profile" prefix; the views and the withdrawal take the bare name.
-      const name = row.key.startsWith('profile') ? row.key.slice('profile'.length) : null;
+      // Profile names are stored with a "profile" prefix; the views and the withdrawal take the bare name. The key is a
+      // Move String (the API renders it as text, e.g. "profileMain Account"); a hex rendering is decoded too, which no
+      // text key can be mistaken for since every one starts with "profile".
+      const key = /^0x[0-9a-f]*$/i.test(row.key) ? utf8(row.key) : row.key;
+      const name = key.startsWith('profile') ? key.slice('profile'.length) : null;
       if (name === null) { errors.push(`unrecognised Aries profile key ${row.key}`); continue; }
       const profile = await ctx.chain.resource(row.value.account, `${ARIES}::profile::Profile`, version);
       if (!profile) { errors.push(`Aries profile ${name} missing`); continue; }

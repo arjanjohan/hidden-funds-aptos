@@ -1394,6 +1394,15 @@ describe('aries wound down', () => {
     expect(staleUnread.positions.map(p => [p.asset, p.status, p.blockers[0]?.code])).toEqual([[USDC_FA, 'blocked', 'stale_oracle']]);
   });
 
+  it('reads a profile key rendered as text or as hex', async () => {
+    const c = chain();
+    const hexKey = { ...c, resource: async (address: string, type: string, v?: string) => address === OWNER && type === `${ARIES}::profile::Profiles`
+      ? { profile_signers: { data: [{ key: hexOf('profileMain Account'), value: { account: addr('9f') } }] } } : c.resource(address, type, v) };
+    const r = await ariesWoundDown.read(context(hexKey), OWNER);
+    expect(r.complete).toBe(true);
+    expect(r.positions.map(p => p.locator)).toEqual([`Main Account/${APT_T}`, `Main Account/${USDC_T}`]);
+  });
+
   it('leaves the age unknown when the owner deposited after the wind-down', async () => {
     const r = await ariesWoundDown.read(context(chain({ late: true })), OWNER);
     expect(r.positions.map(p => [p.ageBasis, p.claimableSince])).toEqual([['unknown', undefined], ['unknown', undefined]]);
