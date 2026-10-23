@@ -200,6 +200,7 @@ describe('owner kind', () => {
     const chain = fakeChain({ account: () => ({ authentication_key: obj, sequence_number: '0' }), resource: () => ({ owner: addr('b2') }) });
     const memo = memoryMemo();
     await memo.set(`owner-kind:${obj}`, 'user');
+    await memo.set(`owner-kind:v1:${obj}`, 'user');
     expect(await ownerKind(context(chain, undefined, memo), obj)).toBe('object');
   });
 
@@ -1169,18 +1170,21 @@ describe('canopy frozen vaults', () => {
     },
     resource: (address, type) => type === `${CANOPY_VAULTS}::vault::Vault` ? { is_paused: false, deposit_limit: { vec: held[address]?.open ? [] : ['0'] } } : null,
     gql: query => query.includes('user_transactions') ? { user_transactions: [{ timestamp: '2026-10-20T05:00:00' }] }
-      : { current_fungible_asset_balances: Object.entries(held).filter(([, h]) => h.wallet).map(([v]) => ({ asset_type: share(v), storage_id: addr('6') })) },
+      : { current_fungible_asset_balances: Object.entries(held).filter(([, h]) => h.wallet).map(([v]) => ({ asset_type: share(v), storage_id: addr('6'), is_primary: true })) },
   });
 
-  it('counts shares in the wallet and staked in a frozen vault, unstaking first; blocked where withdrawing aborts', async () => {
+  it('counts shares in the wallet and staked in a frozen vault as separate parts, unstaking first; blocked where withdrawing aborts', async () => {
     // The stake (version 5) came long before the freeze, so its time is not looked up.
     const r = await canopyFrozenVaults.read(context(chain({ [MOVE0]: { wallet: '50', staked: '100' } })), OWNER, { at: { [share(MOVE0)]: '2026-01-01T00:00:00.000Z' }, v: { [share(MOVE0)]: '5' } });
     expect(r.complete).toBe(true);
-    expect(r.positions).toHaveLength(1);
-    expect(r.positions[0]).toMatchObject({ locator: MOVE0, status: 'blocked', blockers: [{ code: 'withdrawal_aborts' }], grossClaim: [{ raw: '300' }], expectedPayout: [],
-      claimableSince: '2026-10-16T14:40:46Z', ageBasis: 'protocol_closure' });
-    expect(r.positions[0].steps.map(s => [s.function.split('::').slice(-2).join('::'), s.arguments.slice(0, 2)])).toEqual([
-      ['multi_rewards::withdraw', [share(MOVE0), '100']], ['router::withdraw_fa', [MOVE0, JSON.stringify([addr('5a')])]]]);
+    expect(r.positions.map(p => [p.locator, p.grossClaim[0].raw, p.status, p.blockers[0]?.code, p.expectedPayout, p.claimableSince])).toEqual([
+      [MOVE0, '100', 'blocked', 'withdrawal_aborts', [], '2026-10-16T14:40:46Z'], [`${MOVE0}/staked`, '200', 'blocked', 'withdrawal_aborts', [], '2026-10-16T14:40:46Z']]);
+    expect(r.positions.map(p => p.steps.map(s => [s.function.split('::').slice(-2).join('::'), s.arguments.slice(0, 2), s.arguments[3]]))).toEqual([
+      [['router::withdraw_fa', [MOVE0, JSON.stringify([addr('5a')])], '50']],
+      [['multi_rewards::withdraw', [share(MOVE0), '100'], undefined], ['router::withdraw_fa', [MOVE0, JSON.stringify([addr('5a')])], '100']]]);
+    // Wallet shares received after the freeze date only the wallet part, not the stake.
+    const received = await canopyFrozenVaults.read(context(chain({ [SUSDA]: { wallet: '1', staked: '9' } })), OWNER, { at: { [share(SUSDA)]: '2026-10-20T00:00:00.000Z' } });
+    expect(received.positions.map(p => [p.locator, p.claimableSince])).toEqual([[SUSDA, '2026-10-20T00:00:00.000Z'], [`${SUSDA}/staked`, '2026-10-16T14:40:46Z']]);
   });
 
   it('is recoverable where withdrawing works, aged from a later change of the owner\'s shares', async () => {
@@ -1201,7 +1205,7 @@ describe('canopy frozen vaults', () => {
     expect(r.positions[0].steps).toHaveLength(1);
     // MovePosition strategies need a price packet from its operator: team-gated, payout kept.
     const packet = await canopyFrozenVaults.read(context(chain({ [RSETH]: { staked: '3' } })), OWNER, {});
-    expect(packet.positions[0]).toMatchObject({ status: 'team_gated', expectedPayout: [{ raw: '6' }], claimableSince: '2026-06-16T13:09:26Z' });
+    expect(packet.positions[0]).toMatchObject({ status: 'team_gated', expectedPayout: [{ raw: '6' }], claimableSince: '2026-06-16T13:09:26Z', blockers: [{ code: 'price_packet' }] });
     expect(packet.positions[0].steps[1].prerequisites[0]).toMatch(/MovePosition/);
   });
 
@@ -1229,6 +1233,24 @@ describe('canopy frozen vaults', () => {
       fn.endsWith('::withdraw::get_withdrawal_map_view') && args[0] === MOVE0 ? Promise.reject(new Error('view failed')) : c.view(fn, args, typeArgs, v) }), OWNER, {});
     expect(failing.complete).toBe(false);
     expect(failing.positions.map(p => p.locator)).toEqual([SUSDA]);
+  });
+
+  it('reads the wallet for a staking token even when the indexer shows no store yet', async () => {
+    // All 7 shares were just withdrawn from staking into the wallet; the indexer has not caught up.
+    const c = chain({ [SUSDA]: { wallet: '7', staked: '0' } });
+    const r = await canopyFrozenVaults.read(context({ ...c, gql: (async () => ({ current_fungible_asset_balances: [] })) as typeof c.gql }), OWNER, {});
+    expect(r.positions.map(p => [p.locator, p.grossClaim[0].raw])).toEqual([[SUSDA, '14']]);
+  });
+
+  it('shows shares in a secondary store the owner holds, uncounted', async () => {
+    const c = chain({ [SUSDA]: { wallet: '7' } });
+    const store = addr('7e');
+    const r = await canopyFrozenVaults.read(context({ ...c,
+      gql: (async (q: string, v?: Record<string, unknown>) => q.includes('user_transactions') ? c.gql(q, v)
+        : { current_fungible_asset_balances: [{ asset_type: share(SUSDA), storage_id: addr('6'), is_primary: true }, { asset_type: share(SUSDA), storage_id: store, is_primary: false }] }) as typeof c.gql,
+      view: async (fn, args, typeArgs, v) => fn === '0x1::object::owner' ? [OWNER] : fn === '0x1::fungible_asset::balance' ? ['3'] : c.view(fn, args, typeArgs, v) }), OWNER, {});
+    expect(r.positions.map(p => [p.locator, p.grossClaim[0].raw, p.status, p.blockers[0]?.code, p.expectedPayout])).toEqual([
+      [SUSDA, '14', 'recoverable', undefined, [{ asset: `movement:${addr('a')}`, raw: '14' }]], [`${SUSDA}/store/${store}`, '6', 'unknown', 'secondary_store', []]]);
   });
 
   it('leaves out a vault that is open to deposits', async () => {
@@ -1264,8 +1286,8 @@ describe('houston closed lp', () => {
     close(inside[1], 1e12 * (p - sqrtF(a)));
   });
 
-  const position = (o: { id?: string; liquidity?: string; owedX?: string } = {}) => ({ id: o.id ?? '3', lower_tick: { v: neg(1200) }, upper_tick: { v: '2400' }, fee_tier: '0',
-    liquidity: o.liquidity ?? '1000000000000', tokens_owed_x: o.owedX ?? '0', tokens_owed_y: '0', tokens_stored_x: { value: '0' }, tokens_stored_y: { value: '0' } });
+  const position = (o: { id?: string; liquidity?: string; owedX?: string; storedY?: string } = {}) => ({ id: o.id ?? '3', lower_tick: { v: neg(1200) }, upper_tick: { v: '2400' }, fee_tier: '0',
+    liquidity: o.liquidity ?? '1000000000000', tokens_owed_x: o.owedX ?? '0', tokens_owed_y: '0', tokens_stored_x: { value: '0' }, tokens_stored_y: { value: o.storedY ?? '0' } });
   const wallet = (positions: unknown[]) => [{ type: `${HOUSTON}::position::PositionWallet${PAIR}`, data: { positions } }, { type: '0x1::account::Account', data: {} }];
   // The pool sits at tick 300; reserves cover the default position unless told otherwise.
   const chain = (positions: unknown[], reserveY = '10000000000000') => fakeChain({
@@ -1299,6 +1321,15 @@ describe('houston closed lp', () => {
     expect(later.positions[0].claimableSince).toBe('2026-12-01T00:00:00.000Z');
   });
 
+  it('pays stored coins from the position itself: they do not draw on the pool\'s reserves', async () => {
+    const [, y] = burnAmounts(10n ** 12n, -1200n, 2400n, 300n, sqrtPriceAt(300n));
+    // The reserves cover the burn exactly; the position also stores 1,000 of Y.
+    const r = await houstonClosedLp.read(context(chain([position({ storedY: '1000' })], String(y))), OWNER, { w: '100' });
+    expect(r.positions.map(p => [p.positionKind, p.status, p.expectedPayout[0]?.raw, p.steps.length])).toEqual([
+      ['principal', 'recoverable', expect.any(String), 1], ['principal', 'recoverable', String(y), 0], ['fees', 'recoverable', '1000', 0]]);
+    expect(new Set(r.positions.map(p => p.id)).size).toBe(3);
+  });
+
   it('leaves the age unknown without a hint (the check page has no history to date a pair)', async () => {
     const r = await houstonClosedLp.read(context(chain([position()])), OWNER);
     expect(r.positions.map(p => [p.ageBasis, p.claimableSince, p.status])).toEqual([['unknown', undefined, 'recoverable'], ['unknown', undefined, 'recoverable']]);
@@ -1311,9 +1342,12 @@ describe('aries wound down', () => {
   const APT_INFO = info('0x1', 'aptos_coin', 'AptosCoin'), USDC_INFO = info(ARIES, 'fa_to_coin_wrapper', 'WrappedUSDC');
   const APT_T = '0x1::aptos_coin::AptosCoin', USDC_T = `${ARIES}::fa_to_coin_wrapper::WrappedUSDC`, USDC_FA = addr('5dc');
   const table = (keys: unknown[]) => ({ inner: { inner: { handle: addr('7a') }, length: String(keys.length) }, head: { vec: keys.slice(0, 1) }, tail: { vec: keys.slice(-1) } });
-  type Opts = { deposits?: unknown[]; loans?: unknown[]; loanShare?: string; cash?: string; redeem?: boolean; stale?: boolean | Error; aptQuote?: Error };
+  type Opts = { deposits?: unknown[]; loans?: unknown[]; loanShare?: string; cash?: string; redeem?: boolean; stale?: boolean | Error; aptQuote?: Error; late?: boolean };
   // Profile "Main Account": APT quoted 500 (and USDC 70); APT's reserve holds `cash`.
   const chain = (o: Opts = {}) => fakeChain({
+    // Deposits by the owner after the wind-down.
+    gql: () => ({ user_transactions: [{ version: '7700000001', entry_function_id_str: '0x1::aptos_account::transfer' },
+      ...(o.late ? [{ version: '7700000000', entry_function_id_str: `${ARIES}::controller::deposit_fa` }] : [])] }),
     resource: (address, type) => {
       if (address === OWNER && type === `${ARIES}::profile::Profiles`) return { profile_signers: { data: [{ key: 'profileMain Account', value: { account: addr('9f') } }] } };
       if (address === addr('9f') && type === `${ARIES}::profile::Profile`) return { deposited_reserves: table(o.deposits ?? [APT_INFO, USDC_INFO]), borrowed_reserves: table(o.loans ?? []) };
@@ -1366,6 +1400,11 @@ describe('aries wound down', () => {
     const down = await ariesWoundDown.read(context(chain({ aptQuote: new Error('fetch failed') })), OWNER);
     expect(down.complete).toBe(false);
     expect(down.positions.map(p => p.asset)).toEqual([USDC_FA]);
+  });
+
+  it('leaves the age unknown when the owner deposited after the wind-down', async () => {
+    const r = await ariesWoundDown.read(context(chain({ late: true })), OWNER);
+    expect(r.positions.map(p => [p.ageBasis, p.claimableSince])).toEqual([['unknown', undefined], ['unknown', undefined]]);
   });
 
   it('leaves out a profile with debt', async () => {
