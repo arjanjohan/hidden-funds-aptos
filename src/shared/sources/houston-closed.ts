@@ -113,9 +113,11 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: HoustonHint): P
         const [bx, by] = burnAmounts(liquidity, lower, upper, tier.tick, tier.sqrtPrice);
         // Fees the position has been credited (owed, or stored) are paid with it; fees accrued since its last update are
         // left out (no view computes them).
-        const ax = bx + BigInt(p.tokens_owed_x) + BigInt(p.tokens_stored_x.value), ay = by + BigInt(p.tokens_owed_y) + BigInt(p.tokens_stored_y.value);
-        // The pool pays from its reserves: a removal they cannot cover aborts (EINSUFFICIENT_BALANCE, simulated).
-        const short = ax > tier.reserveX || ay > tier.reserveY;
+        const fromPoolX = bx + BigInt(p.tokens_owed_x), fromPoolY = by + BigInt(p.tokens_owed_y);
+        const ax = fromPoolX + BigInt(p.tokens_stored_x.value), ay = fromPoolY + BigInt(p.tokens_stored_y.value);
+        // The pool pays the burn and owed fees from its reserves: a removal they cannot cover aborts (EINSUFFICIENT_BALANCE,
+        // simulated). Stored coins are held in the position itself, so they do not draw on the reserves.
+        const short = fromPoolX > tier.reserveX || fromPoolY > tier.reserveY;
         const blockers = short ? [{ code: 'reserve_short', detail: 'The pool holds less than this position is owed; removing it aborts.' }] : [];
         const outputs: Amount[] = [{ asset: x, raw: ax.toString() }, { asset: y, raw: ay.toString() }];
         const step = { function: `${HOUSTON}::liquidity_manager::remove_liquidity${pair}`,

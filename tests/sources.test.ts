@@ -1274,8 +1274,8 @@ describe('houston closed lp', () => {
     close(inside[1], 1e12 * (p - sqrtF(a)));
   });
 
-  const position = (o: { id?: string; liquidity?: string; owedX?: string } = {}) => ({ id: o.id ?? '3', lower_tick: { v: neg(1200) }, upper_tick: { v: '2400' }, fee_tier: '0',
-    liquidity: o.liquidity ?? '1000000000000', tokens_owed_x: o.owedX ?? '0', tokens_owed_y: '0', tokens_stored_x: { value: '0' }, tokens_stored_y: { value: '0' } });
+  const position = (o: { id?: string; liquidity?: string; owedX?: string; storedY?: string } = {}) => ({ id: o.id ?? '3', lower_tick: { v: neg(1200) }, upper_tick: { v: '2400' }, fee_tier: '0',
+    liquidity: o.liquidity ?? '1000000000000', tokens_owed_x: o.owedX ?? '0', tokens_owed_y: '0', tokens_stored_x: { value: '0' }, tokens_stored_y: { value: o.storedY ?? '0' } });
   const wallet = (positions: unknown[]) => [{ type: `${HOUSTON}::position::PositionWallet${PAIR}`, data: { positions } }, { type: '0x1::account::Account', data: {} }];
   // The pool sits at tick 300; reserves cover the default position unless told otherwise.
   const chain = (positions: unknown[], reserveY = '10000000000000') => fakeChain({
@@ -1307,6 +1307,13 @@ describe('houston closed lp', () => {
     // A pair changed after the closure is aged from that change.
     const later = await houstonClosedLp.read(context(c), OWNER, { moved: { [PAIR]: '2026-12-01T00:00:00.000Z' } });
     expect(later.positions[0].claimableSince).toBe('2026-12-01T00:00:00.000Z');
+  });
+
+  it('pays stored coins from the position itself: they do not draw on the pool\'s reserves', async () => {
+    const [, y] = burnAmounts(10n ** 12n, -1200n, 2400n, 300n, sqrtPriceAt(300n));
+    // The reserves cover the burn exactly; the position also stores 1,000 of Y.
+    const r = await houstonClosedLp.read(context(chain([position({ storedY: '1000' })], String(y))), OWNER, { w: '100' });
+    expect(r.positions.map(p => [p.status, p.expectedPayout[0]?.raw])).toEqual([['recoverable', expect.any(String)], ['recoverable', String(y + 1000n)]]);
   });
 
   it('leaves the age unknown without a hint (the check page has no history to date a pair)', async () => {
