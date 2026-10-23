@@ -717,13 +717,14 @@ export const canopyFrozenEnumerator: Enumerator = {
     let after = '';
     for (;;) {
       const rows = (await chain.gql(`query($a:[String!]!,$s:String!){ current_fungible_asset_balances(where:{asset_type:{_in:$a}, amount:{_gt:"0"},
-        storage_id:{_gt:$s}}, order_by:{storage_id:asc}, limit:${PAGE}){ owner_address asset_type storage_id last_transaction_timestamp } }`, { a: shares, s: after })).current_fungible_asset_balances;
+        storage_id:{_gt:$s}}, order_by:{storage_id:asc}, limit:${PAGE}){ owner_address asset_type storage_id is_primary last_transaction_timestamp } }`, { a: shares, s: after })).current_fungible_asset_balances;
       pages++;
       for (const r of rows) {
         const owner = normalizeAddress(r.owner_address), token = normalizeAddress(r.asset_type);
         if (owner === CANOPY_REWARDS_STATE) continue;
+        // Only the primary store dates the wallet's shares; a secondary store's owner is a candidate without a date.
         const at = new Date(r.last_transaction_timestamp + 'Z').toISOString(), prev = hints.get(owner) ?? {};
-        if (!prev.at?.[token] || at > prev.at[token]) hints.set(owner, { ...prev, at: { ...prev.at, [token]: at } });
+        hints.set(owner, r.is_primary && (!prev.at?.[token] || at > prev.at[token]) ? { ...prev, at: { ...prev.at, [token]: at } } : prev);
       }
       if (rows.length < PAGE) break;
       after = rows[rows.length - 1].storage_id;

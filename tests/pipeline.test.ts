@@ -524,8 +524,10 @@ describe('canopy frozen enumerator', () => {
           { transaction_version: '200000005', event_index: 1, data: { user: addr(2), staking_token: { inner: addr('53') } } },
           { transaction_version: '200000006', event_index: 0, data: { user: addr(3), staking_token: { inner: addr('51') } } }] : [] }
         : { current_fungible_asset_balances: [
-          { owner_address: addr(1), asset_type: addr('51'), storage_id: addr('a1'), last_transaction_timestamp: '2026-10-01T00:00:00' },
-          { owner_address: CANOPY_REWARDS_STATE, asset_type: addr('51'), storage_id: addr('a2'), last_transaction_timestamp: '2026-10-01T00:00:00' }] },
+          { owner_address: addr(1), asset_type: addr('51'), storage_id: addr('a1'), is_primary: true, last_transaction_timestamp: '2026-10-01T00:00:00' },
+          // A later change in owner 1's secondary store does not date its wallet shares.
+          { owner_address: addr(1), asset_type: addr('51'), storage_id: addr('a3'), is_primary: false, last_transaction_timestamp: '2026-10-05T00:00:00' },
+          { owner_address: CANOPY_REWARDS_STATE, asset_type: addr('51'), storage_id: addr('a2'), is_primary: false, last_transaction_timestamp: '2026-10-01T00:00:00' }] },
     });
     expect((await canopyFrozenEnumerator.run(c, undefined)).candidates).toEqual([
       // Every hint carries the lowest of the three processors' watermarks.

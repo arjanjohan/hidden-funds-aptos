@@ -1192,7 +1192,7 @@ describe('canopy frozen vaults', () => {
     expect(r.positions[0].steps).toHaveLength(1);
     // MovePosition strategies need a price packet from its operator: team-gated, payout kept.
     const packet = await canopyFrozenVaults.read(context(chain({ [RSETH]: { staked: '3' } })), OWNER, {});
-    expect(packet.positions[0]).toMatchObject({ status: 'team_gated', expectedPayout: [{ raw: '6' }], claimableSince: '2026-06-16T13:09:26Z' });
+    expect(packet.positions[0]).toMatchObject({ status: 'team_gated', expectedPayout: [{ raw: '6' }], claimableSince: '2026-06-16T13:09:26Z', blockers: [{ code: 'price_packet' }] });
     expect(packet.positions[0].steps[1].prerequisites[0]).toMatch(/MovePosition/);
   });
 

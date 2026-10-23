@@ -221,6 +221,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: CanopyFrozenHin
             provenance: { reader: `${CANOPY_VAULTS}::vault::shares_to_amount`, ledgerVersion: version },
             grossClaim: value, expectedPayout: status === 'recoverable' || status === 'team_gated' ? value : [], payoutBasis: 'view', status,
             blockers: blocked ? [{ code: 'withdrawal_aborts', detail: blocked }]
+              : status === 'team_gated' ? [{ code: 'price_packet', detail: 'Withdrawing needs a MovePosition price packet for the vault\'s strategy, which the Canopy app supplies; the call alone, with empty strategy data, aborts.' }]
               : status === 'unknown' ? [{ code: 'not_simulated', detail: 'No withdrawal from this vault has been simulated.' }] : [],
             confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
             steps: [
