@@ -14,7 +14,7 @@ export const CANOPY_ROUTER = '0x717b417949cd5bfa6dc02822eacb727d820de2741f6ea90b
 const SOURCE = 'canopy-frozen-vaults';
 
 /** What a withdrawal simulated as on 2026-10-21 (a holder's shares, the vault's own withdrawal map): 'ok'; 'packet'
- *  when the strategy is MovePosition's, which needs an off-chain price packet the Canopy app supplies (assumed to work);
+ *  when the strategy is MovePosition's, which needs an off-chain price packet from its operator (team-gated);
  *  else the abort. undefined: no holder to simulate with. */
 type Check = 'ok' | 'packet' | 'EINVALID_SHARES_FACTORS' | 'EINSUFFICIENT_BALANCE' | 'EUNKNOWN_STRATEGY' | undefined;
 
@@ -187,12 +187,13 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: CanopyFrozenHin
         const value = [{ asset: `movement:${vault.asset}`, raw: String(assets) }];
         const check = info?.check;
         const blocked = check && check !== 'ok' && check !== 'packet' ? BLOCKED[check] : undefined;
-        const status = blocked ? 'blocked' : check ? 'recoverable' : 'unknown';
+        // A withdrawal that needs the operator's price packet is team-gated (left-behind.md), with its payout kept.
+        const status = blocked ? 'blocked' : check === 'packet' ? 'team_gated' : check ? 'recoverable' : 'unknown';
         return [{
           ...positionIds(SOURCE, owner, vault.address, 'principal', value[0].asset), source: SOURCE, owner, locator: vault.address, positionKind: 'principal',
           asset: value[0].asset, claimableSince: since, ageBasis: since ? 'protocol_closure' : 'unknown',
           provenance: { reader: `${CANOPY_VAULTS}::vault::shares_to_amount`, ledgerVersion: version },
-          grossClaim: value, expectedPayout: status === 'recoverable' ? value : [], payoutBasis: 'view', status,
+          grossClaim: value, expectedPayout: status === 'recoverable' || status === 'team_gated' ? value : [], payoutBasis: 'view', status,
           blockers: blocked ? [{ code: 'withdrawal_aborts', detail: blocked }]
             : status === 'unknown' ? [{ code: 'not_simulated', detail: 'No withdrawal from this vault has been simulated.' }] : [],
           confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),

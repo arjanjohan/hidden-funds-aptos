@@ -117,18 +117,20 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
       const blocker = !coin ? { code: 'not_attested', detail: 'The token has no Wormhole-wrapped coin on Aptos yet; it must be attested before the transfer can be redeemed.' }
         : !(await guardianSetActive(ctx, t.guardianSet)) ? { code: 'guardian_set_expired', detail: `Signed by Wormhole guardian set ${t.guardianSet}, which has expired (now ${s.guardianSet}); the guardians must sign the transfer again (re-observation) before it can be redeemed.` }
         : null;
+      const gated = blocker?.code === 'guardian_set_expired';
       const locator: string = op.id;
       positions.push({
         ...positionIds(SOURCE, owner, locator, 'request', asset), source: SOURCE, owner, locator, positionKind: 'request', asset,
         claimableSince: iso(t.timestamp), ageBasis: 'onchain_maturity',
         provenance: { reader: `wormholescan operations + ${WH_TOKEN_BRIDGE}::state::State.consumed_vaas`, ledgerVersion: version },
-        grossClaim: value, expectedPayout: blocker ? [] : value, payoutBasis: 'derived',
-        status: !blocker ? 'recoverable' : blocker.code === 'guardian_set_expired' ? 'team_gated' : 'unknown',
+        // Re-signed by the guardians, the transfer pays in full: a team-gated position keeps its payout.
+        grossClaim: value, expectedPayout: !blocker || gated ? value : [], payoutBasis: 'derived',
+        status: !blocker ? 'recoverable' : gated ? 'team_gated' : 'unknown',
         blockers: blocker ? [blocker] : [],
         confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
         steps: [{ function: `${WH_TOKEN_BRIDGE}::complete_transfer::submit_vaa_and_register_entry<${coin ?? 'wrapped coin'}>`,
           arguments: [toHex(fromBase64(op.vaa.raw))], prerequisites: blocker?.code === 'guardian_set_expired' ? ['A re-signed VAA from Wormhole\'s guardians (re-observation)'] : [],
-          expectedOutputs: blocker ? [] : value }],
+          expectedOutputs: !blocker || gated ? value : [] }],
       });
     }
   } catch (err) {
