@@ -108,9 +108,12 @@ describe('market evidence', () => {
     const now = Date.parse('2026-10-20T00:00:00Z') / 1000;
     const kofi = { ...source(async () => { throw new Error(); }), id: 'k', usesMarketQuotes: true } as SourceDef;
     const plain = { ...source(async () => { throw new Error(); }), id: 'p' } as SourceDef;
-    const prev = { run: { verification: { end: '2026-10-19T00:00:00Z' } } } as any;
+    const prev = { run: { verification: { end: '2026-10-19T00:00:00Z' } }, ownerRules: OWNER_RULES } as any;
     const quotes = (...at: string[]) => ({ kapt: Object.fromEntries(at.map((t, i) => [String(i), { verdict: 'usable' as const, quotedAt: t }])) });
     expect(keepPrevious(plain, prev, 'x', now)).toBe(true);
+    // Classified under an older owner rule (or before it was recorded): re-run, not copied.
+    expect(keepPrevious(plain, { ...prev, ownerRules: OWNER_RULES - 1 }, 'x', now)).toBe(false);
+    expect(keepPrevious(plain, { ...prev, ownerRules: undefined }, 'x', now)).toBe(false);
     expect(keepPrevious(kofi, prev, 'x', now, quotes('2026-10-18T00:00:00Z', '2026-10-17T00:00:00Z'))).toBe(true);
     // The run ended recently, but one quote it relied on is older than 7 days: decided by the quote, not the run.
     expect(keepPrevious(kofi, prev, 'x', now, quotes('2026-10-18T00:00:00Z', '2026-10-12T00:00:00Z'))).toBe(false);

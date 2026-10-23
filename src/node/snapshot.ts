@@ -133,10 +133,12 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
 }
 
 /** In a run limited to one source (`--source`), whether another source's previous result can be copied unchanged.
- *  Not when its positions rest on market quotes and the oldest quote the previous snapshot published has expired
- *  (quotes are taken during a run, before it ends): then it is re-run too. */
+ *  Not when it was classified under an older owner rule, nor when its positions rest on market quotes and the oldest
+ *  quote the previous snapshot published has expired (quotes are taken during a run, before it ends): then it is re-run
+ *  too. */
 export function keepPrevious(def: SourceDef<any>, prev: SnapshotSource | undefined, only: string | undefined, nowSecs: number, markets?: MarketTable): boolean {
   if (!only || def.id === only) return false;
+  if (prev?.ownerRules !== OWNER_RULES) return false;
   if (!def.usesMarketQuotes) return true;
   const quoted = Object.values(markets ?? {}).flatMap(b => Object.values(b).map(v => Date.parse(v.quotedAt) / 1000));
   return !!prev && quoted.length > 0 && nowSecs - Math.min(...quoted) <= MARKET_MAX_AGE_SECS;
@@ -175,7 +177,7 @@ async function main() {
     sources.push({
       id: def.id, chain: def.chain, title: def.title, summary: def.summary, category: def.category, inclusionRule: def.inclusionRule,
       protocolStatus: def.protocolStatus, howTo: def.howTo, officialUrl: def.officialUrl, headlineAgeBases: def.headlineAgeBases,
-      run, lastSuccessAt: run.completeness === 'complete' ? run.verification.end : prev?.lastSuccessAt,
+      run, ownerRules: OWNER_RULES, lastSuccessAt: run.completeness === 'complete' ? run.verification.end : prev?.lastSuccessAt,
       totals: sourceTotals(def, positions, prices, now), sizeBands: sizeBands(positions, prices),
     });
     console.error(`${def.id}: ${run.completeness} ${run.degradedReasons.join('; ')}`);
