@@ -1208,6 +1208,17 @@ describe('canopy frozen vaults', () => {
     expect(received.positions[0]).toMatchObject({ locator: SUSDA, grossClaim: [{ raw: '14' }], ageBasis: 'unknown' });
   });
 
+  it('leaves the age unknown without a hint, and reads each vault on its own', async () => {
+    const c = chain({ [SUSDA]: { wallet: '7' }, [MOVE0]: { wallet: '5' } });
+    const r = await canopyFrozenVaults.read(context(c), OWNER);
+    expect(r.positions.map(p => [p.locator, p.ageBasis, p.claimableSince])).toEqual(expect.arrayContaining([[SUSDA, 'unknown', undefined], [MOVE0, 'unknown', undefined]]));
+    // MOVE-0's withdrawal map fails: sUSDa is still read, and the read is incomplete.
+    const failing = await canopyFrozenVaults.read(context({ ...c, view: async (fn, args, typeArgs, v) =>
+      fn.endsWith('::withdraw::get_withdrawal_map_view') && args[0] === MOVE0 ? Promise.reject(new Error('view failed')) : c.view(fn, args, typeArgs, v) }), OWNER, {});
+    expect(failing.complete).toBe(false);
+    expect(failing.positions.map(p => p.locator)).toEqual([SUSDA]);
+  });
+
   it('leaves out a vault that is open to deposits', async () => {
     expect((await canopyFrozenVaults.read(context(chain({ [SUSDA]: { wallet: '7', open: true } })), OWNER)).positions).toEqual([]);
   });
