@@ -89,7 +89,8 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
   try {
     const ops: any[] = [];
     for (let page = 0; ; page++) {
-      const res = await fetch(`${WORMHOLESCAN}/operations?address=${owner}&page=${page}&pageSize=100`);
+      // Bounded, so a stalled third party leaves the read incomplete instead of hanging the check page.
+      const res = await fetch(`${WORMHOLESCAN}/operations?address=${owner}&page=${page}&pageSize=100`, { signal: AbortSignal.timeout(30_000) });
       if (!res.ok) throw new Error(`Wormholescan: HTTP ${res.status}`);
       const list = (await res.json()).operations ?? [];
       ops.push(...list);
