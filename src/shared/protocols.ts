@@ -76,8 +76,8 @@ export const PROTOCOLS: ProtocolEntry[] = [
   // Waiting on a decision
   { id: 'aries-markets', name: 'Aries Markets', chains: [...A], category: 'Lending', status: 'implemented', checkedAt: '2026-10-22',
     reason: 'Wound down in July 2026 and most reserve cash moved out: deposits are read on the check page only (decided 2026-10-22), at the protocol\'s current quote; no dashboard totals (re-reading ~455K profiles would cost ~285K reads a run).', sources: ['aries-wound-down'], defillama: 'aries-markets' },
-  { id: 'portal', name: 'Wormhole (Portal)', chains: [...A], category: 'Bridge', status: 'needs_decision', checkedAt: '2026-10-19', issue: 1,
-    reason: 'Transfers to Aptos never redeemed: a check-page lookup via the Wormhole API, or a pipeline source?', defillama: 'portal' },
+  { id: 'portal', name: 'Wormhole (Portal)', chains: [...A], category: 'Bridge', status: 'implemented', checkedAt: '2026-10-22',
+    reason: 'Transfers to Aptos never redeemed: found through Wormholescan on the check page when the visitor opts in (decided 2026-10-22), checked on chain against the bridge\'s consumed VAAs; no dashboard totals.', sources: ['wormhole-unredeemed'], defillama: 'portal' },
   { id: 'layerzero-v2', name: 'LayerZero v2 OFTs and Stargate', chains: [...A, ...M], category: 'Bridge', status: 'needs_decision', checkedAt: '2026-10-19', issue: 2,
     reason: 'Messages that failed delivery: a check-page lookup via LayerZero Scan, or a pipeline source?' },
 

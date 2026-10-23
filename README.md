@@ -28,6 +28,7 @@ Sources (evidence for each in [docs/sources.md](docs/sources.md)):
 | `earnium-closed-lp` | Aptos | Liquidity left in Earnium pools and liquidity staking after its frontend went away (October 2026) |
 | `houston-closed-lp` | Aptos | Liquidity positions left in HoustonSwap pools after its app went away (October 2026) |
 | `aries-wound-down` | Aptos | Deposits left in Aries Markets after its July 2026 wind-down, at the protocol's current quote; check page only, no dashboard totals |
+| `wormhole-unredeemed` | Aptos | Wormhole Portal transfers to Aptos never redeemed; check page only, when the visitor opts in to the Wormholescan lookup |
 | `topaz-bids` | Aptos | APT still escrowed in bids on Topaz, an NFT marketplace that closed in August 2024 |
 | `layerzero-claimable` | Aptos | Tokens bridged in through LayerZero (lzUSDC, lzUSDT, lzWETH, lzWBTC, lzUSDD, CAKE, BTC.b) that arrived but were never claimed |
 | `movement-native-delegation` | Movement | Unstaked MOVE whose lockup ended, never withdrawn |

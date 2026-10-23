@@ -79,6 +79,8 @@ export interface SourceDef<Hint = unknown> {
   headlineAgeBases: AgeBasis[];
   /** Read on the check page only: the pipeline does not enumerate it, so it has no dashboard totals. */
   checkOnly?: boolean;
+  /** The third party this source sends the owner's address to (named on the check page, where it is opt-in). */
+  thirdParty?: string;
   howTo: string[];
   officialUrl?: string;
   /** `hint` lets the pipeline pass enumeration results so the read can skip its own discovery query. */
