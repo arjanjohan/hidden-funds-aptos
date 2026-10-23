@@ -1195,6 +1195,9 @@ describe('canopy frozen vaults', () => {
     const hint = { at: { [share(SUSDA)]: '2026-01-01T00:00:00.000Z' }, w: '90' };
     expect((await canopyFrozenVaults.read(context(at90('3')), OWNER, hint)).positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined });
     expect((await canopyFrozenVaults.read(context(at90('7')), OWNER, hint)).positions[0].claimableSince).toBe('2026-10-16T14:40:46Z');
+    // A staker whose hint has no store time received wallet shares after the scan: they are read, with no age yet.
+    const received = await canopyFrozenVaults.read(context(at90('0')), OWNER, { v: { [share(MOVE0)]: '5' }, w: '90' });
+    expect(received.positions[0]).toMatchObject({ locator: SUSDA, grossClaim: [{ raw: '14' }], ageBasis: 'unknown' });
   });
 
   it('leaves out a vault that is open to deposits', async () => {
