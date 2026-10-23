@@ -1,8 +1,9 @@
 // Wormhole Portal transfers to Aptos that were never redeemed: the tokens left the source chain, and the signed VAA that
 // mints or releases them on Aptos was never submitted. Nothing is recorded on Aptos until redemption, so the transfers
 // come from Wormholescan's per-address history (a third party, opt-in on the check page; decided 2026-10-22). Each one is
-// then checked on chain: a VAA the token bridge consumed (its `consumed_vaas` set, keyed by the body's double keccak)
-// was redeemed. Check-only: Wormholescan has no chain-wide listing of unredeemed transfers to Aptos.
+// then checked on chain: it must come from the token bridge registered for its source chain (what `complete_transfer`
+// accepts), and a VAA the token bridge consumed (its `consumed_vaas` set, keyed by the body's double keccak) was
+// redeemed. Check-only: Wormholescan has no chain-wide listing of unredeemed transfers to Aptos.
 import { iso, positionIds } from '../accounting.ts';
 import { keccak256 } from '../keccak.ts';
 import { normalizeAddress, once } from '../chain.ts';
@@ -21,7 +22,8 @@ const toHex = (b: Uint8Array) => '0x' + [...b].map(x => x.toString(16).padStart(
 const fromBase64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 const uint = (b: Uint8Array, from: number, len: number) => b.subarray(from, from + len).reduce((v, x) => (v << 8n) | BigInt(x), 0n);
 
-export interface PortalTransfer { guardianSet: number; body: Uint8Array; timestamp: number; amount: bigint; tokenAddress: Uint8Array; tokenChain: number; to: string; toChain: number }
+export interface PortalTransfer { guardianSet: number; body: Uint8Array; timestamp: number; emitterChain: number; emitter: string; amount: bigint;
+  tokenAddress: Uint8Array; tokenChain: number; to: string; toChain: number }
 
 /** A signed VAA's body and, for a Portal token transfer (payload 1), its fields; null for anything else. */
 export function portalTransfer(vaa: Uint8Array): PortalTransfer | null {
@@ -30,8 +32,8 @@ export function portalTransfer(vaa: Uint8Array): PortalTransfer | null {
   // Body: timestamp 4, nonce 4, emitter chain 2, emitter 32, sequence 8, consistency 1, then the payload.
   const p = body.subarray(51);
   if (p[0] !== 1 || p.length < 133) return null;
-  return { guardianSet: Number(uint(vaa, 1, 4)), body, timestamp: Number(uint(body, 0, 4)), amount: uint(p, 1, 32), tokenAddress: p.subarray(33, 65), tokenChain: Number(uint(p, 65, 2)),
-    to: normalizeAddress(toHex(p.subarray(67, 99))), toChain: Number(uint(p, 99, 2)) };
+  return { guardianSet: Number(uint(vaa, 1, 4)), body, timestamp: Number(uint(body, 0, 4)), emitterChain: Number(uint(body, 8, 2)), emitter: toHex(body.subarray(10, 42)),
+    amount: uint(p, 1, 32), tokenAddress: p.subarray(33, 65), tokenChain: Number(uint(p, 65, 2)), to: normalizeAddress(toHex(p.subarray(67, 99))), toChain: Number(uint(p, 99, 2)) };
 }
 
 const bridgeState = (ctx: ReadContext) => once(ctx, `wormhole-state:${ctx.ledger.version}`, async () => {
@@ -39,7 +41,26 @@ const bridgeState = (ctx: ReadContext) => once(ctx, `wormhole-state:${ctx.ledger
     ctx.chain.resource(WH_CORE, `${WH_CORE}::state::WormholeState`, ctx.ledger.version)]);
   if (!s || !core) throw new Error('Wormhole state missing');
   return { consumed: s.consumed_vaas.elems.handle as string, wrapped: s.wrapped_infos.handle as string, native: s.native_infos.handle as string,
-    guardianSet: Number(core.guardian_set_index.number) };
+    emitters: s.registered_emitters.handle as string, guardianSets: core.guardian_sets.handle as string, guardianSet: Number(core.guardian_set_index.number) };
+});
+
+/** Whether a guardian set still verifies VAAs, as the core contract's `guardian_set_is_active` decides: the current set,
+ *  or a superseded one until its expiry (a day after the rotation). */
+const guardianSetActive = (ctx: ReadContext, index: number) => once(ctx, `wormhole-guardian-set:${index}:${ctx.ledger.version}`, async () => {
+  const s = await bridgeState(ctx);
+  if (index === s.guardianSet) return true;
+  const set = await ctx.chain.tableItem(s.guardianSets, 'u64', `${WH_CORE}::structs::GuardianSet`, String(index), ctx.ledger.version);
+  return !!set && Number(set.expiration_time.number) > ctx.ledger.timestampSecs;
+});
+
+const EMITTER_QUERY = `query($h:String!,$k:jsonb!){ current_table_items(where:{table_handle:{_eq:$h}, decoded_key:{_eq:$k}, is_deleted:{_eq:false}}, limit:1){ decoded_value } }`;
+
+/** The token bridge registered for a source chain (by governance; null if none), from the indexer: the fullnode's table
+ *  API cannot parse the key type (`…::u16::U16`). */
+const registeredEmitter = (ctx: ReadContext, chainId: number) => once(ctx, `wormhole-emitter:${chainId}`, async () => {
+  const s = await bridgeState(ctx);
+  const [row] = (await ctx.chain.gql(EMITTER_QUERY, { h: s.emitters, k: { number: String(chainId) } })).current_table_items;
+  return row ? String(row.decoded_value.external_address).toLowerCase() : null;
 });
 
 const typeName = (t: { account_address: string; module_name: string; struct_name: string }) => {
@@ -80,6 +101,8 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
       if (!op.vaa?.raw) continue;
       const t = portalTransfer(fromBase64(op.vaa.raw));
       if (!t || t.toChain !== APTOS_CHAIN || t.to !== owner) continue;
+      // Only the registered token bridge's messages are transfers: anything else that parses as one is not redeemable.
+      if (await registeredEmitter(ctx, t.emitterChain) !== t.emitter) continue;
       // Redeemed: the bridge recorded the VAA's digest.
       const digest = toHex(keccak256(keccak256(t.body)));
       if (await ctx.chain.tableItem(s.consumed, 'vector<u8>', `${WH_CORE}::set::Unit`, digest, version)) continue;
@@ -92,7 +115,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
       // Aptos verifies a VAA against its guardian set; superseded sets expire a day after a rotation (simulated: an
       // older VAA aborts with E_GUARDIAN_SET_EXPIRED), so it needs a fresh signature from Wormhole's guardians first.
       const blocker = !coin ? { code: 'not_attested', detail: 'The token has no Wormhole-wrapped coin on Aptos yet; it must be attested before the transfer can be redeemed.' }
-        : t.guardianSet !== s.guardianSet ? { code: 'guardian_set_expired', detail: `Signed by Wormhole guardian set ${t.guardianSet}, which has expired (now ${s.guardianSet}); the guardians must sign the transfer again (re-observation) before it can be redeemed.` }
+        : !(await guardianSetActive(ctx, t.guardianSet)) ? { code: 'guardian_set_expired', detail: `Signed by Wormhole guardian set ${t.guardianSet}, which has expired (now ${s.guardianSet}); the guardians must sign the transfer again (re-observation) before it can be redeemed.` }
         : null;
       const locator: string = op.id;
       positions.push({

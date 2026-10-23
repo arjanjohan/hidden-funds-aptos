@@ -32,9 +32,9 @@ export const ANIMESWAP_COINS = [
   { coin: '0x1000000fa32d122c18a6a31c009ce5e71674f22d06a581bb0a15575e6addadcc::usda::USDA', symbol: 'USDA', decimals: 6 },
 ];
 
-/** Enumeration hint: each LP coin type the owner holds, with the time its store last changed (indexer), and the
- *  fungible-asset processor's watermark when those times were taken. */
-export type AnimeswapHint = { lps: Record<string, string>; w?: string };
+/** Enumeration hint: each LP coin type the owner held at the scan, with the time its store last changed (indexer). A
+ *  change re-reads the owner; the read itself looks the stores up again. */
+export type AnimeswapHint = { lps: Record<string, string> };
 
 /** `LPCoin<X, Y>` → [X, Y], splitting on the top-level comma (pool coins can be generic themselves). */
 export function pairOf(lp: string): [string, string] {
@@ -101,14 +101,14 @@ const pool = (ctx: ReadContext, lp: string) => once<Pool>(ctx, `animeswap-pool:$
     locked: !!state.locked, kLast: BigInt(state.k_last) };
 });
 
-/** The owner's LP coin types and when each store last changed, from the indexer (the check page has no hint). The
- *  indexer files a migrated store under its coin type too. */
-async function lpsOf(ctx: ReadContext, owner: string): Promise<Record<string, string>> {
+/** The owner's LP coin types as the indexer has them now: the amount over its stores and when the latest one changed.
+ *  The indexer files a migrated store under its coin type too. */
+async function lpsOf(ctx: ReadContext, owner: string): Promise<Map<string, { amount: bigint; at: string }>> {
   const rows = (await ownedBalances(ctx, owner)).filter(r => r.asset_type.startsWith(ANIMESWAP_LP_PREFIX));
-  const lps: Record<string, string> = {};
+  const lps = new Map<string, { amount: bigint; at: string }>();
   for (const r of rows) {
-    const at = new Date(r.last_transaction_timestamp + 'Z').toISOString();
-    if (!lps[r.asset_type] || at > lps[r.asset_type]) lps[r.asset_type] = at;
+    const at = new Date(r.last_transaction_timestamp + 'Z').toISOString(), prev = lps.get(r.asset_type);
+    lps.set(r.asset_type, { amount: (prev?.amount ?? 0n) + BigInt(r.amount), at: prev && prev.at > at ? prev.at : at });
   }
   return lps;
 }
@@ -118,8 +118,13 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: AnimeswapHint):
   const version = ctx.ledger.version;
   const errors: string[] = [];
   let failed = 0;
-  const lps = hint?.lps ?? await lpsOf(ctx, owner);
-  const found = await mapLimit(Object.entries(lps), 4, async ([lp, changedAt]): Promise<Position[]> => {
+  // Looked up again at read time, also with a hint: LP received after the enumeration's scan is read too.
+  let indexed: Map<string, { amount: bigint; at: string }>;
+  try { indexed = await lpsOf(ctx, owner); } catch (err) {
+    return { positions: [], complete: false, errors: [`LP stores: ${String(err).slice(0, 200)}`], ledgerVersion: version };
+  }
+  const lps = [...new Set([...Object.keys(hint?.lps ?? {}), ...indexed.keys()])];
+  const found = await mapLimit(lps, 4, async (lp): Promise<Position[]> => {
     try {
       const [[held], p, a] = await Promise.all([
         // coin::balance covers both the CoinStore and the paired fungible-asset store.
@@ -128,11 +133,10 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: AnimeswapHint):
       if (liquidity === 0n) return [];
       const [x, y] = pairOf(lp);
       const [ax, ay] = removal(p, liquidity, a);
-      // The pool keeps working, so LP added or received after the shutdown is aged from that change. A balance that
-      // differs from the one at the indexer's watermark changed after the store time was taken: unknown until a later run.
-      const unindexed = !!hint?.w && Number(hint.w) < Number(version) &&
-        (await ctx.chain.view('0x1::coin::balance', [owner], [lp], hint.w).catch(() => [null]))[0] !== held;
-      const since = unindexed ? undefined : Date.parse(changedAt) > Date.parse(ANIMESWAP_CLOSED_AT) ? changedAt : ANIMESWAP_CLOSED_AT;
+      // The pool keeps working, so LP added or received after the shutdown is aged from that change. A balance the
+      // indexer does not show yet changed after its store time: unknown until the indexer catches up.
+      const store = indexed.get(lp);
+      const since = store?.amount !== liquidity ? undefined : Date.parse(store.at) > Date.parse(ANIMESWAP_CLOSED_AT) ? store.at : ANIMESWAP_CLOSED_AT;
       const blockers = [
         ...(p.locked ? [{ code: 'paused', detail: 'The pool is locked.' }] : []),
         // burn aborts when either side rounds to zero (ERR_INSUFFICIENT_LIQUIDITY_BURN).
