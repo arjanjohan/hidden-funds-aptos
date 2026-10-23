@@ -3,6 +3,7 @@ import { iso } from '../shared/accounting.ts';
 import { gqlAll, mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
 import { ANIMESWAP, ANIMESWAP_POOLS, animeswapLps, assetOf as animeswapAsset, pairOf } from '../shared/sources/animeswap-closed.ts';
+import { EARNIUM } from '../shared/sources/earnium-closed.ts';
 import { AURO_CLOSED_AT, AURO_COLLECTION, AURO_ROUTER } from '../shared/sources/auro-closed.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
 import { AAVE, type AaveHint, aaveReserves, findFreeze } from '../shared/sources/aave-frozen.ts';
@@ -892,6 +893,78 @@ export const econiaIdleEnumerator: Enumerator = {
   },
 };
 
+// Earnium: everyone who added liquidity or staked it (directly or through the router), ever, and every wallet holding
+// LP (current primary stores per pool, transfers included). A staking call after the closure day began that moved a
+// pool's LP (staking, unstaking, adding and staking) dates that pool's stake for its sender from the call's time, so a
+// stake used after the closure is aged from then; wallet LP carries its store's last change, which every wallet move
+// (adding, removing, unstaking, a transfer) updates. Reward claims move no LP and date nothing. A full scan every run (~140 pages): a wallet that sent all its LP
+// away drops out and is re-read, and every hint carries this run's watermark, against which the read checks that
+// nothing changed after the scans.
+const EARNIUM_CHANGES_FROM = 7_706_000_000;   // 2026-10-21, before the closure's end of day
+const EARNIUM_ADD = ['add_liquidity_entry', 'add_liquidity_coin_entry', 'add_liquidity_both_coins_entry', 'add_liquidity_and_stake_entry',
+  'add_liquidity_and_stake_coin_entry', 'add_liquidity_and_stake_both_coins_entry'];
+const EARNIUM_HOLDERS: EntryFunction[] = [
+  ...EARNIUM_ADD.map(name => ({ contract: EARNIUM, module: 'router', name })),
+  ...['stake', 'stake_and_lock'].map(name => ({ contract: EARNIUM, module: 'liquidity_stake_pool', name })),
+];
+const EARNIUM_CALLS_QUERY = `query($a:bigint!,$w:bigint!){ user_transactions(where:{entry_function_contract_address:{_eq:"${EARNIUM}"}, _or:[
+  {entry_function_module_name:{_eq:"router"}, entry_function_function_name:{_in:${JSON.stringify(EARNIUM_ADD.filter(f => f.includes('_and_stake')))}}},
+  {entry_function_module_name:{_eq:"liquidity_stake_pool"}, entry_function_function_name:{_in:["stake","stake_and_lock","unstake"]}}],
+  version:{_gt:$a, _lte:$w}}, order_by:{version:asc}, limit:${PAGE}){ version sender timestamp } }`;
+const LP_MOVES_QUERY = `query($v:bigint!,$p:[String!]!){ fungible_asset_activities(where:{transaction_version:{_eq:$v}, asset_type:{_in:$p}},
+  limit:${PAGE}){ asset_type } }`;
+const earniumSenders = entrySenders('earnium-closed-lp', EARNIUM_HOLDERS, noContractTotal);
+export const earniumClosedEnumerator: Enumerator = {
+  ...earniumSenders,
+  alsoProcessors: ['fungible_asset_processor'],
+  scope: `${earniumSenders.scope}; plus every wallet holding LP, and Earnium staking calls from version ${EARNIUM_CHANGES_FROM} with the pools whose LP they moved`,
+  async run(chain) {
+    // Calls and the LP they moved come from two processors: scan only what both have indexed. Taken before the scans,
+    // so everything they read is at least this recent.
+    const indexed = String([await processorWatermark(chain, 'user_transaction_processor'), await processorWatermark(chain, 'fungible_asset_processor')]
+      .map(m => BigInt(m.version)).reduce((a, b) => (a < b ? a : b)));
+    const holders = await senders(chain, EARNIUM_HOLDERS, undefined);
+    const [pools] = await chain.view(`${EARNIUM}::liquidity_pool::pools`, []);
+    const poolIds = (pools as { inner: string }[]).map(p => normalizeAddress(p.inner));
+    let pages = holders.pages + 1;
+    const staked = new Map<string, Record<string, string>>();
+    let after = String(EARNIUM_CHANGES_FROM);
+    for (;;) {
+      const page = (await chain.gql(EARNIUM_CALLS_QUERY, { a: after, w: indexed })).user_transactions;
+      pages++;
+      for (const t of page) {
+        const sender = normalizeAddress(t.sender), at = new Date(t.timestamp + 'Z').toISOString();
+        const touched = (await chain.gql(LP_MOVES_QUERY, { v: String(t.version), p: poolIds })).fungible_asset_activities;
+        pages++;
+        for (const { asset_type } of touched) staked.set(sender, { ...staked.get(sender), [normalizeAddress(asset_type)]: at });
+      }
+      if (page.length) after = String(page[page.length - 1].version);
+      if (page.length < PAGE) break;
+    }
+    // LP in wallets, also when it arrived by transfer: every pool's primary stores (staked LP sits in the staking pools'
+    // own, non-primary stores), each with its last change.
+    const lps = new Map<string, Record<string, string>>();
+    for (const pool of poolIds) {
+      let from = '';
+      for (;;) {
+        const rows = (await chain.gql(`query($a:String!,$s:String!){ current_fungible_asset_balances(where:{asset_type:{_eq:$a}, is_primary:{_eq:true},
+          amount:{_gt:"0"}, storage_id:{_gt:$s}}, order_by:{storage_id:asc}, limit:${PAGE}){ owner_address storage_id last_transaction_timestamp } }`, { a: pool, s: from })).current_fungible_asset_balances;
+        pages++;
+        for (const r of rows) {
+          const owner = normalizeAddress(r.owner_address);
+          lps.set(owner, { ...lps.get(owner), [pool]: new Date(r.last_transaction_timestamp + 'Z').toISOString() });
+        }
+        if (rows.length < PAGE) break;
+        from = rows[rows.length - 1].storage_id;
+      }
+    }
+    // Every candidate carries a hint: a read without one is the check page's, which ages from the closure.
+    const owners = new Set([...holders.candidates.map(c => c.owner), ...staked.keys(), ...lps.keys()]);
+    return { candidates: [...owners].map(owner => ({ owner, hint: { ...(staked.has(owner) ? { staked: staked.get(owner) } : {}),
+        ...(lps.has(owner) ? { lps: lps.get(owner) } : {}), w: indexed } })), pages };
+  },
+};
+
 export const thalaVethlEnumerator = entrySenders('thala-vethl-expired',
   [{ contract: THALA_VE, module: 'scripts', name: 'lock' }, { contract: THALA_VEST, module: 'farming_vesting', name: 'convert_to_vethl' }],
   noContractTotal);
@@ -903,4 +976,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator, auroClosedEnumerator, animeswapClosedEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator, auroClosedEnumerator, animeswapClosedEnumerator, earniumClosedEnumerator];

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RequestCapReached } from '../src/node/client.ts';
-import { aaveFrozenEnumerator, animeswapClosedEnumerator, auroClosedEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
+import { aaveFrozenEnumerator, animeswapClosedEnumerator, earniumClosedEnumerator, auroClosedEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
 import { ANIMESWAP_POOLS } from '../src/shared/sources/animeswap-closed.ts';
 import { fetchPrices } from '../src/node/prices.ts';
 import { keepPrevious, runSource } from '../src/node/snapshot.ts';
@@ -474,5 +474,35 @@ describe('animeswap enumerator', () => {
     expect(r.candidates).toEqual([{ owner: addr(1), hint: { lps: {
       [`${ANIMESWAP_POOLS}::LPCoinV1::${lps[0]}`]: '2024-01-02T03:04:05.000Z', [`${ANIMESWAP_POOLS}::LPCoinV1::${lps[1]}`]: '2025-02-03T04:05:06.000Z' } } }]);
     expect(r.pages).toBe(3);
+  });
+});
+
+describe('earnium enumerator', () => {
+  it('lists everyone who added or staked liquidity and every wallet holding LP; dates the stakes a staking call after the closure moved', async () => {
+    const POOL = addr('e1'), OTHER = addr('e2');
+    const c = fakeChain({
+      view: () => [[{ inner: POOL }, { inner: OTHER }]],
+      gql: (query, vars) => {
+        if (query.includes('processor_status')) return { processor_status: [{ last_success_version: '7706000500', last_transaction_timestamp: '2026-10-21T00:00:00' }] };
+        if (query.includes('current_fungible_asset_balances')) return { current_fungible_asset_balances: vars.a === POOL && vars.s === ''
+          ? [{ owner_address: addr(3), storage_id: addr('a3'), last_transaction_timestamp: '2026-11-01T00:00:00' }] : [] };
+        // Owner 2 unstaked from POOL (its LP moved), then claimed rewards (no LP moved); owner 4's call is past the watermark.
+        if (query.includes('fungible_asset_activities')) return { fungible_asset_activities: vars.v === '7706000100' ? [{ asset_type: POOL }, { asset_type: POOL }] : [] };
+        if (query.includes('_or:')) return { user_transactions: vars.a === '7706000000' ? [{ version: '7706000100', sender: addr(2), timestamp: '2026-10-21T10:00:00' },
+          { version: '7706000200', sender: addr(2), timestamp: '2026-10-21T11:00:00' }, ...(BigInt(vars.w as string) >= 7_706_000_600n ? [{ version: '7706000600', sender: addr(4), timestamp: '2026-10-21T12:00:00' }] : [])] : [] };
+        return { user_transactions: vars.f === 'stake' && vars.after === '0' ? [{ version: '5', sender: addr(1) }, { version: '6', sender: addr(2) }] : [] };
+      },
+    });
+    const r = await earniumClosedEnumerator.run(c, undefined);
+    // Every hint carries the version the scans reached.
+    expect(r.candidates).toEqual([
+      { owner: addr(1), hint: { w: '7706000500' } },
+      { owner: addr(2), hint: { staked: { [POOL]: '2026-10-21T10:00:00.000Z' }, w: '7706000500' } },
+      // Holds LP it never added or staked itself (a transfer in).
+      { owner: addr(3), hint: { lps: { [POOL]: '2026-11-01T00:00:00.000Z' }, w: '7706000500' } },
+    ]);
+    // A full scan every run: a wallet that sent all its LP away drops out, and is re-read as gone.
+    expect(r.incremental).toBeFalsy();
+    expect(earniumClosedEnumerator.alsoProcessors).toEqual(['fungible_asset_processor']);
   });
 });

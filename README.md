@@ -25,6 +25,7 @@ Sources (evidence for each in [docs/sources.md](docs/sources.md)):
 | `econia-idle-accounts` | Aptos | Coins left idle in Econia market accounts after Econia Labs archived the order book (September 2025) |
 | `auro-closed-positions` | Aptos | Collateral left in debt-free Auro Finance positions after the website shut down (April 2026) |
 | `animeswap-closed-lp` | Aptos | Liquidity left in AnimeSwap pools after its frontend went away (October 2026) |
+| `earnium-closed-lp` | Aptos | Liquidity left in Earnium pools and liquidity staking after its frontend went away (October 2026) |
 | `topaz-bids` | Aptos | APT still escrowed in bids on Topaz, an NFT marketplace that closed in August 2024 |
 | `layerzero-claimable` | Aptos | Tokens bridged in through LayerZero (lzUSDC, lzUSDT, lzWETH, lzWBTC, lzUSDD, CAKE, BTC.b) that arrived but were never claimed |
 | `movement-native-delegation` | Movement | Unstaked MOVE whose lockup ended, never withdrawn |
