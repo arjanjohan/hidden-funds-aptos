@@ -47,12 +47,12 @@ async function walk(ctx: ReadContext, table: any, struct: 'Deposit' | 'Loan'): P
   return out;
 }
 
-/** A reserve's payout asset: the fungible asset behind an Aries wrapper coin, else the coin itself. */
+/** A reserve's payout asset, and whether it is withdrawn as a fungible asset: an Aries wrapper coin (registered with
+ *  `fa_to_coin_wrapper`) pays the fungible asset it wraps through `withdraw_fa`; any other coin, also one in Aries's own
+ *  package that is not registered, pays itself through `withdraw`. */
 const assetOfReserve = (ctx: ReadContext, type: string) => once(ctx, `aries-asset:${type}`, async () => {
-  if (!type.startsWith(`${ARIES}::`)) return assetOf(type);
-  const info = await ctx.chain.resource(ARIES, `${ARIES}::fa_to_coin_wrapper::WrapperCoinInfo<${type}>`, ctx.ledger.version);
-  if (!info) throw new Error(`Aries wrapper ${type} missing`);
-  return normalizeAddress(info.metadata.inner ?? info.metadata);
+  const info = type.startsWith(`${ARIES}::`) ? await ctx.chain.resource(ARIES, `${ARIES}::fa_to_coin_wrapper::WrapperCoinInfo<${type}>`, ctx.ledger.version) : null;
+  return info ? { asset: normalizeAddress(info.metadata.inner ?? info.metadata), fa: true } : { asset: assetOf(type), fa: false };
 });
 
 /** The first version after the wind-down's end of day (the block at 2026-08-01 00:00:00 UTC, read from the archive). */
@@ -133,7 +133,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
       for (const { type, quote } of supplied) {
         if (quote === 0n) continue;
         try {
-          const [asset, state] = await Promise.all([assetOfReserve(ctx, type), reserveState(ctx, type)]);
+          const [{ asset, fa }, state] = await Promise.all([assetOfReserve(ctx, type), reserveState(ctx, type)]);
           // The reserve's own blockers first: they decide without reading any other reserve's oracle.
           const local = quote === null ? { code: 'reserve_accounting_negative', detail: 'Aries cannot quote this deposit: the reserve records more than its loans plus cash, so the quote (and a withdrawal) aborts.' }
             : !state.redeem ? { code: 'paused', detail: 'Redemption is disabled for this reserve.' }
@@ -154,7 +154,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
             status: blocker ? 'blocked' : 'recoverable', blockers: blocker ? [blocker] : [],
             confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
             // u64 max withdraws everything the profile supplies to the reserve.
-            steps: [{ function: `${ARIES}::controller::${type.startsWith(`${ARIES}::`) ? 'withdraw_fa' : 'withdraw'}<${type}>`,
+            steps: [{ function: `${ARIES}::controller::${fa ? 'withdraw_fa' : 'withdraw'}<${type}>`,
               arguments: [hex(name), U64_MAX, 'false'], prerequisites: [], expectedOutputs: blocker ? [] : value }],
           });
         } catch (err) {

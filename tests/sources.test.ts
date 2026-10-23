@@ -1397,6 +1397,13 @@ describe('aries wound down', () => {
     expect(staleUnread.positions.map(p => [p.asset, p.status, p.blockers[0]?.code])).toEqual([[USDC_FA, 'blocked', 'stale_oracle']]);
   });
 
+  it('pays a coin in Aries\'s own package that is not a registered wrapper as itself, through withdraw', async () => {
+    const LEGACY = info(ARIES, 'legacy_coins', 'Legacy'), LEGACY_T = `${ARIES}::legacy_coins::Legacy`;
+    const r = await ariesWoundDown.read(context(chain({ deposits: [LEGACY] })), OWNER);
+    expect(r.complete).toBe(true);
+    expect(r.positions[0]).toMatchObject({ asset: LEGACY_T, grossClaim: [{ raw: '70' }], steps: [{ function: `${ARIES}::controller::withdraw<${LEGACY_T}>` }] });
+  });
+
   it('reads a profile key rendered as text or as hex', async () => {
     const c = chain();
     const hexKey = { ...c, resource: async (address: string, type: string, v?: string) => address === OWNER && type === `${ARIES}::profile::Profiles`
