@@ -63,10 +63,23 @@ const DEPOSITS = new Set(['deposit', 'deposit_fa'].map(f => `${ARIES}::controlle
 /** Owners with more transactions since the wind-down than this many pages are not searched: their age is unknown. */
 const LATE_PAGES = 10;
 
+/** Waits briefly for the indexer's transactions to reach the read's version (it trails the fullnode by seconds). */
+const indexedThrough = (ctx: ReadContext) => once(ctx, `aries-indexed:${ctx.ledger.version}`, async () => {
+  for (let i = 0; i < INDEX_TRIES; i++) {
+    const [row] = (await ctx.chain.gql(`query{ processor_status(where:{processor:{_eq:"user_transaction_processor"}}){ last_success_version } }`)).processor_status;
+    if (row && BigInt(row.last_success_version) >= BigInt(ctx.ledger.version)) return true;
+    if (i < INDEX_TRIES - 1) await new Promise(r => setTimeout(r, INDEX_WAIT_MS));
+  }
+  return false;
+});
+const INDEX_TRIES = 6, INDEX_WAIT_MS = 2_000;
+
 /** Whether the owner deposited into Aries after the wind-down (Aries still takes deposits): its deposits are then not all
  *  from before it, so their ages are unknown. Its transactions since then, newest first (filtering by function
- *  times out; by sender and version it does not). */
+ *  times out; by sender and version it does not). An indexer that has not reached the read's version could miss the
+ *  newest: then it counts as a late deposit too. */
 async function depositedLate(ctx: ReadContext, owner: string): Promise<boolean> {
+  if (!(await indexedThrough(ctx))) return true;
   let before = String(BigInt(ctx.ledger.version) + 1n);
   for (let page = 0; page < LATE_PAGES; page++) {
     const rows: { version: string; entry_function_id_str: string | null }[] =
