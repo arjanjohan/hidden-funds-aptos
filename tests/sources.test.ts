@@ -1277,7 +1277,7 @@ describe('aries wound down', () => {
   const APT_INFO = info('0x1', 'aptos_coin', 'AptosCoin'), USDC_INFO = info(ARIES, 'fa_to_coin_wrapper', 'WrappedUSDC');
   const APT_T = '0x1::aptos_coin::AptosCoin', USDC_T = `${ARIES}::fa_to_coin_wrapper::WrappedUSDC`, USDC_FA = addr('5dc');
   const table = (keys: unknown[]) => ({ inner: { inner: { handle: addr('7a') }, length: String(keys.length) }, head: { vec: keys.slice(0, 1) }, tail: { vec: keys.slice(-1) } });
-  type Opts = { deposits?: unknown[]; loans?: unknown[]; loanShare?: string; cash?: string; redeem?: boolean; stale?: boolean };
+  type Opts = { deposits?: unknown[]; loans?: unknown[]; loanShare?: string; cash?: string; redeem?: boolean; stale?: boolean; aptQuote?: Error };
   // Profile "Main Account": APT quoted 500 (and USDC 70); APT's reserve holds `cash`.
   const chain = (o: Opts = {}) => fakeChain({
     resource: (address, type) => {
@@ -1288,7 +1288,7 @@ describe('aries wound down', () => {
     },
     tableItem: (_h, _k, _v, key: any) => ({ val: {}, next: { vec: key.struct_name === APT_INFO.struct_name ? [USDC_INFO] : [] } }),
     view: (fn, _args, typeArgs) => {
-      if (fn.endsWith('::profile::profile_deposit')) return typeArgs[0] === APT_T ? ['400', '500'] : ['90', '70'];
+      if (fn.endsWith('::profile::profile_deposit')) { if (typeArgs[0] === APT_T && o.aptQuote) throw o.aptQuote; return typeArgs[0] === APT_T ? ['400', '500'] : ['90', '70']; }
       if (fn.endsWith('::profile::profile_loan')) return [o.loanShare ?? '0', '0'];
       if (fn.endsWith('::reserve::reserve_state')) return [{ total_cash_available: typeArgs[0] === APT_T ? (o.cash ?? '1000') : '1000', reserve_config: { allow_redeem: o.redeem ?? true } }];
       if (fn.endsWith('::oracle::get_reserve_price')) { if (o.stale) throw new Error('EORACLE_PRICE_STALE'); return [{}]; }
@@ -1319,6 +1319,16 @@ describe('aries wound down', () => {
     expect(await code({ stale: true })).toBe('stale_oracle');
     // The last reserve left needs no price.
     expect(await code({ stale: true, deposits: [APT_INFO] })).toBeUndefined();
+  });
+
+  it('reads each reserve on its own: an overflowing quote is blocked, another failure leaves the read incomplete', async () => {
+    const overflow = await ariesWoundDown.read(context(chain({ aptQuote: new Error('ARITHMETIC_ERROR: Subtraction overflow') })), OWNER);
+    expect(overflow.complete).toBe(true);
+    expect(overflow.positions.map(p => [p.asset, p.status, p.blockers[0]?.code, p.grossClaim])).toEqual([
+      [APT, 'blocked', 'reserve_accounting_negative', []], [USDC_FA, 'recoverable', undefined, [{ asset: USDC_FA, raw: '70' }]]]);
+    const down = await ariesWoundDown.read(context(chain({ aptQuote: new Error('fetch failed') })), OWNER);
+    expect(down.complete).toBe(false);
+    expect(down.positions.map(p => p.asset)).toEqual([USDC_FA]);
   });
 
   it('leaves out a profile with debt', async () => {
