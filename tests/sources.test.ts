@@ -1416,7 +1416,7 @@ describe('wormhole unredeemed', () => {
 
   it('needs the guardians for a VAA from an expired guardian set, not from one still in its grace period', async () => {
     api([vaa(OWNER, 4)]);
-    expect((await wormholeUnredeemed.read(context(chain()), OWNER)).positions[0]).toMatchObject({ status: 'team_gated', expectedPayout: [], blockers: [{ code: 'guardian_set_expired' }] });
+    expect((await wormholeUnredeemed.read(context(chain()), OWNER)).positions[0]).toMatchObject({ status: 'team_gated', expectedPayout: [{ raw: '150000000' }], blockers: [{ code: 'guardian_set_expired' }] });
     api([vaa(OWNER, 6)]);
     expect((await wormholeUnredeemed.read(context(chain()), OWNER)).positions[0].status).toBe('team_gated');
     api([vaa(OWNER, 6)]);
