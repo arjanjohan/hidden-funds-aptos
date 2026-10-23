@@ -42,7 +42,7 @@ const basisLabel: Record<string, string> = {
       <div class="card"><span class="muted">Held by a contract</span><b>{usd(t.byStatus.contract_held.usd)}</b><span class="muted">{count(t.byStatus.contract_held.positions)} positions held by a resource account or an object, which no person signs for; never in the headline</span></div>
     )}
     {t.byStatus.unknown.positions > 0 && (
-      <div class="card"><span class="muted">Not counted (unknown)</span><b>{usd(t.byStatus.unknown.usd)}</b><span class="muted">{count(t.byStatus.unknown.positions)} positions whose check could not run</span></div>
+      <div class="card"><span class="muted">Not counted (unknown)</span><b>{usd(t.byStatus.unknown.usd)}</b><span class="muted">{count(t.byStatus.unknown.positions)} positions whose check could not run{s.ownerRules ? '' : ', or held by a resource account or an object (classified before those were counted apart)'}</span></div>
     )}
   </div>
 
