@@ -49,7 +49,9 @@ export class State {
   /** Insert new candidates and record which ones changed: new, re-enumerated by an incremental (activity) scan, or
    *  with a different hint. A changed candidate is due regardless of its refresh window. Never deletes candidates.
    *  An incremental scan's hint is a delta: it is deep-merged into the stored hint. A hint's `w` (the version the
-   *  enumeration's scans reached, which advances every run) is stored but is not a change. */
+   *  enumeration's scans reached, which advances every run) is stored but is not a change, except for an owner with a
+   *  position whose age was unknown: readers leave an age unknown when the holding changed after the scans, so a later
+   *  watermark may date it. */
   upsertCandidates(source: string, candidates: { owner: string; hint?: unknown }[], now: string, incremental = false) {
     const stmt = this.db.prepare(`insert into candidates (source, owner, hint, first_seen, changed_at, dirty) values (?, ?, ?, ?, ?, 1)
       on conflict(source, owner) do update set
@@ -57,12 +59,13 @@ export class State {
         changed_at = case when ? then excluded.changed_at else candidates.changed_at end,
         hint = excluded.hint`);
     const stored = this.db.prepare('select hint from candidates where source = ? and owner = ?');
+    const undated = this.db.prepare(`select 1 from positions where source = ? and owner = ? and json_extract(json, '$.ageBasis') = 'unknown' limit 1`);
     this.db.exec('begin');
     for (const c of candidates) {
       const prev = (stored.get(source, c.owner) as { hint: string | null } | undefined)?.hint ?? null;
       const hint = incremental && c.hint !== undefined && prev ? deepMerge(JSON.parse(prev), c.hint) : c.hint;
       const text = hint === undefined ? null : JSON.stringify(hint);
-      const changed = incremental || withoutWatermark(prev) !== withoutWatermark(text);
+      const changed = incremental || withoutWatermark(prev) !== withoutWatermark(text) || (prev !== text && !!undated.get(source, c.owner));
       stmt.run(source, c.owner, text, now, now, changed ? 1 : 0, changed ? 1 : 0);
     }
     this.db.exec('commit');
