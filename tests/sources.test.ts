@@ -1331,9 +1331,12 @@ describe('aries wound down', () => {
   const APT_INFO = info('0x1', 'aptos_coin', 'AptosCoin'), USDC_INFO = info(ARIES, 'fa_to_coin_wrapper', 'WrappedUSDC');
   const APT_T = '0x1::aptos_coin::AptosCoin', USDC_T = `${ARIES}::fa_to_coin_wrapper::WrappedUSDC`, USDC_FA = addr('5dc');
   const table = (keys: unknown[]) => ({ inner: { inner: { handle: addr('7a') }, length: String(keys.length) }, head: { vec: keys.slice(0, 1) }, tail: { vec: keys.slice(-1) } });
-  type Opts = { deposits?: unknown[]; loans?: unknown[]; loanShare?: string; cash?: string; redeem?: boolean; stale?: boolean | Error; aptQuote?: Error };
+  type Opts = { deposits?: unknown[]; loans?: unknown[]; loanShare?: string; cash?: string; redeem?: boolean; stale?: boolean | Error; aptQuote?: Error; late?: boolean };
   // Profile "Main Account": APT quoted 500 (and USDC 70); APT's reserve holds `cash`.
   const chain = (o: Opts = {}) => fakeChain({
+    // Deposits by the owner after the wind-down.
+    gql: () => ({ user_transactions: [{ version: '7700000001', entry_function_id_str: '0x1::aptos_account::transfer' },
+      ...(o.late ? [{ version: '7700000000', entry_function_id_str: `${ARIES}::controller::deposit_fa` }] : [])] }),
     resource: (address, type) => {
       if (address === OWNER && type === `${ARIES}::profile::Profiles`) return { profile_signers: { data: [{ key: 'profileMain Account', value: { account: addr('9f') } }] } };
       if (address === addr('9f') && type === `${ARIES}::profile::Profile`) return { deposited_reserves: table(o.deposits ?? [APT_INFO, USDC_INFO]), borrowed_reserves: table(o.loans ?? []) };
@@ -1386,6 +1389,11 @@ describe('aries wound down', () => {
     const down = await ariesWoundDown.read(context(chain({ aptQuote: new Error('fetch failed') })), OWNER);
     expect(down.complete).toBe(false);
     expect(down.positions.map(p => p.asset)).toEqual([USDC_FA]);
+  });
+
+  it('leaves the age unknown when the owner deposited after the wind-down', async () => {
+    const r = await ariesWoundDown.read(context(chain({ late: true })), OWNER);
+    expect(r.positions.map(p => [p.ageBasis, p.claimableSince])).toEqual([['unknown', undefined], ['unknown', undefined]]);
   });
 
   it('leaves out a profile with debt', async () => {
