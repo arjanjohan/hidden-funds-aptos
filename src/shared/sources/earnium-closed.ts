@@ -80,7 +80,8 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: EarniumHint): P
   }
   // The pools still take liquidity, so each part is aged on its own: wallet LP from its store's last change (LP added,
   // unstaked or received later is aged from then), an unlocked stake from the owner's last staking call in the pool
-  // after the closure, or from its unlock when that came after the closure.
+  // after the closure, or from its unlock when that came after the closure. Without a hint (the check page) there is
+  // no history to date either, so the age is unknown.
   const latest = (...dates: (string | undefined)[]) => dates.filter((d): d is string => !!d).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a));
   const found = await mapLimit(held, 4, async (h): Promise<Position[]> => {
     try {
@@ -90,12 +91,12 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: EarniumHint): P
       const changed = unscanned.get(h.pool);
       const p = await poolInfo(ctx, h.pool);
       const parts: { lp: bigint; locator: string; since?: string; unstake: boolean; blocked: boolean }[] = [
-        ...(h.wallet > 0n ? [{ lp: h.wallet, locator: h.pool, since: changed?.wallet ? undefined : latest(EARNIUM_CLOSED_AT, hint?.lps?.[h.pool]),
+        ...(h.wallet > 0n ? [{ lp: h.wallet, locator: h.pool, since: !hint || changed?.wallet ? undefined : latest(EARNIUM_CLOSED_AT, hint.lps?.[h.pool]),
           unstake: false, blocked: false }] : []),
-        ...(stakedFree > 0n ? [{ lp: stakedFree, locator: `${h.pool}/staked`, unstake: true, blocked: false, since: changed?.staked ? undefined
-          : latest(EARNIUM_CLOSED_AT, hint?.staked?.[h.pool], h.unlock > 0n ? iso(Number(h.unlock)) : undefined) }] : []),
-        // Not claimable before its unlock: no age.
-        ...(lockedUntil !== null ? [{ lp: h.staked, locator: `${h.pool}/locked`, unstake: false, blocked: true }] : []),
+        ...(stakedFree > 0n ? [{ lp: stakedFree, locator: `${h.pool}/staked`, unstake: true, blocked: false, since: !hint || changed?.staked ? undefined
+          : latest(EARNIUM_CLOSED_AT, hint.staked?.[h.pool], h.unlock > 0n ? iso(Number(h.unlock)) : undefined) }] : []),
+        // Not claimable before its unlock: no age. Unstaking it comes first, once the lock ends.
+        ...(lockedUntil !== null ? [{ lp: h.staked, locator: `${h.pool}/locked`, unstake: true, blocked: true }] : []),
       ];
       const positions: Position[] = [];
       for (const part of parts) {
@@ -103,11 +104,11 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: EarniumHint): P
         const outputs: Amount[] = [{ asset: p.paid[0], raw: a1.toString() }, { asset: p.paid[1], raw: a2.toString() }];
         const steps = [
           ...(part.unstake ? [{ function: `${EARNIUM}::liquidity_stake_pool::unstake`, arguments: [h.pool, part.lp.toString()],
-            prerequisites: [], expectedOutputs: [] }] : []),
+            prerequisites: part.blocked ? [`after ${iso(Number(lockedUntil))}`] : [], expectedOutputs: [] }] : []),
           { function: `${EARNIUM}::router::remove_liquidity_entry`,
             arguments: [p.inner[0], p.inner[1], String(p.stable), part.lp.toString(), (a1 * (10_000n - SLIPPAGE_BPS) / 10_000n).toString(),
               (a2 * (10_000n - SLIPPAGE_BPS) / 10_000n).toString(), owner],
-            prerequisites: part.blocked ? [`unstake after ${iso(Number(lockedUntil))}`] : [], expectedOutputs: outputs },
+            prerequisites: [], expectedOutputs: outputs },
         ];
         const blockers = part.blocked ? [{ code: 'locked', detail: `Staked with a lock until ${iso(Number(lockedUntil)).slice(0, 10)}.` }] : [];
         const { locator, since } = part;
