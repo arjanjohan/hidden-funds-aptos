@@ -1376,6 +1376,9 @@ describe('aries wound down', () => {
     expect(await code({ stale: true })).toBe('stale_oracle');
     // The last reserve left needs no price.
     expect(await code({ stale: true, deposits: [APT_INFO] })).toBeUndefined();
+    // A deposit with a blocker of its own is classified without reading other reserves' prices.
+    const known = await ariesWoundDown.read(context(chain({ cash: '499', stale: new Error('fetch failed') })), OWNER);
+    expect(known.positions.map(p => [p.asset, p.blockers[0]?.code])).toEqual([[APT, 'reserves_removed']]);
     // A price read that fails otherwise is not a stale price: the read is incomplete.
     const down = await ariesWoundDown.read(context(chain({ stale: new Error('fetch failed') })), OWNER);
     expect(down).toMatchObject({ complete: false, positions: [] });

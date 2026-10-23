@@ -134,15 +134,16 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
         if (quote === 0n) continue;
         try {
           const [asset, state] = await Promise.all([assetOfReserve(ctx, type), reserveState(ctx, type)]);
+          // The reserve's own blockers first: they decide without reading any other reserve's oracle.
+          const local = quote === null ? { code: 'reserve_accounting_negative', detail: 'Aries cannot quote this deposit: the reserve records more than its loans plus cash, so the quote (and a withdrawal) aborts.' }
+            : !state.redeem ? { code: 'paused', detail: 'Redemption is disabled for this reserve.' }
+            : state.cash < quote ? { code: 'reserves_removed', detail: 'Aries\'s admin moved this reserve\'s cash out (2026-06-26 to 08-17); it holds less than this deposit\'s quote.' }
+            : null;
           // After a withdrawal the contract values what the profile still supplies: only the last reserve left leaves
           // without a fresh price.
           const others = [...supplied.filter(s => s.type !== type).map(s => s.type), ...unread];
-          const stale = (await Promise.all(others.map(t => priced(ctx, t)))).some(p => !p);
-          const blocker = quote === null ? { code: 'reserve_accounting_negative', detail: 'Aries cannot quote this deposit: the reserve records more than its loans plus cash, so the quote (and a withdrawal) aborts.' }
-            : !state.redeem ? { code: 'paused', detail: 'Redemption is disabled for this reserve.' }
-            : state.cash < quote ? { code: 'reserves_removed', detail: 'Aries\'s admin moved this reserve\'s cash out (2026-06-26 to 08-17); it holds less than this deposit\'s quote.' }
-            : stale ? { code: 'stale_oracle', detail: 'This profile also supplies a reserve whose oracle price is stale; withdrawing aborts until only this reserve is left.' }
-            : null;
+          const stale = !local && (await Promise.all(others.map(t => priced(ctx, t)))).some(p => !p);
+          const blocker = local ?? (stale ? { code: 'stale_oracle', detail: 'This profile also supplies a reserve whose oracle price is stale; withdrawing aborts until only this reserve is left.' } : null);
           const value: Amount[] = quote === null ? [] : [{ asset, raw: quote.toString() }];
           const locator = `${name || '(main)'}/${type}`;
           positions.push({
