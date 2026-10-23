@@ -1287,4 +1287,9 @@ describe('houston closed lp', () => {
     const later = await houstonClosedLp.read(context(c), OWNER, { moved: { [PAIR]: '2026-12-01T00:00:00.000Z' } });
     expect(later.positions[0].claimableSince).toBe('2026-12-01T00:00:00.000Z');
   });
+
+  it('leaves the age unknown without a hint (the check page has no history to date a pair)', async () => {
+    const r = await houstonClosedLp.read(context(chain([position()])), OWNER);
+    expect(r.positions.map(p => [p.ageBasis, p.claimableSince, p.status])).toEqual([['unknown', undefined, 'recoverable'], ['unknown', undefined, 'recoverable']]);
+  });
 });
