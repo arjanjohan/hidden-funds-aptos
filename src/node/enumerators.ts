@@ -4,6 +4,7 @@ import { gqlAll, mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
 import { ANIMESWAP, ANIMESWAP_POOLS, animeswapLps, assetOf as animeswapAsset, pairOf } from '../shared/sources/animeswap-closed.ts';
 import { EARNIUM } from '../shared/sources/earnium-closed.ts';
+import { HOUSTON, HOUSTON_POOLS } from '../shared/sources/houston-closed.ts';
 import { AURO_CLOSED_AT, AURO_COLLECTION, AURO_ROUTER } from '../shared/sources/auro-closed.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
 import { CANOPY_VAULTS } from '../shared/sources/canopy-frozen.ts';
@@ -1034,6 +1035,80 @@ export const earniumClosedEnumerator: Enumerator = {
   },
 };
 
+// HoustonSwap: everyone who added liquidity, ever (positions sit in the owner's own account, one PositionWallet per
+// pair; a position can only move between accounts through another contract, and none is known). A liquidity call after
+// the closure day began dates the pairs it changed for its sender, from the call's time: the sender's position wallets
+// just before and at the call, compared. Calls are scanned once, from the cursor, so that comparison reads history the
+// fullnode still keeps (~11 days; runs are weekly); the dates found are kept in the cursor. A call whose history is
+// pruned anyway dates every pair its sender holds. The senders are a full scan every run (~25 pages): every hint carries
+// this run's watermark, against which the read checks that nothing changed after the scans.
+const HOUSTON_CHANGES_FROM = 7_715_000_000;   // 2026-10-22, before the closure's end of day
+const HOUSTON_ADDS: EntryFunction[] = [{ contract: HOUSTON, module: 'liquidity_manager', name: 'add_liquidity' }];
+const HOUSTON_CALLS_QUERY = `query($a:bigint!,$w:bigint!){ user_transactions(where:{entry_function_contract_address:{_eq:"${HOUSTON}"},
+  entry_function_module_name:{_eq:"liquidity_manager"}, version:{_gt:$a, _lte:$w}}, order_by:{version:asc}, limit:${PAGE}){ version sender timestamp } }`;
+const HOUSTON_WALLET = `${HOUSTON}::position::PositionWallet`;
+/** An account's position wallets by pair (`<X, Y>`), as stored. */
+async function houstonWallets(chain: ChainReader, owner: string, version: string): Promise<Map<string, string>> {
+  const all = await chain.resources(owner, version);
+  if (!all) throw new Error(`resources of ${owner}: more than one page`);
+  return new Map(all.filter(r => r.type.startsWith(`${HOUSTON_WALLET}<`)).map(r => [r.type.slice(HOUSTON_WALLET.length), JSON.stringify(r.data)]));
+}
+const houstonSenders = entrySenders('houston-closed-lp', HOUSTON_ADDS, async (chain, ledger, positions) => {
+  // What the pool would pay the positions (principal: burn and owed fees; stored coins are the positions' own), per pair
+  // and side, cannot exceed that pair's reserves (all fee tiers).
+  const owed = new Map<string, bigint>();
+  for (const p of positions.filter(p => p.positionKind === 'principal')) {
+    const key = `${p.locator.slice(0, p.locator.lastIndexOf('#'))}|${p.asset}`;
+    owed.set(key, (owed.get(key) ?? 0n) + BigInt(p.grossClaim[0].raw));
+  }
+  let ok = true, pools = 0;
+  for (const pair of new Set(positions.map(p => p.locator.slice(0, p.locator.lastIndexOf('#'))))) {
+    const state = await chain.resource(HOUSTON_POOLS, `${HOUSTON}::pool::Pool${pair}`, ledger.version);
+    pools++;
+    const [x, y] = pairOf(`P${pair}`);
+    const reserve = (side: string) => (state.fee_tier.data as any[]).reduce((t, e) => t + BigInt(e.value[side].value), 0n);
+    ok &&= (owed.get(`${pair}|${animeswapAsset(x)}`) ?? 0n) <= reserve('reserve_x') && (owed.get(`${pair}|${animeswapAsset(y)}`) ?? 0n) <= reserve('reserve_y');
+  }
+  return { check: 'amounts found <= pool reserves, per pair and side', ok, detail: `${pools} pairs with positions` };
+});
+export const houstonClosedEnumerator: Enumerator = {
+  ...houstonSenders,
+  scope: `${houstonSenders.scope}; plus liquidity calls from version ${HOUSTON_CHANGES_FROM}, with the pairs they changed`,
+  async run(chain, cursor) {
+    let stored: { v?: string; moved?: Record<string, Record<string, string>> } = {};
+    try { stored = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: rescan */ }
+    if (typeof stored !== 'object' || stored === null) stored = {};
+    // Taken before the scans, so everything they read is at least this recent.
+    const indexed = (await processorWatermark(chain, 'user_transaction_processor')).version;
+    const adders = await senders(chain, HOUSTON_ADDS, undefined);
+    let pages = adders.pages;
+    const moved = new Map<string, Record<string, string>>(Object.entries(stored.moved && typeof stored.moved === 'object' ? stored.moved : {}));
+    let after = typeof stored.v === 'string' ? stored.v : String(HOUSTON_CHANGES_FROM);
+    for (;;) {
+      const page = (await chain.gql(HOUSTON_CALLS_QUERY, { a: after, w: indexed })).user_transactions;
+      pages++;
+      for (const t of page) {
+        const sender = normalizeAddress(t.sender), at = new Date(t.timestamp + 'Z').toISOString(), v = BigInt(t.version);
+        let changed: string[];
+        try {
+          const [before, now] = await Promise.all([houstonWallets(chain, sender, String(v - 1n)), houstonWallets(chain, sender, String(v))]);
+          changed = [...new Set([...before.keys(), ...now.keys()])].filter(pair => before.get(pair) !== now.get(pair));
+        } catch (err) {
+          if (!/HTTP 410|pruned/i.test(String(err))) throw err;
+          changed = [...(await houstonWallets(chain, sender, String(indexed))).keys()];
+        }
+        for (const pair of changed) moved.set(sender, { ...moved.get(sender), [pair]: at });
+      }
+      if (page.length < PAGE) break;
+      after = String(page[page.length - 1].version);
+    }
+    // Every candidate carries a hint: a read without one is the check page's, which has no history to date it.
+    const owners = new Set([...adders.candidates.map(c => c.owner), ...moved.keys()]);
+    return { candidates: [...owners].map(owner => ({ owner, hint: { ...(moved.has(owner) ? { moved: moved.get(owner) } : {}), w: String(indexed) } })),
+      cursor: JSON.stringify({ v: String(indexed), moved: Object.fromEntries(moved) }), pages };
+  },
+};
+
 export const thalaVethlEnumerator = entrySenders('thala-vethl-expired',
   [{ contract: THALA_VE, module: 'scripts', name: 'lock' }, { contract: THALA_VEST, module: 'farming_vesting', name: 'convert_to_vethl' }],
   noContractTotal);
@@ -1045,4 +1120,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator, auroClosedEnumerator, animeswapClosedEnumerator, earniumClosedEnumerator, canopyFrozenEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator, auroClosedEnumerator, animeswapClosedEnumerator, earniumClosedEnumerator, houstonClosedEnumerator, canopyFrozenEnumerator];

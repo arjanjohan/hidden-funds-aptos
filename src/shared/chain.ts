@@ -45,6 +45,10 @@ export function createReader(options: ReaderOptions = {}): ChainReader {
   const endpoints = NETWORKS[network];
 
   async function request(url: string, init: RequestInit, label: string, allow404 = false): Promise<any> {
+    return (await requestWithHeaders(url, init, label, allow404))?.body ?? null;
+  }
+
+  async function requestWithHeaders(url: string, init: RequestInit, label: string, allow404 = false): Promise<{ body: any; headers: Headers } | null> {
     for (let attempt = 0; ; attempt++) {
       onRequest?.(label);
       let res: Response;
@@ -77,7 +81,7 @@ export function createReader(options: ReaderOptions = {}): ChainReader {
       }
       if (!res.ok) throw new Error(`${label}: HTTP ${res.status} ${text.slice(0, 300)}`);
       if (body?.errors) throw new Error(`${label}: ${JSON.stringify(body.errors).slice(0, 300)}`);
-      return body;
+      return { body, headers: res.headers };
     }
   }
 
@@ -94,6 +98,12 @@ export function createReader(options: ReaderOptions = {}): ChainReader {
       request(`${endpoints.fullnode}/view${at(version)}`, json({ function: fn, type_arguments: typeArgs, arguments: args }), `view ${fn}`),
     resource: async (address, type, version) =>
       (await request(`${endpoints.fullnode}/accounts/${address}/resource/${encodeURIComponent(type)}${at(version)}`, {}, `resource ${type}`, true))?.data ?? null,
+    // One page of up to 9,999 resources; a longer list (a cursor follows) is not served.
+    resources: async (address, version) => {
+      const page = await requestWithHeaders(`${endpoints.fullnode}/accounts/${address}/resources?limit=9999${version ? `&ledger_version=${version}` : ''}`, {}, 'resources', true);
+      if (!page) return [];
+      return page.headers.get('x-aptos-cursor') ? null : page.body;
+    },
     account: address => request(`${endpoints.fullnode}/accounts/${address}`, {}, 'account', true),
     tableItem: (handle, keyType, valueType, key, version) =>
       request(`${endpoints.fullnode}/tables/${handle}/item${at(version)}`, json({ key_type: keyType, value_type: valueType, key }), 'table', true),

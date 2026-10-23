@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RequestCapReached } from '../src/node/client.ts';
-import { aaveFrozenEnumerator, animeswapClosedEnumerator, canopyFrozenEnumerator, earniumClosedEnumerator, auroClosedEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
+import { aaveFrozenEnumerator, animeswapClosedEnumerator, canopyFrozenEnumerator, earniumClosedEnumerator, houstonClosedEnumerator, auroClosedEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
 import { ANIMESWAP_POOLS } from '../src/shared/sources/animeswap-closed.ts';
 import { CANOPY_REWARDS_STATE } from '../src/shared/sources/canopy-rewards.ts';
 import { fetchPrices } from '../src/node/prices.ts';
@@ -535,5 +535,50 @@ describe('canopy frozen enumerator', () => {
       { owner: addr(2), hint: { v: { [addr('51')]: '200000000', [addr('53')]: '200000005' }, w: '240000000' } },
       { owner: addr(3), hint: { v: { [addr('51')]: '200000006' }, w: '240000000' } },
     ]);
+  });
+});
+
+describe('houston enumerator', () => {
+  it('checks what the pool pays against its reserves, leaving out coins stored in the positions', async () => {
+    const PAIR = '<0x1::aptos_coin::AptosCoin, 0x2::c::D>';
+    const c = fakeChain({ resource: () => ({ fee_tier: { data: [{ key: '0', value: { reserve_x: { value: '100' }, reserve_y: { value: '50' } } }] } }) });
+    const p = (kind: string, asset: string, raw: string) => ({ locator: `${PAIR}#1`, positionKind: kind, asset, grossClaim: [{ asset, raw }] } as unknown as Position);
+    const APT_FA = '0x000000000000000000000000000000000000000000000000000000000000000a';
+    const positions = [p('principal', APT_FA, '100'), p('principal', '0x2::c::D', '50'), p('fees', '0x2::c::D', '1000')];
+    expect((await houstonClosedEnumerator.sanity!(c, { version: '1', timestampSecs: 0 }, positions)).ok).toBe(true);
+    expect((await houstonClosedEnumerator.sanity!(c, { version: '1', timestampSecs: 0 }, [...positions, p('principal', '0x2::c::D', '1')])).ok).toBe(false);
+  });
+
+  it('lists everyone who added liquidity, and dates the pairs a liquidity call after the closure changed', async () => {
+    const PAIR = '<0x1::aptos_coin::AptosCoin, 0x2::c::D>', OTHER = '<0x3::e::F, 0x1::aptos_coin::AptosCoin>';
+    const W = '0x7ab72b249ec24f76fe66b6de19dcee1e3d3361db5c2cccfaa48ea8659060a1bd::position::PositionWallet';
+    const c = fakeChain({
+      gql: (query, vars) => {
+        if (query.includes('processor_status')) return { processor_status: [{ last_success_version: '7715000500', last_transaction_timestamp: '2026-10-22T00:00:00' }] };
+        // Owner 2 removed liquidity in PAIR after the closure began; its OTHER wallet did not change.
+        if (query.includes('entry_function_module_name:{_eq:"liquidity_manager"}, version')) return { user_transactions: vars.a === '7715000000'
+          ? [{ version: '7715000100', sender: addr(2), timestamp: '2026-10-22T10:00:00' }] : [] };
+        return { user_transactions: vars.f === 'add_liquidity' && vars.after === '0' ? [{ version: '5', sender: addr(1) }, { version: '6', sender: addr(2) }] : [] };
+      },
+    });
+    const wallets = { ...c, resources: async (_address: string, version?: string) => [{ type: `${W}${PAIR}`, data: { positions: [{ liquidity: version === '7715000099' ? '9' : '4' }] } },
+      { type: `${W}${OTHER}`, data: { positions: [{ liquidity: '1' }] } }] };
+    const r = await houstonClosedEnumerator.run(wallets, undefined);
+    expect(r.candidates).toEqual([
+      { owner: addr(1), hint: { w: '7715000500' } },
+      { owner: addr(2), hint: { moved: { [PAIR]: '2026-10-22T10:00:00.000Z' }, w: '7715000500' } },
+    ]);
+    expect(r.incremental).toBeFalsy();
+    // Calls are scanned once: the next run starts at the watermark and keeps the dates in the cursor.
+    expect(JSON.parse(r.cursor!)).toEqual({ v: '7715000500', moved: { [addr(2)]: { [PAIR]: '2026-10-22T10:00:00.000Z' } } });
+    const next = await houstonClosedEnumerator.run(wallets, r.cursor);
+    expect(next.candidates[1]).toEqual({ owner: addr(2), hint: { moved: { [PAIR]: '2026-10-22T10:00:00.000Z' }, w: '7715000500' } });
+    // History the fullnode pruned: every pair the sender holds is dated from the call.
+    const pruned = { ...wallets, resources: async (address: string, version?: string) => {
+      if (version !== '7715000500') throw new Error('resources: HTTP 410 {"message":"Ledger version 7715000099 is pruned"}');
+      return wallets.resources(address, version);
+    } };
+    expect((await houstonClosedEnumerator.run(pruned, undefined)).candidates[1].hint).toEqual(
+      { moved: { [PAIR]: '2026-10-22T10:00:00.000Z', [OTHER]: '2026-10-22T10:00:00.000Z' }, w: '7715000500' });
   });
 });

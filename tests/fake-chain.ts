@@ -6,6 +6,7 @@ type Handler<A extends unknown[]> = (...args: A) => unknown;
 export function fakeChain(handlers: {
   view?: Handler<[string, unknown[], string[]]>;
   resource?: Handler<[string, string]>;
+  resources?: Handler<[string]>;
   archiveResource?: Handler<[string, string, string]>;
   account?: Handler<[string]>;
   tableItem?: Handler<[string, string, string, unknown]>;
@@ -22,6 +23,7 @@ export function fakeChain(handlers: {
     ledger: async () => ({ version: '100', timestampSecs: 1_800_000_000 }),
     view: (fn, args, typeArgs = []) => call('view', handlers.view, fn, args, typeArgs) as Promise<any[]>,
     resource: (address, type) => call('resource', handlers.resource, address, type),
+    resources: address => call('resources', handlers.resources, address) as Promise<any>,
     account: address => call('account', handlers.account, address) as Promise<any>,
     tableItem: (handle, keyType, valueType, key) => call('tableItem', handlers.tableItem, handle, keyType, valueType, key),
     archiveResource: (address, type, version) => call('archiveResource', handlers.archiveResource, address, type, version),
