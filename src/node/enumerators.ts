@@ -2,6 +2,7 @@
 import { iso } from '../shared/accounting.ts';
 import { gqlAll, mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
+import { ANIMESWAP, ANIMESWAP_POOLS, animeswapLps, assetOf as animeswapAsset, pairOf } from '../shared/sources/animeswap-closed.ts';
 import { AURO_CLOSED_AT, AURO_COLLECTION, AURO_ROUTER } from '../shared/sources/auro-closed.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
 import { AAVE, type AaveHint, aaveReserves, findFreeze } from '../shared/sources/aave-frozen.ts';
@@ -291,6 +292,51 @@ export const auroClosedEnumerator: Enumerator = {
   },
   async sanity() {
     return { check: 'none', ok: null, detail: 'no contract total: the pools\' books overstate what the DAO account holds (stkAPT ~37%)' };
+  },
+};
+
+// AnimeSwap: every store holding an AnimeSwap LP coin, per pool from the pair registry. The indexer files a store that
+// migrated to the paired fungible asset under the coin type too. The pool account itself is left out: it holds the DAO
+// fee minted in LP (4.5% of APT/USDC), the protocol's own, with no signer to recover it.
+export const animeswapClosedEnumerator: Enumerator = {
+  sourceId: 'animeswap-closed-lp',
+  processor: 'fungible_asset_processor',
+  scope: `stores holding any LP coin in ${ANIMESWAP}::AnimeSwapPoolV1::PairInfo (current_fungible_asset_balances, amount > 0), except the pool account`,
+  async run(chain) {
+    const lps = await animeswapLps(chain);
+    const holders = new Map<string, Record<string, string>>();
+    let pages = 1;
+    for (const lp of lps) {
+      let after = '';
+      for (;;) {
+        const rows = (await chain.gql(`query($a:String!,$s:String!){ current_fungible_asset_balances(where:{asset_type:{_eq:$a}, amount:{_gt:"0"},
+          storage_id:{_gt:$s}}, order_by:{storage_id:asc}, limit:${PAGE}){ owner_address storage_id last_transaction_timestamp } }`, { a: lp, s: after })).current_fungible_asset_balances;
+        pages++;
+        for (const r of rows) {
+          const owner = normalizeAddress(r.owner_address);
+          if (owner === ANIMESWAP_POOLS || owner === ANIMESWAP) continue;
+          const at = new Date(r.last_transaction_timestamp + 'Z').toISOString(), prev = holders.get(owner) ?? {};
+          if (!prev[lp] || at > prev[lp]) holders.set(owner, { ...prev, [lp]: at });
+        }
+        if (rows.length < PAGE) break;
+        after = rows[rows.length - 1].storage_id;
+      }
+    }
+    return { candidates: [...holders].map(([owner, lps]) => ({ owner, hint: { lps } })), pages };
+  },
+  async sanity(chain, ledger, positions) {
+    // What the positions would pay, per pool and side, cannot exceed that side's reserve.
+    const owed = new Map<string, bigint>();
+    for (const p of positions) owed.set(`${p.locator}|${p.asset}`, (owed.get(`${p.locator}|${p.asset}`) ?? 0n) + BigInt(p.grossClaim[0].raw));
+    let ok = true, pools = 0;
+    for (const lp of new Set(positions.map(p => p.locator))) {
+      const [x, y] = pairOf(lp);
+      const state = await chain.resource(ANIMESWAP_POOLS, `${ANIMESWAP}::AnimeSwapPoolV1::LiquidityPool<${x}, ${y}>`, ledger.version);
+      pools++;
+      for (const [coin, reserve] of [[x, state.coin_x_reserve.value], [y, state.coin_y_reserve.value]] as const)
+        ok &&= (owed.get(`${lp}|${animeswapAsset(coin)}`) ?? 0n) <= BigInt(reserve);
+    }
+    return { check: 'payouts found <= pool reserves, per pool and side', ok, detail: `${pools} pools with positions` };
   },
 };
 
@@ -857,4 +903,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator, auroClosedEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator, auroClosedEnumerator, animeswapClosedEnumerator];

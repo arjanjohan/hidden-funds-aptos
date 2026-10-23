@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RequestCapReached } from '../src/node/client.ts';
-import { aaveFrozenEnumerator, auroClosedEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
+import { aaveFrozenEnumerator, animeswapClosedEnumerator, auroClosedEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
+import { ANIMESWAP_POOLS } from '../src/shared/sources/animeswap-closed.ts';
 import { fetchPrices } from '../src/node/prices.ts';
 import { keepPrevious, runSource } from '../src/node/snapshot.ts';
 import { State } from '../src/node/state.ts';
@@ -210,6 +211,32 @@ describe('state changes', () => {
     expect(state.due(def(), Date.parse('2026-10-02T00:00:00Z'), new Set())).toEqual([]);
     state.upsertCandidates('t', [{ owner: addr(1), hint: { version: 2 } }], '2026-10-03T00:00:00Z');
     expect(state.due(def(), Date.parse('2026-10-03T00:00:00Z'), new Set()).map(d => d.owner)).toEqual([addr(1)]);
+  });
+
+  it('does not count a new scan watermark in a hint as a change', () => {
+    const state = new State(':memory:');
+    state.upsertCandidates('t', [{ owner: addr(1), hint: { lps: { a: 'x' }, w: '10' } }], '2026-10-01T00:00:00Z');
+    state.recordRead('t', addr(1), [], true, '2026-10-01T00:00:01Z');
+    state.upsertCandidates('t', [{ owner: addr(1), hint: { lps: { a: 'x' }, w: '20' } }], '2026-10-02T00:00:00Z');
+    expect(state.due(def(), Date.parse('2026-10-02T00:00:00Z'), new Set())).toEqual([]);
+    state.upsertCandidates('t', [{ owner: addr(1), hint: { lps: { a: 'y' }, w: '30' } }], '2026-10-03T00:00:00Z');
+    expect(state.due(def(), Date.parse('2026-10-03T00:00:00Z'), new Set()).map(d => d.owner)).toEqual([addr(1)]);
+  });
+
+  it('re-reads an owner whose age was unknown when the scan watermark advances', () => {
+    const state = new State(':memory:');
+    const position = (ageBasis: string) => ({ id: `t:${addr(1)}:x:principal`, ageBasis } as unknown as Position);
+    const monthly = { ...def(), refresh: { nonZero: 'monthly', zero: 'monthly' } } as SourceDef;
+    state.upsertCandidates('t', [{ owner: addr(1), hint: { lps: { a: 'x' }, w: '10' } }], '2026-10-01T00:00:00Z');
+    state.recordRead('t', addr(1), [position('unknown')], true, '2026-10-01T00:00:01Z');
+    state.upsertCandidates('t', [{ owner: addr(1), hint: { lps: { a: 'x' }, w: '10' } }], '2026-10-02T00:00:00Z');
+    expect(state.due(monthly, Date.parse('2026-10-02T00:00:00Z'), new Set())).toEqual([]);
+    state.upsertCandidates('t', [{ owner: addr(1), hint: { lps: { a: 'x' }, w: '20' } }], '2026-10-03T00:00:00Z');
+    expect(state.due(monthly, Date.parse('2026-10-03T00:00:00Z'), new Set()).map(d => d.owner)).toEqual([addr(1)]);
+    // Dated now: the next watermark is not a change.
+    state.recordRead('t', addr(1), [position('protocol_closure')], true, '2026-10-03T00:00:01Z');
+    state.upsertCandidates('t', [{ owner: addr(1), hint: { lps: { a: 'x' }, w: '30' } }], '2026-10-04T00:00:00Z');
+    expect(state.due(monthly, Date.parse('2026-10-04T00:00:00Z'), new Set())).toEqual([]);
   });
 
   it('merges an incremental hint into the stored one and reads with it', () => {
@@ -429,5 +456,23 @@ describe('auro enumerator', () => {
     expect(JSON.parse(callsBehind.cursor!)).toEqual({ v: '5067106504', repaid: {} });
     expect(callsBehind.candidates[0].hint).toMatchObject({ w: '5050000000' });
     expect((await auroClosedEnumerator.run(auro('5200000000'), early.cursor)).candidates[0].hint).toMatchObject({ changed: { [addr('f1')]: '2026-05-07T16:32:48.000Z' } });
+  });
+});
+
+describe('animeswap enumerator', () => {
+  it('lists every pool\'s LP holders with each store\'s last change, leaving out the pool account', async () => {
+    const hex = (t: string) => '0x' + Buffer.from(t).toString('hex');
+    const lps = ['LPCoin<0x1::aptos_coin::AptosCoin, 0x2::c::D>', 'LPCoin<0x3::e::F, 0x4::g::H>'];
+    const c = fakeChain({
+      resource: () => ({ pair_list: lps.map(t => ({ lp_coin: { account_address: ANIMESWAP_POOLS, module_name: hex('LPCoinV1'), struct_name: hex(t) } })) }),
+      gql: (_q, vars) => ({ current_fungible_asset_balances: vars.a === `${ANIMESWAP_POOLS}::LPCoinV1::${lps[0]}` ? [
+        { owner_address: addr(1), storage_id: addr('a1'), last_transaction_timestamp: '2024-01-02T03:04:05' },
+        { owner_address: ANIMESWAP_POOLS, storage_id: addr('a2'), last_transaction_timestamp: '2024-01-02T03:04:05' },
+      ] : vars.a === `${ANIMESWAP_POOLS}::LPCoinV1::${lps[1]}` ? [{ owner_address: addr(1), storage_id: addr('a3'), last_transaction_timestamp: '2025-02-03T04:05:06' }] : [] }),
+    });
+    const r = await animeswapClosedEnumerator.run(c, undefined);
+    expect(r.candidates).toEqual([{ owner: addr(1), hint: { lps: {
+      [`${ANIMESWAP_POOLS}::LPCoinV1::${lps[0]}`]: '2024-01-02T03:04:05.000Z', [`${ANIMESWAP_POOLS}::LPCoinV1::${lps[1]}`]: '2025-02-03T04:05:06.000Z' } } }]);
+    expect(r.pages).toBe(3);
   });
 });
