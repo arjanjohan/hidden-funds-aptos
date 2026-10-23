@@ -1389,6 +1389,9 @@ describe('aries wound down', () => {
     const down = await ariesWoundDown.read(context(chain({ aptQuote: new Error('fetch failed') })), OWNER);
     expect(down.complete).toBe(false);
     expect(down.positions.map(p => p.asset)).toEqual([USDC_FA]);
+    // The unread reserve still counts for the oracle check: with its price stale, USDC cannot come out alone either.
+    const staleUnread = await ariesWoundDown.read(context(chain({ aptQuote: new Error('fetch failed'), stale: true })), OWNER);
+    expect(staleUnread.positions.map(p => [p.asset, p.status, p.blockers[0]?.code])).toEqual([[USDC_FA, 'blocked', 'stale_oracle']]);
   });
 
   it('leaves the age unknown when the owner deposited after the wind-down', async () => {

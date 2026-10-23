@@ -114,6 +114,8 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
       if (debt) continue;
       // Each reserve is read on its own: one that fails leaves the others readable.
       const supplied: { type: string; quote: bigint | null }[] = [];
+      // Reserves whose deposit could not be read: still supplied as far as the oracle check below knows.
+      const unread: string[] = [];
       for (const type of await walk(ctx, profile.deposited_reserves, 'Deposit')) {
         try {
           const [lp, underlying] = await ctx.chain.view(`${ARIES}::profile::profile_deposit`, [owner, name], [type], version);
@@ -122,7 +124,7 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
           // The quote overflows where the reserve records more than its loans plus cash: the contract cannot quote it,
           // or pay it (phase 0: 2 of ~200 sampled users).
           if (/overflow|ARITHMETIC_ERROR/i.test(String(err))) supplied.push({ type, quote: null });
-          else errors.push(`Aries ${name || '(main)'}/${type}: ${String(err).slice(0, 200)}`);
+          else { unread.push(type); errors.push(`Aries ${name || '(main)'}/${type}: ${String(err).slice(0, 200)}`); }
         }
       }
       for (const { type, quote } of supplied) {
@@ -131,7 +133,8 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
           const [asset, state] = await Promise.all([assetOfReserve(ctx, type), reserveState(ctx, type)]);
           // After a withdrawal the contract values what the profile still supplies: only the last reserve left leaves
           // without a fresh price.
-          const stale = (await Promise.all(supplied.filter(s => s.type !== type).map(s => priced(ctx, s.type)))).some(p => !p);
+          const others = [...supplied.filter(s => s.type !== type).map(s => s.type), ...unread];
+          const stale = (await Promise.all(others.map(t => priced(ctx, t)))).some(p => !p);
           const blocker = quote === null ? { code: 'reserve_accounting_negative', detail: 'Aries cannot quote this deposit: the reserve records more than its loans plus cash, so the quote (and a withdrawal) aborts.' }
             : !state.redeem ? { code: 'paused', detail: 'Redemption is disabled for this reserve.' }
             : state.cash < quote ? { code: 'reserves_removed', detail: 'Aries\'s admin moved this reserve\'s cash out (2026-06-26 to 08-17); it holds less than this deposit\'s quote.' }
