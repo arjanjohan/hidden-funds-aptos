@@ -11,7 +11,7 @@ import { aaveFrozenEnumerator, animeswapClosedEnumerator, canopyFrozenEnumerator
 import { ANIMESWAP_POOLS } from '../src/shared/sources/animeswap-closed.ts';
 import { CANOPY_REWARDS_STATE } from '../src/shared/sources/canopy-rewards.ts';
 import { fetchPrices } from '../src/node/prices.ts';
-import { keepPrevious, runSource } from '../src/node/snapshot.ts';
+import { keepPrevious, reclassifiedUnder, runSource } from '../src/node/snapshot.ts';
 import { State } from '../src/node/state.ts';
 import { positionIds } from '../src/shared/accounting.ts';
 import { AAVE, AAVE_UNFROZEN_AT } from '../src/shared/sources/aave-frozen.ts';
@@ -343,6 +343,23 @@ describe('source version', () => {
     await runSource(def, enumerator([held, empty]), state, chain(), { hit: false });
     expect(reads.filter(o => o === held)).toHaveLength(2);
     expect(reads.filter(o => o === empty)).toHaveLength(1);
+  });
+
+  it('publishes the owner rule only once every owner with positions has been re-read under it', async () => {
+    const state = new State(':memory:');
+    const [a, b] = [addr(1), addr(2)];
+    const def = { ...source(async (o: string) => ({ positions: [position(o)], complete: true, errors: [], ledgerVersion: '1' })),
+      refresh: { nonZero: 'monthly' as const, zero: 'monthly' as const } };
+    await runSource(def, enumerator([a, b]), state, chain(), { hit: false });
+    expect(reclassifiedUnder(state, def.id)).toBe(OWNER_RULES);
+    // A new rule version: both owners pending until a run re-reads them; a run that does not (skipped) publishes none.
+    const fresh = new State(':memory:');
+    await runSource(def, enumerator([a, b]), fresh, chain(), { hit: false });
+    fresh.setCursor(`owner-rules:${def.id}`, String(OWNER_RULES - 1));
+    fresh.setCursor(`owner-rules-done:${def.id}`, String(OWNER_RULES - 1));
+    expect(reclassifiedUnder(fresh, def.id)).toBe(OWNER_RULES - 1);
+    await runSource(def, enumerator([a, b]), fresh, chain(), { hit: false });
+    expect(reclassifiedUnder(fresh, def.id)).toBe(OWNER_RULES);
   });
 });
 

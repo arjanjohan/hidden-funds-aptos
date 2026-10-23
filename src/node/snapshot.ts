@@ -132,6 +132,17 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
   return { run, ledger };
 }
 
+/** The owner rule a source's stored positions are all classified under, once every owner with positions has been
+ *  re-read since the rule last changed (a run that hit the cap or read some incompletely leaves it pending); undefined
+ *  before that. Published with the source, so a single-source run never copies positions from before the change. */
+export function reclassifiedUnder(state: State, sourceId: string): number | undefined {
+  const done = `owner-rules-done:${sourceId}`;
+  if (state.cursor(`owner-rules:${sourceId}`) === String(OWNER_RULES) && state.cursor(done) !== String(OWNER_RULES) && state.pendingNonzero(sourceId) === 0)
+    state.setCursor(done, String(OWNER_RULES));
+  const v = state.cursor(done);
+  return v === undefined ? undefined : Number(v);
+}
+
 /** In a run limited to one source (`--source`), whether another source's previous result can be copied unchanged.
  *  Not when it was classified under an older owner rule, nor when its positions rest on market quotes and the oldest
  *  quote the previous snapshot published has expired (quotes are taken during a run, before it ends): then it is re-run
@@ -177,7 +188,7 @@ async function main() {
     sources.push({
       id: def.id, chain: def.chain, title: def.title, summary: def.summary, category: def.category, inclusionRule: def.inclusionRule,
       protocolStatus: def.protocolStatus, howTo: def.howTo, officialUrl: def.officialUrl, headlineAgeBases: def.headlineAgeBases,
-      run, ownerRules: OWNER_RULES, lastSuccessAt: run.completeness === 'complete' ? run.verification.end : prev?.lastSuccessAt,
+      run, ownerRules: reclassifiedUnder(state, def.id), lastSuccessAt: run.completeness === 'complete' ? run.verification.end : prev?.lastSuccessAt,
       totals: sourceTotals(def, positions, prices, now), sizeBands: sizeBands(positions, prices),
     });
     console.error(`${def.id}: ${run.completeness} ${run.degradedReasons.join('; ')}`);

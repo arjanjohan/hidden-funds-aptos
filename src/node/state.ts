@@ -117,6 +117,11 @@ export class State {
     this.db.prepare('update candidates set changed_at = ?, dirty = 1 where source = ?').run(now, source);
   }
 
+  /** Owners of a source with stored positions that are due for a re-read (changed, or last read incompletely). */
+  pendingNonzero(source: string): number {
+    return (this.db.prepare('select count(*) as n from candidates where source = ? and last_nonzero = 1 and dirty = 1').get(source) as { n: number }).n;
+  }
+
   /** Mark every candidate of a source with stored positions changed (used when a rule that applies to positions, not
    *  to finding them, changes: owners without positions have nothing stale). */
   markNonzeroChanged(source: string, now: string) {
