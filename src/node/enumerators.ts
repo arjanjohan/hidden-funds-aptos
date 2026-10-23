@@ -304,8 +304,6 @@ export const animeswapClosedEnumerator: Enumerator = {
   processor: 'fungible_asset_processor',
   scope: `stores holding any LP coin in ${ANIMESWAP}::AnimeSwapPoolV1::PairInfo (current_fungible_asset_balances, amount > 0), except the pool account`,
   async run(chain) {
-    // Taken before the scan, so every store time read is at least this recent.
-    const w = (await processorWatermark(chain, 'fungible_asset_processor')).version;
     const lps = await animeswapLps(chain);
     const holders = new Map<string, Record<string, string>>();
     let pages = 1;
@@ -325,7 +323,7 @@ export const animeswapClosedEnumerator: Enumerator = {
         after = rows[rows.length - 1].storage_id;
       }
     }
-    return { candidates: [...holders].map(([owner, lps]) => ({ owner, hint: { lps, w: String(w) } })), pages };
+    return { candidates: [...holders].map(([owner, lps]) => ({ owner, hint: { lps } })), pages };
   },
   async sanity(chain, ledger, positions) {
     // What the positions would pay, per pool and side, cannot exceed that side's reserve.
