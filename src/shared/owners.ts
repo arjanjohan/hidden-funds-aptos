@@ -10,7 +10,8 @@ const RESERVED = /^0x0{63}[0-9a]$/;
 
 export async function ownerKind(ctx: ReadContext, owner: string): Promise<OwnerKind> {
   if (RESERVED.test(owner)) return 'resource_account';
-  const key = `owner-kind:${owner}`;
+  // v2: ObjectCore decides first. Entries from before (an object with an account resource filed as a user) are not read.
+  const key = `owner-kind:v2:${owner}`;
   const cached = await ctx.memo.get(key);
   if (cached) return cached as OwnerKind;
   // An object can also carry an account resource (to hold coins), with its own address as the key; nobody holds a key
@@ -23,7 +24,7 @@ export async function ownerKind(ctx: ReadContext, owner: string): Promise<OwnerK
 }
 
 /** A source read with the owner rule applied: positions of an owner nobody can sign for (a resource account or an
- *  object) become `unknown`. The pipeline and the check page both read through this, so they classify alike.
+ *  object) become `contract_held`. The pipeline and the check page both read through this, so they classify alike.
  *  Indexer-only positions never reach a total, so their owner is not looked up. */
 export async function readClassified<Hint>(source: SourceDef<Hint>, ctx: ReadContext, owner: string, hint?: Hint): Promise<ReadResult> {
   const r = await source.read(ctx, owner, hint);
