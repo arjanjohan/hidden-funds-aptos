@@ -1342,12 +1342,13 @@ describe('aries wound down', () => {
   const APT_INFO = info('0x1', 'aptos_coin', 'AptosCoin'), USDC_INFO = info(ARIES, 'fa_to_coin_wrapper', 'WrappedUSDC');
   const APT_T = '0x1::aptos_coin::AptosCoin', USDC_T = `${ARIES}::fa_to_coin_wrapper::WrappedUSDC`, USDC_FA = addr('5dc');
   const table = (keys: unknown[]) => ({ inner: { inner: { handle: addr('7a') }, length: String(keys.length) }, head: { vec: keys.slice(0, 1) }, tail: { vec: keys.slice(-1) } });
-  type Opts = { deposits?: unknown[]; loans?: unknown[]; loanShare?: string; cash?: string; redeem?: boolean; stale?: boolean | Error; aptQuote?: Error; late?: boolean };
+  type Opts = { deposits?: unknown[]; loans?: unknown[]; loanShare?: string; cash?: string; redeem?: boolean; stale?: boolean | Error; aptQuote?: Error; late?: boolean; indexedTo?: string };
   // Profile "Main Account": APT quoted 500 (and USDC 70); APT's reserve holds `cash`.
   const chain = (o: Opts = {}) => fakeChain({
     // Deposits by the owner after the wind-down.
-    gql: () => ({ user_transactions: [{ version: '7700000001', entry_function_id_str: '0x1::aptos_account::transfer' },
-      ...(o.late ? [{ version: '7700000000', entry_function_id_str: `${ARIES}::controller::deposit_fa` }] : [])] }),
+    gql: q => q.includes('processor_status') ? { processor_status: [{ last_success_version: o.indexedTo ?? '100' }] }
+      : { user_transactions: [{ version: '7700000001', entry_function_id_str: '0x1::aptos_account::transfer' },
+        ...(o.late ? [{ version: '7700000000', entry_function_id_str: `${ARIES}::controller::deposit_fa` }] : [])] },
     resource: (address, type) => {
       if (address === OWNER && type === `${ARIES}::profile::Profiles`) return { profile_signers: { data: [{ key: 'profileMain Account', value: { account: addr('9f') } }] } };
       if (address === addr('9f') && type === `${ARIES}::profile::Profile`) return { deposited_reserves: table(o.deposits ?? [APT_INFO, USDC_INFO]), borrowed_reserves: table(o.loans ?? []) };
@@ -1387,6 +1388,9 @@ describe('aries wound down', () => {
     expect(await code({ stale: true })).toBe('stale_oracle');
     // The last reserve left needs no price.
     expect(await code({ stale: true, deposits: [APT_INFO] })).toBeUndefined();
+    // A deposit with a blocker of its own is classified without reading other reserves' prices.
+    const known = await ariesWoundDown.read(context(chain({ cash: '499', stale: new Error('fetch failed') })), OWNER);
+    expect(known.positions.map(p => [p.asset, p.blockers[0]?.code])).toEqual([[APT, 'reserves_removed']]);
     // A price read that fails otherwise is not a stale price: the read is incomplete.
     const down = await ariesWoundDown.read(context(chain({ stale: new Error('fetch failed') })), OWNER);
     expect(down).toMatchObject({ complete: false, positions: [] });
@@ -1400,11 +1404,36 @@ describe('aries wound down', () => {
     const down = await ariesWoundDown.read(context(chain({ aptQuote: new Error('fetch failed') })), OWNER);
     expect(down.complete).toBe(false);
     expect(down.positions.map(p => p.asset)).toEqual([USDC_FA]);
+    // The unread reserve still counts for the oracle check: with its price stale, USDC cannot come out alone either.
+    const staleUnread = await ariesWoundDown.read(context(chain({ aptQuote: new Error('fetch failed'), stale: true })), OWNER);
+    expect(staleUnread.positions.map(p => [p.asset, p.status, p.blockers[0]?.code])).toEqual([[USDC_FA, 'blocked', 'stale_oracle']]);
   });
 
-  it('leaves the age unknown when the owner deposited after the wind-down', async () => {
+  it('pays a coin in Aries\'s own package that is not a registered wrapper as itself, through withdraw', async () => {
+    const LEGACY = info(ARIES, 'legacy_coins', 'Legacy'), LEGACY_T = `${ARIES}::legacy_coins::Legacy`;
+    const r = await ariesWoundDown.read(context(chain({ deposits: [LEGACY] })), OWNER);
+    expect(r.complete).toBe(true);
+    expect(r.positions[0]).toMatchObject({ asset: LEGACY_T, grossClaim: [{ raw: '70' }], steps: [{ function: `${ARIES}::controller::withdraw<${LEGACY_T}>` }] });
+  });
+
+  it('reads a profile key rendered as text or as hex', async () => {
+    const c = chain();
+    const hexKey = { ...c, resource: async (address: string, type: string, v?: string) => address === OWNER && type === `${ARIES}::profile::Profiles`
+      ? { profile_signers: { data: [{ key: hexOf('profileMain Account'), value: { account: addr('9f') } }] } } : c.resource(address, type, v) };
+    const r = await ariesWoundDown.read(context(hexKey), OWNER);
+    expect(r.complete).toBe(true);
+    expect(r.positions.map(p => p.locator)).toEqual([`Main Account/${APT_T}`, `Main Account/${USDC_T}`]);
+  });
+
+  it('leaves the age unknown when the owner deposited after the wind-down, or the indexer has not reached the read', async () => {
     const r = await ariesWoundDown.read(context(chain({ late: true })), OWNER);
     expect(r.positions.map(p => [p.ageBasis, p.claimableSince])).toEqual([['unknown', undefined], ['unknown', undefined]]);
+    vi.useFakeTimers();
+    try {
+      const behind = ariesWoundDown.read(context(chain({ indexedTo: '99' })), OWNER);
+      await vi.runAllTimersAsync();
+      expect((await behind).positions.map(p => p.ageBasis)).toEqual(['unknown', 'unknown']);
+    } finally { vi.useRealTimers(); }
   });
 
   it('leaves out a profile with debt', async () => {
