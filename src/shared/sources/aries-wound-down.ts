@@ -60,9 +60,12 @@ const reserveState = (ctx: ReadContext, type: string) => once(ctx, `aries-reserv
   return { cash: BigInt(s.total_cash_available), redeem: !!s.reserve_config.allow_redeem };
 });
 
-/** Whether Aries's oracle still prices the reserve (it aborts on a stale price). */
+/** Whether Aries's oracle still prices the reserve: false on its stale-price abort; any other failure is an error. */
 const priced = (ctx: ReadContext, type: string) => once(ctx, `aries-price:${type}:${ctx.ledger.version}`, () =>
-  ctx.chain.view(`${ARIES}::oracle::get_reserve_price`, [], [type], ctx.ledger.version).then(() => true, () => false));
+  ctx.chain.view(`${ARIES}::oracle::get_reserve_price`, [], [type], ctx.ledger.version).then(() => true, err => {
+    if (/EORACLE_PRICE_STALE/.test(String(err))) return false;
+    throw err;
+  }));
 
 async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
   const owner = normalizeAddress(ownerInput);

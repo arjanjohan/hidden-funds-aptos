@@ -1120,9 +1120,17 @@ describe('earnium closed lp', () => {
     const locked = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '100', staked: '400', unlock: '1900000000' } })), OWNER);
     expect(raw(locked)).toEqual([[APT, '200', 'recoverable'], [KAPT, '300', 'recoverable'], [APT, undefined, 'blocked'], [KAPT, undefined, 'blocked']]);
     expect(locked.positions[2]).toMatchObject({ locator: `${POOL}/locked`, blockers: [{ code: 'locked' }], grossClaim: [{ raw: '800' }], ageBasis: 'unknown' });
+    // Unstaking comes first, once the lock ends.
+    expect(locked.positions[2].steps.map(s => [s.function.split('::').pop(), s.arguments[s.function.endsWith('::unstake') ? 1 : 3], s.prerequisites])).toEqual([
+      ['unstake', '400', [`after ${new Date(1_900_000_000_000).toISOString()}`]], ['remove_liquidity_entry', '400', []]]);
     // Locked forever on purpose (launch liquidity): it can never come out, so it is not left behind (R3).
     const forever = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '0', staked: '400', unlock: '18446744073709551615' } })), OWNER);
     expect(forever.positions).toEqual([]);
+  });
+
+  it('leaves the age unknown without a hint (the check page has no history to date a part)', async () => {
+    const r = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '100', staked: '400', unlock: '0' } })), OWNER);
+    expect(r.positions.map(p => [p.ageBasis, p.claimableSince, p.status])).toEqual(Array(4).fill(['unknown', undefined, 'recoverable']));
   });
 
   it('ages a stake that unlocked after the closure from its unlock', async () => {
@@ -1212,6 +1220,17 @@ describe('canopy frozen vaults', () => {
     expect(received.positions[0]).toMatchObject({ locator: SUSDA, grossClaim: [{ raw: '14' }], ageBasis: 'unknown' });
   });
 
+  it('leaves the age unknown without a hint, and reads each vault on its own', async () => {
+    const c = chain({ [SUSDA]: { wallet: '7' }, [MOVE0]: { wallet: '5' } });
+    const r = await canopyFrozenVaults.read(context(c), OWNER);
+    expect(r.positions.map(p => [p.locator, p.ageBasis, p.claimableSince])).toEqual(expect.arrayContaining([[SUSDA, 'unknown', undefined], [MOVE0, 'unknown', undefined]]));
+    // MOVE-0's withdrawal map fails: sUSDa is still read, and the read is incomplete.
+    const failing = await canopyFrozenVaults.read(context({ ...c, view: async (fn, args, typeArgs, v) =>
+      fn.endsWith('::withdraw::get_withdrawal_map_view') && args[0] === MOVE0 ? Promise.reject(new Error('view failed')) : c.view(fn, args, typeArgs, v) }), OWNER, {});
+    expect(failing.complete).toBe(false);
+    expect(failing.positions.map(p => p.locator)).toEqual([SUSDA]);
+  });
+
   it('leaves out a vault that is open to deposits', async () => {
     expect((await canopyFrozenVaults.read(context(chain({ [SUSDA]: { wallet: '7', open: true } })), OWNER)).positions).toEqual([]);
   });
@@ -1287,7 +1306,7 @@ describe('aries wound down', () => {
   const APT_INFO = info('0x1', 'aptos_coin', 'AptosCoin'), USDC_INFO = info(ARIES, 'fa_to_coin_wrapper', 'WrappedUSDC');
   const APT_T = '0x1::aptos_coin::AptosCoin', USDC_T = `${ARIES}::fa_to_coin_wrapper::WrappedUSDC`, USDC_FA = addr('5dc');
   const table = (keys: unknown[]) => ({ inner: { inner: { handle: addr('7a') }, length: String(keys.length) }, head: { vec: keys.slice(0, 1) }, tail: { vec: keys.slice(-1) } });
-  type Opts = { deposits?: unknown[]; loans?: unknown[]; loanShare?: string; cash?: string; redeem?: boolean; stale?: boolean; aptQuote?: Error };
+  type Opts = { deposits?: unknown[]; loans?: unknown[]; loanShare?: string; cash?: string; redeem?: boolean; stale?: boolean | Error; aptQuote?: Error };
   // Profile "Main Account": APT quoted 500 (and USDC 70); APT's reserve holds `cash`.
   const chain = (o: Opts = {}) => fakeChain({
     resource: (address, type) => {
@@ -1301,7 +1320,7 @@ describe('aries wound down', () => {
       if (fn.endsWith('::profile::profile_deposit')) { if (typeArgs[0] === APT_T && o.aptQuote) throw o.aptQuote; return typeArgs[0] === APT_T ? ['400', '500'] : ['90', '70']; }
       if (fn.endsWith('::profile::profile_loan')) return [o.loanShare ?? '0', '0'];
       if (fn.endsWith('::reserve::reserve_state')) return [{ total_cash_available: typeArgs[0] === APT_T ? (o.cash ?? '1000') : '1000', reserve_config: { allow_redeem: o.redeem ?? true } }];
-      if (fn.endsWith('::oracle::get_reserve_price')) { if (o.stale) throw new Error('EORACLE_PRICE_STALE'); return [{}]; }
+      if (fn.endsWith('::oracle::get_reserve_price')) { if (o.stale) throw o.stale === true ? new Error('Move abort in oracle: EORACLE_PRICE_STALE(0x2)') : o.stale; return [{}]; }
       throw new Error(fn);
     },
   });
@@ -1329,6 +1348,9 @@ describe('aries wound down', () => {
     expect(await code({ stale: true })).toBe('stale_oracle');
     // The last reserve left needs no price.
     expect(await code({ stale: true, deposits: [APT_INFO] })).toBeUndefined();
+    // A price read that fails otherwise is not a stale price: the read is incomplete.
+    const down = await ariesWoundDown.read(context(chain({ stale: new Error('fetch failed') })), OWNER);
+    expect(down).toMatchObject({ complete: false, positions: [] });
   });
 
   it('reads each reserve on its own: an overflowing quote is blocked, another failure leaves the read incomplete', async () => {
