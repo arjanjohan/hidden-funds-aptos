@@ -1160,15 +1160,18 @@ describe('canopy frozen vaults', () => {
       : { current_fungible_asset_balances: Object.entries(held).filter(([, h]) => h.wallet).map(([v]) => ({ asset_type: share(v), storage_id: addr('6') })) },
   });
 
-  it('counts shares in the wallet and staked in a frozen vault, unstaking first; blocked where withdrawing aborts', async () => {
+  it('counts shares in the wallet and staked in a frozen vault as separate parts, unstaking first; blocked where withdrawing aborts', async () => {
     // The stake (version 5) came long before the freeze, so its time is not looked up.
     const r = await canopyFrozenVaults.read(context(chain({ [MOVE0]: { wallet: '50', staked: '100' } })), OWNER, { at: { [share(MOVE0)]: '2026-01-01T00:00:00.000Z' }, v: { [share(MOVE0)]: '5' } });
     expect(r.complete).toBe(true);
-    expect(r.positions).toHaveLength(1);
-    expect(r.positions[0]).toMatchObject({ locator: MOVE0, status: 'blocked', blockers: [{ code: 'withdrawal_aborts' }], grossClaim: [{ raw: '300' }], expectedPayout: [],
-      claimableSince: '2026-10-16T14:40:46Z', ageBasis: 'protocol_closure' });
-    expect(r.positions[0].steps.map(s => [s.function.split('::').slice(-2).join('::'), s.arguments.slice(0, 2)])).toEqual([
-      ['multi_rewards::withdraw', [share(MOVE0), '100']], ['router::withdraw_fa', [MOVE0, JSON.stringify([addr('5a')])]]]);
+    expect(r.positions.map(p => [p.locator, p.grossClaim[0].raw, p.status, p.blockers[0]?.code, p.expectedPayout, p.claimableSince])).toEqual([
+      [MOVE0, '100', 'blocked', 'withdrawal_aborts', [], '2026-10-16T14:40:46Z'], [`${MOVE0}/staked`, '200', 'blocked', 'withdrawal_aborts', [], '2026-10-16T14:40:46Z']]);
+    expect(r.positions.map(p => p.steps.map(s => [s.function.split('::').slice(-2).join('::'), s.arguments.slice(0, 2), s.arguments[3]]))).toEqual([
+      [['router::withdraw_fa', [MOVE0, JSON.stringify([addr('5a')])], '50']],
+      [['multi_rewards::withdraw', [share(MOVE0), '100'], undefined], ['router::withdraw_fa', [MOVE0, JSON.stringify([addr('5a')])], '100']]]);
+    // Wallet shares received after the freeze date only the wallet part, not the stake.
+    const received = await canopyFrozenVaults.read(context(chain({ [SUSDA]: { wallet: '1', staked: '9' } })), OWNER, { at: { [share(SUSDA)]: '2026-10-20T00:00:00.000Z' } });
+    expect(received.positions.map(p => [p.locator, p.claimableSince])).toEqual([[SUSDA, '2026-10-20T00:00:00.000Z'], [`${SUSDA}/staked`, '2026-10-16T14:40:46Z']]);
   });
 
   it('is recoverable where withdrawing works, aged from a later change of the owner\'s shares', async () => {
