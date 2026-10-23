@@ -86,34 +86,47 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
         if (BigInt(share) > 0n) { debt = true; break; }
       }
       if (debt) continue;
-      const supplied: { type: string; quote: bigint }[] = [];
+      // Each reserve is read on its own: one that fails leaves the others readable.
+      const supplied: { type: string; quote: bigint | null }[] = [];
       for (const type of await walk(ctx, profile.deposited_reserves, 'Deposit')) {
-        const [lp, underlying] = await ctx.chain.view(`${ARIES}::profile::profile_deposit`, [owner, name], [type], version);
-        if (BigInt(lp) > 0n) supplied.push({ type, quote: BigInt(underlying) });
+        try {
+          const [lp, underlying] = await ctx.chain.view(`${ARIES}::profile::profile_deposit`, [owner, name], [type], version);
+          if (BigInt(lp) > 0n) supplied.push({ type, quote: BigInt(underlying) });
+        } catch (err) {
+          // The quote overflows where the reserve records more than its loans plus cash: the contract cannot quote it,
+          // or pay it (phase 0: 2 of ~200 sampled users).
+          if (/overflow|ARITHMETIC_ERROR/i.test(String(err))) supplied.push({ type, quote: null });
+          else errors.push(`Aries ${name || '(main)'}/${type}: ${String(err).slice(0, 200)}`);
+        }
       }
       for (const { type, quote } of supplied) {
         if (quote === 0n) continue;
-        const [asset, state] = await Promise.all([assetOfReserve(ctx, type), reserveState(ctx, type)]);
-        // After a withdrawal the contract values what the profile still supplies: only the last reserve left leaves
-        // without a fresh price.
-        const stale = (await Promise.all(supplied.filter(s => s.type !== type).map(s => priced(ctx, s.type)))).some(p => !p);
-        const blocker = !state.redeem ? { code: 'paused', detail: 'Redemption is disabled for this reserve.' }
-          : state.cash < quote ? { code: 'reserves_removed', detail: 'Aries\'s admin moved this reserve\'s cash out (2026-06-26 to 08-17); it holds less than this deposit\'s quote.' }
-          : stale ? { code: 'stale_oracle', detail: 'This profile also supplies a reserve whose oracle price is stale; withdrawing aborts until only this reserve is left.' }
-          : null;
-        const value: Amount[] = [{ asset, raw: quote.toString() }];
-        const locator = `${name || '(main)'}/${type}`;
-        positions.push({
-          ...positionIds(SOURCE, owner, locator, 'principal', asset), source: SOURCE, owner, locator, positionKind: 'principal', asset,
-          claimableSince: ARIES_CLOSED_AT, ageBasis: 'protocol_closure',
-          provenance: { reader: `${ARIES}::profile::profile_deposit`, ledgerVersion: version },
-          grossClaim: value, expectedPayout: blocker ? [] : value, payoutBasis: 'view',
-          status: blocker ? 'blocked' : 'recoverable', blockers: blocker ? [blocker] : [],
-          confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
-          // u64 max withdraws everything the profile supplies to the reserve.
-          steps: [{ function: `${ARIES}::controller::${type.startsWith(`${ARIES}::`) ? 'withdraw_fa' : 'withdraw'}<${type}>`,
-            arguments: [hex(name), U64_MAX, 'false'], prerequisites: [], expectedOutputs: blocker ? [] : value }],
-        });
+        try {
+          const [asset, state] = await Promise.all([assetOfReserve(ctx, type), reserveState(ctx, type)]);
+          // After a withdrawal the contract values what the profile still supplies: only the last reserve left leaves
+          // without a fresh price.
+          const stale = (await Promise.all(supplied.filter(s => s.type !== type).map(s => priced(ctx, s.type)))).some(p => !p);
+          const blocker = quote === null ? { code: 'reserve_accounting_negative', detail: 'Aries cannot quote this deposit: the reserve records more than its loans plus cash, so the quote (and a withdrawal) aborts.' }
+            : !state.redeem ? { code: 'paused', detail: 'Redemption is disabled for this reserve.' }
+            : state.cash < quote ? { code: 'reserves_removed', detail: 'Aries\'s admin moved this reserve\'s cash out (2026-06-26 to 08-17); it holds less than this deposit\'s quote.' }
+            : stale ? { code: 'stale_oracle', detail: 'This profile also supplies a reserve whose oracle price is stale; withdrawing aborts until only this reserve is left.' }
+            : null;
+          const value: Amount[] = quote === null ? [] : [{ asset, raw: quote.toString() }];
+          const locator = `${name || '(main)'}/${type}`;
+          positions.push({
+            ...positionIds(SOURCE, owner, locator, 'principal', asset), source: SOURCE, owner, locator, positionKind: 'principal', asset,
+            claimableSince: ARIES_CLOSED_AT, ageBasis: 'protocol_closure',
+            provenance: { reader: `${ARIES}::profile::profile_deposit`, ledgerVersion: version },
+            grossClaim: value, expectedPayout: blocker ? [] : value, payoutBasis: 'view',
+            status: blocker ? 'blocked' : 'recoverable', blockers: blocker ? [blocker] : [],
+            confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
+            // u64 max withdraws everything the profile supplies to the reserve.
+            steps: [{ function: `${ARIES}::controller::${type.startsWith(`${ARIES}::`) ? 'withdraw_fa' : 'withdraw'}<${type}>`,
+              arguments: [hex(name), U64_MAX, 'false'], prerequisites: [], expectedOutputs: blocker ? [] : value }],
+          });
+        } catch (err) {
+          errors.push(`Aries ${name || '(main)'}/${type}: ${String(err).slice(0, 200)}`);
+        }
       }
     }
   } catch (err) {

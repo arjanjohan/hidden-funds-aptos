@@ -150,8 +150,9 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: CanopyFrozenHin
     // Shares staked in Canopy's rewards pools: the staking tokens the owner ever subscribed with.
     const [rows] = await ctx.chain.view(`${CANOPY_REWARDS_VIEWS}::rewards_view::get_user_pool_positions`, [owner, { vec: [] }, { vec: [] }], [], version);
     const stakedTokens = new Set((rows as any[]).map(r => normalizeAddress(r.pool_staking_token.inner)).filter(t => vaults.has(t)));
-    // Shares in the wallet: from the indexer, checked on chain below. An enumerated owner without a store time holds none.
-    const held = hint && !hint.at ? [] : await gqlAll(ctx.chain, SHARES_QUERY, { o: owner, a: [...vaults.keys()] }, 'current_fungible_asset_balances', 'storage_id');
+    // Shares in the wallet: from the indexer, checked on chain below. Looked up again also with a hint, so shares received
+    // after the enumeration's scan are read too (their age stays unknown until a scan has seen them).
+    const held = await gqlAll(ctx.chain, SHARES_QUERY, { o: owner, a: [...vaults.keys()] }, 'current_fungible_asset_balances', 'storage_id');
     const inWallet = new Set(held.map((r: any) => normalizeAddress(r.asset_type)));
     // A stake or withdrawal's time, looked up only when it came after the vault's freeze (rare).
     const stakedAt = (v: string) => once(ctx, `canopy-tx:${v}`, () => transactionTime(ctx.chain, v));
