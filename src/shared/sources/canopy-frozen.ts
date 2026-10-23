@@ -156,53 +156,61 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: CanopyFrozenHin
     const inWallet = new Set(held.map((r: any) => normalizeAddress(r.asset_type)));
     // A stake or withdrawal's time, looked up only when it came after the vault's freeze (rare).
     const stakedAt = (v: string) => once(ctx, `canopy-tx:${v}`, () => transactionTime(ctx.chain, v));
+    // Each vault is read on its own: one that fails leaves the others readable.
+    const errors: string[] = [];
     const found = await mapLimit([...new Set([...stakedTokens, ...inWallet])], 4, async (token): Promise<Position[]> => {
-      const vault = vaults.get(token)!;
-      if (!(await frozen(ctx, vault.address))) return [];
-      const [[wallet], [staked]] = await Promise.all([
-        inWallet.has(token) ? ctx.chain.view('0x1::primary_fungible_store::balance', [owner, token], ['0x1::fungible_asset::Metadata'], version) : ['0'],
-        stakedTokens.has(token) ? ctx.chain.view(`${CANOPY_REWARDS}::multi_rewards::get_user_staked_balance`, [owner, token], [], version) : ['0'],
-      ]);
-      const shares = BigInt(wallet) + BigInt(staked);
-      if (shares === 0n) return [];
-      const [[assets], [map]] = await Promise.all([
-        ctx.chain.view(`${CANOPY_VAULTS}::vault::shares_to_amount`, [vault.address, shares.toString()], [], version),
-        ctx.chain.view(`${CANOPY_ROUTER}::withdraw::get_withdrawal_map_view`, [vault.address, shares.toString()], [], version),
-      ]);
-      const info = FROZEN_VAULTS.get(vault.address);
-      const strategies = ((map as any).data as any[]).map(e => normalizeAddress(e.key.inner));
-      // Frozen, so no new deposits: aged from the freeze, or from the owner's own later change where it is known. Shares
-      // that differ from those at the version the enumeration's scans reached changed after them, and a stake or
-      // withdrawal whose transaction is not indexed yet has no time: either way the age is unknown until a later run.
-      const unscanned = !!hint?.w && Number(hint.w) < Number(version) && await Promise.all([
-        inWallet.has(token) ? ctx.chain.view('0x1::primary_fungible_store::balance', [owner, token], ['0x1::fungible_asset::Metadata'], hint.w) : ['0'],
-        stakedTokens.has(token) ? ctx.chain.view(`${CANOPY_REWARDS}::multi_rewards::get_user_staked_balance`, [owner, token], [], hint.w) : ['0'],
-      ]).then(([[walletThen], [stakedThen]]) => String(walletThen) !== String(wallet) || String(stakedThen) !== String(staked), () => true);
-      const stakeChange = hint?.v?.[token];
-      const restaked = stakeChange && Number(stakeChange) > (info?.frozenVersion ?? Infinity) ? await stakedAt(stakeChange) : undefined;
-      const since = info && !unscanned && restaked !== null ? [info.frozenAt, hint?.at?.[token], restaked !== undefined ? iso(restaked) : undefined]
-        .filter((d): d is string => !!d).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a)) : undefined;
-      const value = [{ asset: `movement:${vault.asset}`, raw: String(assets) }];
-      const check = info?.check;
-      const blocked = check && check !== 'ok' && check !== 'packet' ? BLOCKED[check] : undefined;
-      const status = blocked ? 'blocked' : check ? 'recoverable' : 'unknown';
-      return [{
-        ...positionIds(SOURCE, owner, vault.address, 'principal', value[0].asset), source: SOURCE, owner, locator: vault.address, positionKind: 'principal',
-        asset: value[0].asset, claimableSince: since, ageBasis: since ? 'protocol_closure' : 'unknown',
-        provenance: { reader: `${CANOPY_VAULTS}::vault::shares_to_amount`, ledgerVersion: version },
-        grossClaim: value, expectedPayout: status === 'recoverable' ? value : [], payoutBasis: 'view', status,
-        blockers: blocked ? [{ code: 'withdrawal_aborts', detail: blocked }]
-          : status === 'unknown' ? [{ code: 'not_simulated', detail: 'No withdrawal from this vault has been simulated.' }] : [],
-        confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
-        steps: [
-          ...(BigInt(staked) > 0n ? [{ function: `${CANOPY_REWARDS}::multi_rewards::withdraw`, arguments: [token, String(staked)], prerequisites: [], expectedOutputs: [] }] : []),
-          { function: `${CANOPY_ROUTER}::router::withdraw_fa`,
-            arguments: [vault.address, JSON.stringify(strategies), JSON.stringify(strategies.map(() => '0x')), shares.toString(), 'some(10)', 'none'],
-            prerequisites: check === 'packet' ? ['A MovePosition price packet for the strategy (the Canopy app supplies it).'] : [], expectedOutputs: value },
-        ],
-      }];
+      try {
+        const vault = vaults.get(token)!;
+        if (!(await frozen(ctx, vault.address))) return [];
+        const [[wallet], [staked]] = await Promise.all([
+          inWallet.has(token) ? ctx.chain.view('0x1::primary_fungible_store::balance', [owner, token], ['0x1::fungible_asset::Metadata'], version) : ['0'],
+          stakedTokens.has(token) ? ctx.chain.view(`${CANOPY_REWARDS}::multi_rewards::get_user_staked_balance`, [owner, token], [], version) : ['0'],
+        ]);
+        const shares = BigInt(wallet) + BigInt(staked);
+        if (shares === 0n) return [];
+        const [[assets], [map]] = await Promise.all([
+          ctx.chain.view(`${CANOPY_VAULTS}::vault::shares_to_amount`, [vault.address, shares.toString()], [], version),
+          ctx.chain.view(`${CANOPY_ROUTER}::withdraw::get_withdrawal_map_view`, [vault.address, shares.toString()], [], version),
+        ]);
+        const info = FROZEN_VAULTS.get(vault.address);
+        const strategies = ((map as any).data as any[]).map(e => normalizeAddress(e.key.inner));
+        // Frozen, so no new deposits: aged from the freeze, or from the owner's own later change where it is known. Shares
+        // that differ from those at the version the enumeration's scans reached changed after them, and a stake or
+        // withdrawal whose transaction is not indexed yet has no time: either way the age is unknown until a later run.
+        // Without a hint (the check page) there is no history to date the shares: unknown too.
+        const unscanned = !!hint?.w && Number(hint.w) < Number(version) && await Promise.all([
+          inWallet.has(token) ? ctx.chain.view('0x1::primary_fungible_store::balance', [owner, token], ['0x1::fungible_asset::Metadata'], hint.w) : ['0'],
+          stakedTokens.has(token) ? ctx.chain.view(`${CANOPY_REWARDS}::multi_rewards::get_user_staked_balance`, [owner, token], [], hint.w) : ['0'],
+        ]).then(([[walletThen], [stakedThen]]) => String(walletThen) !== String(wallet) || String(stakedThen) !== String(staked), () => true);
+        const stakeChange = hint?.v?.[token];
+        const restaked = stakeChange && Number(stakeChange) > (info?.frozenVersion ?? Infinity) ? await stakedAt(stakeChange) : undefined;
+        const since = info && hint && !unscanned && restaked !== null ? [info.frozenAt, hint?.at?.[token], restaked !== undefined ? iso(restaked) : undefined]
+          .filter((d): d is string => !!d).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a)) : undefined;
+        const value = [{ asset: `movement:${vault.asset}`, raw: String(assets) }];
+        const check = info?.check;
+        const blocked = check && check !== 'ok' && check !== 'packet' ? BLOCKED[check] : undefined;
+        const status = blocked ? 'blocked' : check ? 'recoverable' : 'unknown';
+        return [{
+          ...positionIds(SOURCE, owner, vault.address, 'principal', value[0].asset), source: SOURCE, owner, locator: vault.address, positionKind: 'principal',
+          asset: value[0].asset, claimableSince: since, ageBasis: since ? 'protocol_closure' : 'unknown',
+          provenance: { reader: `${CANOPY_VAULTS}::vault::shares_to_amount`, ledgerVersion: version },
+          grossClaim: value, expectedPayout: status === 'recoverable' ? value : [], payoutBasis: 'view', status,
+          blockers: blocked ? [{ code: 'withdrawal_aborts', detail: blocked }]
+            : status === 'unknown' ? [{ code: 'not_simulated', detail: 'No withdrawal from this vault has been simulated.' }] : [],
+          confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
+          steps: [
+            ...(BigInt(staked) > 0n ? [{ function: `${CANOPY_REWARDS}::multi_rewards::withdraw`, arguments: [token, String(staked)], prerequisites: [], expectedOutputs: [] }] : []),
+            { function: `${CANOPY_ROUTER}::router::withdraw_fa`,
+              arguments: [vault.address, JSON.stringify(strategies), JSON.stringify(strategies.map(() => '0x')), shares.toString(), 'some(10)', 'none'],
+              prerequisites: check === 'packet' ? ['A MovePosition price packet for the strategy (the Canopy app supplies it).'] : [], expectedOutputs: value },
+          ],
+        }];
+      } catch (err) {
+        errors.push(`${token}: ${String(err).slice(0, 200)}`);
+        return [];
+      }
     });
-    return { positions: found.flat(), complete: true, errors: [], ledgerVersion: version };
+    return { positions: found.flat(), complete: errors.length === 0, errors, ledgerVersion: version };
   } catch (err) {
     return { positions: [], complete: false, errors: [String(err).slice(0, 300)], ledgerVersion: version };
   }
