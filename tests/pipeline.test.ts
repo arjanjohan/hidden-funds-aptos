@@ -462,7 +462,7 @@ describe('animeswap enumerator', () => {
 });
 
 describe('earnium enumerator', () => {
-  it('lists everyone who added or staked liquidity and every wallet holding LP; dates the pools whose LP a call after the closure moved', async () => {
+  it('lists everyone who added or staked liquidity and every wallet holding LP; dates the stakes a staking call after the closure moved', async () => {
     const POOL = addr('e1'), OTHER = addr('e2');
     const c = fakeChain({
       view: () => [[{ inner: POOL }, { inner: OTHER }]],
@@ -481,7 +481,7 @@ describe('earnium enumerator', () => {
     // Every hint carries the version the scans reached.
     expect(r.candidates).toEqual([
       { owner: addr(1), hint: { w: '7706000500' } },
-      { owner: addr(2), hint: { moved: { [POOL]: '2026-10-21T10:00:00.000Z' }, w: '7706000500' } },
+      { owner: addr(2), hint: { staked: { [POOL]: '2026-10-21T10:00:00.000Z' }, w: '7706000500' } },
       // Holds LP it never added or staked itself (a transfer in).
       { owner: addr(3), hint: { lps: { [POOL]: '2026-11-01T00:00:00.000Z' }, w: '7706000500' } },
     ]);

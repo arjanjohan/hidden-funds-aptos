@@ -1064,47 +1064,55 @@ describe('earnium closed lp', () => {
   });
   const raw = (r: { positions: { asset?: string; expectedPayout: { raw: string }[]; status: string }[] }) => r.positions.map(p => [p.asset, p.expectedPayout[0]?.raw, p.status]);
 
-  it('counts wallet and unstakable LP at the removal payout, unstaking first, from the closure', async () => {
+  it('counts wallet LP and unstakable LP as separate parts at the removal payout, unstaking first, from the closure', async () => {
     const r = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '100', staked: '400', unlock: '0' } })), OWNER, {});
     expect(r.complete).toBe(true);
-    expect(raw(r)).toEqual([[APT, '1000', 'recoverable'], [KAPT, '1500', 'recoverable']]);
-    expect(r.positions[0]).toMatchObject({ claimableSince: EARNIUM_CLOSED_AT, ageBasis: 'protocol_closure', locator: POOL });
-    expect(r.positions[0].steps.map(s => [s.function.split('::').slice(-2).join('::'), s.arguments])).toEqual([
+    expect(raw(r)).toEqual([[APT, '200', 'recoverable'], [KAPT, '300', 'recoverable'], [APT, '800', 'recoverable'], [KAPT, '1200', 'recoverable']]);
+    expect(r.positions.map(p => [p.locator, p.claimableSince, p.ageBasis])).toEqual([
+      [POOL, EARNIUM_CLOSED_AT, 'protocol_closure'], [POOL, EARNIUM_CLOSED_AT, 'protocol_closure'],
+      [`${POOL}/staked`, EARNIUM_CLOSED_AT, 'protocol_closure'], [`${POOL}/staked`, EARNIUM_CLOSED_AT, 'protocol_closure']]);
+    const steps = (i: number) => r.positions[i].steps.map(s => [s.function.split('::').slice(-2).join('::'), s.arguments]);
+    expect(steps(0)).toEqual([['router::remove_liquidity_entry', [APT, KAPT, 'false', '100', '198', '297', OWNER]]]);
+    expect(steps(2)).toEqual([
       ['liquidity_stake_pool::unstake', [POOL, '400']],
-      ['router::remove_liquidity_entry', [APT, KAPT, 'false', '500', '990', '1485', OWNER]],
+      ['router::remove_liquidity_entry', [APT, KAPT, 'false', '400', '792', '1188', OWNER]],
     ]);
-    expect(r.positions[1].steps).toEqual([]);
-    // LP the owner moved after the closure is aged from that call; a call in another pool does not re-date it.
-    const later = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '100', staked: '0', unlock: '0' } })), OWNER, { moved: { [POOL]: '2026-12-01T00:00:00.000Z' } });
-    expect(later.positions[0].claimableSince).toBe('2026-12-01T00:00:00.000Z');
-    const other = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '100', staked: '0', unlock: '0' } })), OWNER, { moved: { [addr('e9')]: '2026-12-01T00:00:00.000Z' } });
-    expect(other.positions[0].claimableSince).toBe(EARNIUM_CLOSED_AT);
+    expect([r.positions[1].steps, r.positions[3].steps]).toEqual([[], []]);
+    // A staking call after the closure dates the stake, not the wallet LP; wallet LP received later dates only itself.
+    // A call in another pool dates nothing here.
+    const both = context(chain({ [POOL]: { wallet: '100', staked: '400', unlock: '0' } }));
+    const staked = await earniumClosedLp.read(both, OWNER, { staked: { [POOL]: '2026-12-01T00:00:00.000Z' } });
+    expect(staked.positions.map(p => p.claimableSince)).toEqual([EARNIUM_CLOSED_AT, EARNIUM_CLOSED_AT, '2026-12-01T00:00:00.000Z', '2026-12-01T00:00:00.000Z']);
+    const received = await earniumClosedLp.read(both, OWNER, { lps: { [POOL]: '2026-11-02T00:00:00.000Z' } });
+    expect(received.positions.map(p => p.claimableSince)).toEqual(['2026-11-02T00:00:00.000Z', '2026-11-02T00:00:00.000Z', EARNIUM_CLOSED_AT, EARNIUM_CLOSED_AT]);
+    const other = await earniumClosedLp.read(both, OWNER, { staked: { [addr('e9')]: '2026-12-01T00:00:00.000Z' } });
+    expect(other.positions.map(p => p.claimableSince)).toEqual(Array(4).fill(EARNIUM_CLOSED_AT));
   });
 
-  it('leaves the age unknown for a pool whose holdings changed after the version the enumeration scans reached', async () => {
-    // At version 90 (the scans') the owner had 100 LP staked in POOL and 50 in OTHER; at the read's version 100 it has
-    // moved POOL's to its wallet, while OTHER is unchanged.
+  it('leaves the age unknown for a part whose holdings changed after the version the enumeration scans reached', async () => {
+    // At version 90 (the scans') the owner had 100 LP staked in POOL and 50 in OTHER's wallet; at the read's version 100
+    // it has unstaked 60 of POOL's to its wallet (both parts changed), and staked 30 in OTHER (its wallet is unchanged).
     const OTHER = addr('e2');
-    const now: Held = { [POOL]: { wallet: '100', staked: '0', unlock: '0' }, [OTHER]: { wallet: '50', staked: '0', unlock: '0' } };
-    const c = chain(now, [POOL, OTHER]), then = chain({ ...now, [POOL]: { wallet: '0', staked: '100', unlock: '0' } }, [POOL, OTHER]);
+    const now: Held = { [POOL]: { wallet: '60', staked: '40', unlock: '0' }, [OTHER]: { wallet: '50', staked: '30', unlock: '0' } };
+    const c = chain(now, [POOL, OTHER]), then = chain({ [POOL]: { wallet: '0', staked: '100', unlock: '0' }, [OTHER]: { wallet: '50', staked: '0', unlock: '0' } }, [POOL, OTHER]);
     const at90 = { ...c, view: async (fn: string, args: unknown[], typeArgs: string[], version?: string) =>
       version === '90' ? then.view(fn, args, typeArgs) : c.view(fn, args, typeArgs) };
     const r = await earniumClosedLp.read(context(at90), OWNER, { w: '90' });
-    expect(r.positions.map(p => [p.locator, p.ageBasis, p.claimableSince])).toEqual([
-      [POOL, 'unknown', undefined], [POOL, 'unknown', undefined], [OTHER, 'protocol_closure', EARNIUM_CLOSED_AT], [OTHER, 'protocol_closure', EARNIUM_CLOSED_AT]]);
+    expect(r.positions.filter((_, i) => i % 2 === 0).map(p => [p.locator, p.ageBasis, p.claimableSince])).toEqual([
+      [POOL, 'unknown', undefined], [`${POOL}/staked`, 'unknown', undefined],
+      [OTHER, 'protocol_closure', EARNIUM_CLOSED_AT], [`${OTHER}/staked`, 'unknown', undefined]]);
   });
 
   it('blocks a stake still locked, and leaves out LP locked forever', async () => {
     const locked = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '100', staked: '400', unlock: '1900000000' } })), OWNER);
     expect(raw(locked)).toEqual([[APT, '200', 'recoverable'], [KAPT, '300', 'recoverable'], [APT, undefined, 'blocked'], [KAPT, undefined, 'blocked']]);
-    expect(locked.positions[2]).toMatchObject({ locator: `${POOL}/locked`, blockers: [{ code: 'locked' }], grossClaim: [{ raw: '800' }] });
+    expect(locked.positions[2]).toMatchObject({ locator: `${POOL}/locked`, blockers: [{ code: 'locked' }], grossClaim: [{ raw: '800' }], ageBasis: 'unknown' });
+    // Locked forever on purpose (launch liquidity): it can never come out, so it is not left behind (R3).
     const forever = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '0', staked: '400', unlock: '18446744073709551615' } })), OWNER);
     expect(forever.positions).toEqual([]);
   });
 
-  it('ages wallet LP from its last change and a stake that unlocked after the closure from its unlock', async () => {
-    const received = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '100', staked: '0', unlock: '0' } })), OWNER, { lps: { [POOL]: '2026-11-02T00:00:00.000Z' } });
-    expect(received.positions[0].claimableSince).toBe('2026-11-02T00:00:00.000Z');
+  it('ages a stake that unlocked after the closure from its unlock', async () => {
     // Unlocked on 2026-09-21, before the closure: the closure date stays. Unlocked on 2026-11-18, after it: from then.
     const before = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '0', staked: '400', unlock: '1790000000' } })), OWNER, {});
     expect(before.positions[0].claimableSince).toBe(EARNIUM_CLOSED_AT);

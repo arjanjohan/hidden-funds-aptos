@@ -19,10 +19,10 @@ const SLIPPAGE_BPS = 100n;
 const POOLS_PER_CALL = 20;
 const SOURCE = 'earnium-closed-lp';
 
-/** Enumeration hint, per pool: when an Earnium call of the owner's last moved the pool's LP after the closure began
- *  (`moved`), and when the LP in its wallet last changed (`lps`, a transfer in included); and the version the
+/** Enumeration hint, per pool: when a staking call of the owner's last moved its staked LP after the closure began
+ *  (`staked`), and when the LP in its wallet last changed (`lps`, a transfer in included); and the version the
  *  enumeration's scans reached (`w`). */
-export type EarniumHint = { moved?: Record<string, string>; lps?: Record<string, string>; w?: string };
+export type EarniumHint = { staked?: Record<string, string>; lps?: Record<string, string>; w?: string };
 
 /** Every pool, once per ledger version. */
 export const earniumPools = (ctx: ReadContext) => once(ctx, `earnium-pools:${ctx.ledger.version}`, async () =>
@@ -68,38 +68,41 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: EarniumHint): P
   try { held = await holdings(ctx, owner, await earniumPools(ctx), version); } catch (err) {
     return { positions: [], complete: false, errors: [`user_info: ${String(err).slice(0, 200)}`], ledgerVersion: version };
   }
-  // A pool whose holdings differ from those at the version the enumeration's scans reached changed after them (a call
-  // or transfer they have not seen): its age is unknown until a later run dates it.
-  const unscanned = new Set<string>();
+  // Per pool, which holdings differ from those at the version the enumeration's scans reached: they changed after the
+  // scans (a call or transfer they have not seen), so their age is unknown until a later run dates them.
+  const unscanned = new Map<string, { wallet: boolean; staked: boolean }>();
   if (hint?.w && Number(hint.w) < Number(version) && held.length) {
     const then = await holdings(ctx, owner, held.map(h => h.pool), hint.w).catch(() => null);
     for (const h of held) {
-      const t = then?.find(x => x.pool === h.pool);
-      if (!t || t.wallet !== h.wallet || t.staked !== h.staked || t.unlock !== h.unlock) unscanned.add(h.pool);
+      const t = then ? then.find(x => x.pool === h.pool) ?? { wallet: 0n, staked: 0n, unlock: h.unlock } : null;
+      unscanned.set(h.pool, { wallet: !t || t.wallet !== h.wallet, staked: !t || t.staked !== h.staked || t.unlock !== h.unlock });
     }
   }
-  // The pools still take liquidity, so LP the owner moved after the closure is aged from that call, wallet LP from its
-  // last change (LP received later is aged from then), and a stake that unlocked after the closure from its unlock.
+  // The pools still take liquidity, so each part is aged on its own: wallet LP from its store's last change (LP added,
+  // unstaked or received later is aged from then), an unlocked stake from the owner's last staking call in the pool
+  // after the closure, or from its unlock when that came after the closure.
   const latest = (...dates: (string | undefined)[]) => dates.filter((d): d is string => !!d).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a));
   const found = await mapLimit(held, 4, async (h): Promise<Position[]> => {
     try {
       // LP locked with no end can never come out; a stake still locked is blocked until its unlock time.
       const stakedFree = h.unlock === LOCKED_FOREVER || BigInt(ctx.ledger.timestampSecs) < h.unlock ? 0n : h.staked;
       const lockedUntil = h.staked > 0n && stakedFree === 0n && h.unlock !== LOCKED_FOREVER ? h.unlock : null;
-      const liquidity = h.wallet + stakedFree;
-      const since = unscanned.has(h.pool) ? undefined : latest(EARNIUM_CLOSED_AT, hint?.moved?.[h.pool], h.wallet > 0n ? hint?.lps?.[h.pool] : undefined,
-        stakedFree > 0n && h.unlock > 0n ? iso(Number(h.unlock)) : undefined);
+      const changed = unscanned.get(h.pool);
       const p = await poolInfo(ctx, h.pool);
-      const parts: { lp: bigint; blocked: boolean }[] = [
-        ...(liquidity > 0n ? [{ lp: liquidity, blocked: false }] : []),
-        ...(lockedUntil !== null ? [{ lp: h.staked, blocked: true }] : []),
+      const parts: { lp: bigint; locator: string; since?: string; unstake: boolean; blocked: boolean }[] = [
+        ...(h.wallet > 0n ? [{ lp: h.wallet, locator: h.pool, since: changed?.wallet ? undefined : latest(EARNIUM_CLOSED_AT, hint?.lps?.[h.pool]),
+          unstake: false, blocked: false }] : []),
+        ...(stakedFree > 0n ? [{ lp: stakedFree, locator: `${h.pool}/staked`, unstake: true, blocked: false, since: changed?.staked ? undefined
+          : latest(EARNIUM_CLOSED_AT, hint?.staked?.[h.pool], h.unlock > 0n ? iso(Number(h.unlock)) : undefined) }] : []),
+        // Not claimable before its unlock: no age.
+        ...(lockedUntil !== null ? [{ lp: h.staked, locator: `${h.pool}/locked`, unstake: false, blocked: true }] : []),
       ];
       const positions: Position[] = [];
       for (const part of parts) {
         const [a1, a2] = (await ctx.chain.view(`${EARNIUM}::router::redeemable_liquidity`, [h.pool, part.lp.toString()], [], version)).map(x => BigInt(x));
         const outputs: Amount[] = [{ asset: p.paid[0], raw: a1.toString() }, { asset: p.paid[1], raw: a2.toString() }];
         const steps = [
-          ...(!part.blocked && stakedFree > 0n ? [{ function: `${EARNIUM}::liquidity_stake_pool::unstake`, arguments: [h.pool, stakedFree.toString()],
+          ...(part.unstake ? [{ function: `${EARNIUM}::liquidity_stake_pool::unstake`, arguments: [h.pool, part.lp.toString()],
             prerequisites: [], expectedOutputs: [] }] : []),
           { function: `${EARNIUM}::router::remove_liquidity_entry`,
             arguments: [p.inner[0], p.inner[1], String(p.stable), part.lp.toString(), (a1 * (10_000n - SLIPPAGE_BPS) / 10_000n).toString(),
@@ -107,7 +110,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: EarniumHint): P
             prerequisites: part.blocked ? [`unstake after ${iso(Number(lockedUntil))}`] : [], expectedOutputs: outputs },
         ];
         const blockers = part.blocked ? [{ code: 'locked', detail: `Staked with a lock until ${iso(Number(lockedUntil)).slice(0, 10)}.` }] : [];
-        const locator = part.blocked ? `${h.pool}/locked` : h.pool;
+        const { locator, since } = part;
         // One position per side, so a priced side still counts when the other asset has no price. One removal pays both,
         // so only the first side carries the steps: shown twice, they would tell the owner to remove the same LP twice.
         let first = true;
