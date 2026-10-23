@@ -306,8 +306,6 @@ export const animeswapClosedEnumerator: Enumerator = {
   processor: 'fungible_asset_processor',
   scope: `stores holding any LP coin in ${ANIMESWAP}::AnimeSwapPoolV1::PairInfo (current_fungible_asset_balances, amount > 0), except the pool account`,
   async run(chain) {
-    // Taken before the scan, so every store time read is at least this recent.
-    const w = (await processorWatermark(chain, 'fungible_asset_processor')).version;
     const lps = await animeswapLps(chain);
     const holders = new Map<string, Record<string, string>>();
     let pages = 1;
@@ -327,7 +325,7 @@ export const animeswapClosedEnumerator: Enumerator = {
         after = rows[rows.length - 1].storage_id;
       }
     }
-    return { candidates: [...holders].map(([owner, lps]) => ({ owner, hint: { lps, w: String(w) } })), pages };
+    return { candidates: [...holders].map(([owner, lps]) => ({ owner, hint: { lps } })), pages };
   },
   async sanity(chain, ledger, positions) {
     // What the positions would pay, per pool and side, cannot exceed that side's reserve.
@@ -965,10 +963,10 @@ export const econiaIdleEnumerator: Enumerator = {
 };
 
 // Earnium: everyone who added liquidity or staked it (directly or through the router), ever, and every wallet holding
-// LP (current primary stores per pool, transfers included). A call after the closure day began that moved a pool's LP
-// (adding, removing, staking, unstaking; in a wallet's store or a staking pool's) dates that pool's LP for its sender
-// from the call's time, so liquidity used after the closure is aged from then; wallet LP also carries its store's last
-// change. Reward claims move no LP and date nothing. A full scan every run (~140 pages): a wallet that sent all its LP
+// LP (current primary stores per pool, transfers included). A staking call after the closure day began that moved a
+// pool's LP (staking, unstaking, adding and staking) dates that pool's stake for its sender from the call's time, so a
+// stake used after the closure is aged from then; wallet LP carries its store's last change, which every wallet move
+// (adding, removing, unstaking, a transfer) updates. Reward claims move no LP and date nothing. A full scan every run (~140 pages): a wallet that sent all its LP
 // away drops out and is re-read, and every hint carries this run's watermark, against which the read checks that
 // nothing changed after the scans.
 const EARNIUM_CHANGES_FROM = 7_706_000_000;   // 2026-10-21, before the closure's end of day
@@ -979,7 +977,7 @@ const EARNIUM_HOLDERS: EntryFunction[] = [
   ...['stake', 'stake_and_lock'].map(name => ({ contract: EARNIUM, module: 'liquidity_stake_pool', name })),
 ];
 const EARNIUM_CALLS_QUERY = `query($a:bigint!,$w:bigint!){ user_transactions(where:{entry_function_contract_address:{_eq:"${EARNIUM}"}, _or:[
-  {entry_function_module_name:{_eq:"router"}, entry_function_function_name:{_in:${JSON.stringify([...EARNIUM_ADD, 'remove_liquidity_entry'])}}},
+  {entry_function_module_name:{_eq:"router"}, entry_function_function_name:{_in:${JSON.stringify(EARNIUM_ADD.filter(f => f.includes('_and_stake')))}}},
   {entry_function_module_name:{_eq:"liquidity_stake_pool"}, entry_function_function_name:{_in:["stake","stake_and_lock","unstake"]}}],
   version:{_gt:$a, _lte:$w}}, order_by:{version:asc}, limit:${PAGE}){ version sender timestamp } }`;
 const LP_MOVES_QUERY = `query($v:bigint!,$p:[String!]!){ fungible_asset_activities(where:{transaction_version:{_eq:$v}, asset_type:{_in:$p}},
@@ -988,7 +986,7 @@ const earniumSenders = entrySenders('earnium-closed-lp', EARNIUM_HOLDERS, noCont
 export const earniumClosedEnumerator: Enumerator = {
   ...earniumSenders,
   alsoProcessors: ['fungible_asset_processor'],
-  scope: `${earniumSenders.scope}; plus every wallet holding LP, and Earnium calls from version ${EARNIUM_CHANGES_FROM} with the pools whose LP they moved`,
+  scope: `${earniumSenders.scope}; plus every wallet holding LP, and Earnium staking calls from version ${EARNIUM_CHANGES_FROM} with the pools whose LP they moved`,
   async run(chain) {
     // Calls and the LP they moved come from two processors: scan only what both have indexed. Taken before the scans,
     // so everything they read is at least this recent.
@@ -998,7 +996,7 @@ export const earniumClosedEnumerator: Enumerator = {
     const [pools] = await chain.view(`${EARNIUM}::liquidity_pool::pools`, []);
     const poolIds = (pools as { inner: string }[]).map(p => normalizeAddress(p.inner));
     let pages = holders.pages + 1;
-    const moved = new Map<string, Record<string, string>>();
+    const staked = new Map<string, Record<string, string>>();
     let after = String(EARNIUM_CHANGES_FROM);
     for (;;) {
       const page = (await chain.gql(EARNIUM_CALLS_QUERY, { a: after, w: indexed })).user_transactions;
@@ -1007,7 +1005,7 @@ export const earniumClosedEnumerator: Enumerator = {
         const sender = normalizeAddress(t.sender), at = new Date(t.timestamp + 'Z').toISOString();
         const touched = (await chain.gql(LP_MOVES_QUERY, { v: String(t.version), p: poolIds })).fungible_asset_activities;
         pages++;
-        for (const { asset_type } of touched) moved.set(sender, { ...moved.get(sender), [normalizeAddress(asset_type)]: at });
+        for (const { asset_type } of touched) staked.set(sender, { ...staked.get(sender), [normalizeAddress(asset_type)]: at });
       }
       if (page.length) after = String(page[page.length - 1].version);
       if (page.length < PAGE) break;
@@ -1030,8 +1028,8 @@ export const earniumClosedEnumerator: Enumerator = {
       }
     }
     // Every candidate carries a hint: a read without one is the check page's, which ages from the closure.
-    const owners = new Set([...holders.candidates.map(c => c.owner), ...moved.keys(), ...lps.keys()]);
-    return { candidates: [...owners].map(owner => ({ owner, hint: { ...(moved.has(owner) ? { moved: moved.get(owner) } : {}),
+    const owners = new Set([...holders.candidates.map(c => c.owner), ...staked.keys(), ...lps.keys()]);
+    return { candidates: [...owners].map(owner => ({ owner, hint: { ...(staked.has(owner) ? { staked: staked.get(owner) } : {}),
         ...(lps.has(owner) ? { lps: lps.get(owner) } : {}), w: indexed } })), pages };
   },
 };
