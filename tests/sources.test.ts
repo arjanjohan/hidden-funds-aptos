@@ -1296,7 +1296,7 @@ describe('aries wound down', () => {
   const APT_INFO = info('0x1', 'aptos_coin', 'AptosCoin'), USDC_INFO = info(ARIES, 'fa_to_coin_wrapper', 'WrappedUSDC');
   const APT_T = '0x1::aptos_coin::AptosCoin', USDC_T = `${ARIES}::fa_to_coin_wrapper::WrappedUSDC`, USDC_FA = addr('5dc');
   const table = (keys: unknown[]) => ({ inner: { inner: { handle: addr('7a') }, length: String(keys.length) }, head: { vec: keys.slice(0, 1) }, tail: { vec: keys.slice(-1) } });
-  type Opts = { deposits?: unknown[]; loans?: unknown[]; loanShare?: string; cash?: string; redeem?: boolean; stale?: boolean; aptQuote?: Error };
+  type Opts = { deposits?: unknown[]; loans?: unknown[]; loanShare?: string; cash?: string; redeem?: boolean; stale?: boolean | Error; aptQuote?: Error };
   // Profile "Main Account": APT quoted 500 (and USDC 70); APT's reserve holds `cash`.
   const chain = (o: Opts = {}) => fakeChain({
     resource: (address, type) => {
@@ -1310,7 +1310,7 @@ describe('aries wound down', () => {
       if (fn.endsWith('::profile::profile_deposit')) { if (typeArgs[0] === APT_T && o.aptQuote) throw o.aptQuote; return typeArgs[0] === APT_T ? ['400', '500'] : ['90', '70']; }
       if (fn.endsWith('::profile::profile_loan')) return [o.loanShare ?? '0', '0'];
       if (fn.endsWith('::reserve::reserve_state')) return [{ total_cash_available: typeArgs[0] === APT_T ? (o.cash ?? '1000') : '1000', reserve_config: { allow_redeem: o.redeem ?? true } }];
-      if (fn.endsWith('::oracle::get_reserve_price')) { if (o.stale) throw new Error('EORACLE_PRICE_STALE'); return [{}]; }
+      if (fn.endsWith('::oracle::get_reserve_price')) { if (o.stale) throw o.stale === true ? new Error('Move abort in oracle: EORACLE_PRICE_STALE(0x2)') : o.stale; return [{}]; }
       throw new Error(fn);
     },
   });
@@ -1338,6 +1338,9 @@ describe('aries wound down', () => {
     expect(await code({ stale: true })).toBe('stale_oracle');
     // The last reserve left needs no price.
     expect(await code({ stale: true, deposits: [APT_INFO] })).toBeUndefined();
+    // A price read that fails otherwise is not a stale price: the read is incomplete.
+    const down = await ariesWoundDown.read(context(chain({ stale: new Error('fetch failed') })), OWNER);
+    expect(down).toMatchObject({ complete: false, positions: [] });
   });
 
   it('reads each reserve on its own: an overflowing quote is blocked, another failure leaves the read incomplete', async () => {
