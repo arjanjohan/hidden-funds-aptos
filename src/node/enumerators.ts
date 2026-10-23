@@ -6,6 +6,7 @@ import { ANIMESWAP, ANIMESWAP_POOLS, animeswapLps, assetOf as animeswapAsset, pa
 import { EARNIUM } from '../shared/sources/earnium-closed.ts';
 import { AURO_CLOSED_AT, AURO_COLLECTION, AURO_ROUTER } from '../shared/sources/auro-closed.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
+import { CANOPY_VAULTS } from '../shared/sources/canopy-frozen.ts';
 import { AAVE, type AaveHint, aaveReserves, findFreeze } from '../shared/sources/aave-frozen.ts';
 import { ECHELON, FROZEN_MARKETS } from '../shared/sources/echelon-frozen.ts';
 import { ECONIA, ECONIA_COIN_MARKETS, KANA_ECONIA_WRAPPER } from '../shared/sources/econia-idle.ts';
@@ -686,6 +687,74 @@ export const canopyEndedRewardsEnumerator: Enumerator = {
   sanity: async () => ({ check: 'none', ok: null, detail: 'no contract total: earned rewards are computed per staker' }),
 };
 
+// Canopy vault shares (Movement): every store holding a vault's shares token (the staking pool's own store left out:
+// its shares belong to the stakers), and every staker in multi_rewards (shares are staked there; the read checks which).
+// Store holders carry each store's last change by shares token, stakers the version of their last stake or withdrawal
+// by shares token (from multi_rewards' events since the first freeze: the staking row is one per staker, so its version
+// does not say which shares changed), for aging.
+const CANOPY_STAKES_FROM = 156_180_000;   // just before the first freeze (2026-06-16)
+const STAKE_EVENTS_QUERY = `query($t:[String!]!,$v:bigint!,$i:bigint!){ events(where:{indexed_type:{_in:$t}, _or:[{transaction_version:{_gt:$v}},
+  {transaction_version:{_eq:$v}, event_index:{_gt:$i}}]}, order_by:[{transaction_version:asc},{event_index:asc}], limit:${PAGE}){ transaction_version event_index data } }`;
+export const canopyFrozenEnumerator: Enumerator = {
+  sourceId: 'canopy-frozen-vaults',
+  processor: 'fungible_asset_processor',
+  // The read looks up stake and withdrawal times in user transactions.
+  alsoProcessors: ['default_processor', 'events_processor', 'user_transaction_processor'],
+  scope: `stores holding any ${CANOPY_VAULTS}::vault shares token (current_fungible_asset_balances), plus stakers in ${CANOPY_REWARDS}::multi_rewards (user_staked_balances) with their stakes and withdrawals from version ${CANOPY_STAKES_FROM}`,
+  async run(chain) {
+    const shares: string[] = [];
+    for (let offset = 0; ; offset += 100) {
+      const [page] = await chain.view(`${CANOPY_VAULTS}::vault::vaults_view`, [String(offset), '100']);
+      shares.push(...(page as any).vaults.map((v: any) => normalizeAddress(v.shares_address)));
+      if ((page as any).vaults.length < 100) break;
+    }
+    // Share stores, the staking table and stakes come from three processors: the lowest watermark, taken before the
+    // scans, is a version everything they read is at least as recent as.
+    const w = String((await Promise.all(['fungible_asset_processor', 'default_processor', 'events_processor'].map(p => processorWatermark(chain, p))))
+      .map(m => BigInt(m.version)).reduce((a, b) => (a < b ? a : b)));
+    const hints = new Map<string, { at?: Record<string, string>; v?: Record<string, string> }>();
+    let pages = 1;
+    let after = '';
+    for (;;) {
+      const rows = (await chain.gql(`query($a:[String!]!,$s:String!){ current_fungible_asset_balances(where:{asset_type:{_in:$a}, amount:{_gt:"0"},
+        storage_id:{_gt:$s}}, order_by:{storage_id:asc}, limit:${PAGE}){ owner_address asset_type storage_id is_primary last_transaction_timestamp } }`, { a: shares, s: after })).current_fungible_asset_balances;
+      pages++;
+      for (const r of rows) {
+        const owner = normalizeAddress(r.owner_address), token = normalizeAddress(r.asset_type);
+        if (owner === CANOPY_REWARDS_STATE) continue;
+        // Only the primary store dates the wallet's shares; a secondary store's owner is a candidate without a date.
+        const at = new Date(r.last_transaction_timestamp + 'Z').toISOString(), prev = hints.get(owner) ?? {};
+        hints.set(owner, r.is_primary && (!prev.at?.[token] || at > prev.at[token]) ? { ...prev, at: { ...prev.at, [token]: at } } : prev);
+      }
+      if (rows.length < PAGE) break;
+      after = rows[rows.length - 1].storage_id;
+    }
+    const state = await chain.resource(CANOPY_REWARDS_STATE, `${CANOPY_REWARDS}::multi_rewards::MultiRewardsModule`);
+    if (!state) throw new Error('Canopy MultiRewardsModule missing');
+    const table = await tableRows(chain, normalizeAddress(state.user_staked_balances.handle), undefined);
+    for (const r of table.rows) {
+      const owner = normalizeAddress(r.key);
+      hints.set(owner, hints.get(owner) ?? {});
+    }
+    pages += table.pages;
+    let v = String(CANOPY_STAKES_FROM), i = '-1';
+    for (;;) {
+      const events = (await chain.gql(STAKE_EVENTS_QUERY, { t: ['StakeEvent', 'WithdrawEvent', 'EmergencyWithdrawEvent'].map(e => `${CANOPY_REWARDS}::multi_rewards::${e}`), v, i })).events;
+      pages++;
+      for (const e of events) {
+        // A staker the table does not list yet (its processor trailing) is a candidate too: the read finds what it holds.
+        const owner = normalizeAddress(e.data.user), token = normalizeAddress(e.data.staking_token.inner), h = hints.get(owner) ?? {};
+        hints.set(owner, { ...h, v: { ...h.v, [token]: String(e.transaction_version) } });
+      }
+      if (events.length < PAGE) break;
+      const last = events[events.length - 1];
+      v = String(last.transaction_version); i = String(last.event_index);
+    }
+    return { candidates: [...hints].map(([owner, hint]) => ({ owner, hint: { ...hint, w } })), pages };
+  },
+  sanity: async () => ({ check: 'none', ok: null, detail: 'no contract total: shares are spread over wallets and the staking pool' }),
+};
+
 // Senders of smart_chef::deposit: everyone who staked in a PancakeSwap (Aptos) CAKE syrup pool.
 // Deposits after the last CAKE pool ended (version ~444.55M, 2024-02-09 14:05 UTC) only went to the Gui Inu pools.
 // Withdrawals (any time) mark a staker changed, so an exit drops out in the next run instead of at a monthly re-read.
@@ -976,4 +1045,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator, auroClosedEnumerator, animeswapClosedEnumerator, earniumClosedEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator, auroClosedEnumerator, animeswapClosedEnumerator, earniumClosedEnumerator, canopyFrozenEnumerator];

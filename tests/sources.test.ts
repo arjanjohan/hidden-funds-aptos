@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ownerKind } from '../src/shared/owners.ts';
 import { AAVE, aaveFrozenReserves, AAVE_UNFROZEN_AT, USDC } from '../src/shared/sources/aave-frozen.ts';
 import { canopyEndedRewards } from '../src/shared/sources/canopy-rewards.ts';
+import { CANOPY_VAULTS, canopyFrozenVaults, FROZEN_VAULTS } from '../src/shared/sources/canopy-frozen.ts';
 import { APT, delegation, MOVE, movementDelegation } from '../src/shared/sources/delegation.ts';
 import { EARNIUM, EARNIUM_CLOSED_AT, earniumClosedLp } from '../src/shared/sources/earnium-closed.ts';
 import { ANIMESWAP, ANIMESWAP_CLOSED_AT, ANIMESWAP_POOLS, animeswapClosedLp, isqrt, pairOf } from '../src/shared/sources/animeswap-closed.ts';
@@ -1134,5 +1135,112 @@ describe('earnium closed lp', () => {
     const r = await earniumClosedLp.read(context(c), OWNER, {});
     expect(r.positions.map(p => p.locator)).toEqual([pools[24], pools[24]]);
     expect(c.calls.filter(x => x.includes('user_info'))).toHaveLength(2);
+  });
+});
+
+describe('canopy frozen vaults', () => {
+  const byName = (n: string) => [...FROZEN_VAULTS].find(([, v]) => v.name === n)![0];
+  const MOVE0 = byName('CV MOVE-0'), SUSDA = byName('CV sUSDa-46'), RSETH = byName('CV rsETH-26');
+  const share = (v: string) => addr(`5${v.slice(3, 10)}`);
+  type Held = Record<string, { wallet?: string; staked?: string; open?: boolean }>;
+  // Each vault pays 2 asset units per share; its withdrawal map names one strategy.
+  const chain = (held: Held) => fakeChain({
+    view: (fn, args) => {
+      if (fn.endsWith('::vault::vaults_view')) return [{ vaults: [MOVE0, SUSDA, RSETH].map(v => ({ vault_address: v, shares_address: share(v), asset_address: '0xa' })) }];
+      if (fn.endsWith('::rewards_view::get_user_pool_positions')) return [Object.entries(held).filter(([, h]) => h.staked).map(([v]) => ({ pool_staking_token: { inner: share(v) } }))];
+      const v = [MOVE0, SUSDA, RSETH].find(x => share(x) === args[1] || x === args[0]);
+      if (fn === '0x1::primary_fungible_store::balance') return [held[v!]?.wallet ?? '0'];
+      if (fn.endsWith('::multi_rewards::get_user_staked_balance')) return [held[v!]?.staked ?? '0'];
+      if (fn.endsWith('::vault::shares_to_amount')) return [String(BigInt(args[1] as string) * 2n)];
+      if (fn.endsWith('::withdraw::get_withdrawal_map_view')) return [{ data: [{ key: { inner: addr('5a') }, value: '1' }] }];
+      throw new Error(fn);
+    },
+    resource: (address, type) => type === `${CANOPY_VAULTS}::vault::Vault` ? { is_paused: false, deposit_limit: { vec: held[address]?.open ? [] : ['0'] } } : null,
+    gql: query => query.includes('user_transactions') ? { user_transactions: [{ timestamp: '2026-10-20T05:00:00' }] }
+      : { current_fungible_asset_balances: Object.entries(held).filter(([, h]) => h.wallet).map(([v]) => ({ asset_type: share(v), storage_id: addr('6'), is_primary: true })) },
+  });
+
+  it('counts shares in the wallet and staked in a frozen vault as separate parts, unstaking first; blocked where withdrawing aborts', async () => {
+    // The stake (version 5) came long before the freeze, so its time is not looked up.
+    const r = await canopyFrozenVaults.read(context(chain({ [MOVE0]: { wallet: '50', staked: '100' } })), OWNER, { at: { [share(MOVE0)]: '2026-01-01T00:00:00.000Z' }, v: { [share(MOVE0)]: '5' } });
+    expect(r.complete).toBe(true);
+    expect(r.positions.map(p => [p.locator, p.grossClaim[0].raw, p.status, p.blockers[0]?.code, p.expectedPayout, p.claimableSince])).toEqual([
+      [MOVE0, '100', 'blocked', 'withdrawal_aborts', [], '2026-10-16T14:40:46Z'], [`${MOVE0}/staked`, '200', 'blocked', 'withdrawal_aborts', [], '2026-10-16T14:40:46Z']]);
+    expect(r.positions.map(p => p.steps.map(s => [s.function.split('::').slice(-2).join('::'), s.arguments.slice(0, 2), s.arguments[3]]))).toEqual([
+      [['router::withdraw_fa', [MOVE0, JSON.stringify([addr('5a')])], '50']],
+      [['multi_rewards::withdraw', [share(MOVE0), '100'], undefined], ['router::withdraw_fa', [MOVE0, JSON.stringify([addr('5a')])], '100']]]);
+    // Wallet shares received after the freeze date only the wallet part, not the stake.
+    const received = await canopyFrozenVaults.read(context(chain({ [SUSDA]: { wallet: '1', staked: '9' } })), OWNER, { at: { [share(SUSDA)]: '2026-10-20T00:00:00.000Z' } });
+    expect(received.positions.map(p => [p.locator, p.claimableSince])).toEqual([[SUSDA, '2026-10-20T00:00:00.000Z'], [`${SUSDA}/staked`, '2026-10-16T14:40:46Z']]);
+  });
+
+  it('is recoverable where withdrawing works, aged from a later change of the owner\'s shares', async () => {
+    const r = await canopyFrozenVaults.read(context(chain({ [SUSDA]: { wallet: '7' } })), OWNER, { at: { [share(SUSDA)]: '2026-10-20T00:00:00.000Z' } });
+    expect(r.positions[0]).toMatchObject({ status: 'recoverable', expectedPayout: [{ raw: '14' }], claimableSince: '2026-10-20T00:00:00.000Z' });
+    // A change to another vault's shares, in the wallet or staked, does not re-date this one.
+    const other = await canopyFrozenVaults.read(context(chain({ [SUSDA]: { wallet: '7' } })), OWNER,
+      { at: { [share(MOVE0)]: '2026-10-20T00:00:00.000Z' }, v: { [share(MOVE0)]: '300000000' } });
+    expect(other.positions[0].claimableSince).toBe('2026-10-16T14:40:46Z');
+    // A stake of these shares after the freeze dates them from that transaction.
+    const restaked = await canopyFrozenVaults.read(context(chain({ [SUSDA]: { staked: '7' } })), OWNER, { v: { [share(SUSDA)]: '300000000' } });
+    expect(restaked.positions[0].claimableSince).toBe('2026-10-20T05:00:00.000Z');
+    // Its transaction not indexed yet: the time is unknown, so is the age.
+    const c = chain({ [SUSDA]: { staked: '7' } });
+    const unindexed = await canopyFrozenVaults.read(context({ ...c, gql: (async (q: string, v?: Record<string, unknown>) =>
+      q.includes('user_transactions') ? { user_transactions: [] } : c.gql(q, v)) as typeof c.gql }), OWNER, { v: { [share(SUSDA)]: '300000000' } });
+    expect(unindexed.positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined });
+    expect(r.positions[0].steps).toHaveLength(1);
+    // MovePosition strategies need a price packet from its operator: team-gated, payout kept.
+    const packet = await canopyFrozenVaults.read(context(chain({ [RSETH]: { staked: '3' } })), OWNER, {});
+    expect(packet.positions[0]).toMatchObject({ status: 'team_gated', expectedPayout: [{ raw: '6' }], claimableSince: '2026-06-16T13:09:26Z', blockers: [{ code: 'price_packet' }] });
+    expect(packet.positions[0].steps[1].prerequisites[0]).toMatch(/MovePosition/);
+  });
+
+  it('leaves the age unknown for shares that changed after the version the enumeration scans reached', async () => {
+    // At version 90 (the scans') the owner had 3 sUSDa shares in its wallet; at the read's version 100 it has 7.
+    const at90 = (wallet: string) => {
+      const c = chain({ [SUSDA]: { wallet: '7' } });
+      return { ...c, view: async (fn: string, args: unknown[], typeArgs: string[], version?: string) =>
+        version === '90' && fn === '0x1::primary_fungible_store::balance' ? [wallet] : c.view(fn, args, typeArgs) };
+    };
+    const hint = { at: { [share(SUSDA)]: '2026-01-01T00:00:00.000Z' }, w: '90' };
+    expect((await canopyFrozenVaults.read(context(at90('3')), OWNER, hint)).positions[0]).toMatchObject({ ageBasis: 'unknown', claimableSince: undefined });
+    expect((await canopyFrozenVaults.read(context(at90('7')), OWNER, hint)).positions[0].claimableSince).toBe('2026-10-16T14:40:46Z');
+    // A staker whose hint has no store time received wallet shares after the scan: they are read, with no age yet.
+    const received = await canopyFrozenVaults.read(context(at90('0')), OWNER, { v: { [share(MOVE0)]: '5' }, w: '90' });
+    expect(received.positions[0]).toMatchObject({ locator: SUSDA, grossClaim: [{ raw: '14' }], ageBasis: 'unknown' });
+  });
+
+  it('leaves the age unknown without a hint, and reads each vault on its own', async () => {
+    const c = chain({ [SUSDA]: { wallet: '7' }, [MOVE0]: { wallet: '5' } });
+    const r = await canopyFrozenVaults.read(context(c), OWNER);
+    expect(r.positions.map(p => [p.locator, p.ageBasis, p.claimableSince])).toEqual(expect.arrayContaining([[SUSDA, 'unknown', undefined], [MOVE0, 'unknown', undefined]]));
+    // MOVE-0's withdrawal map fails: sUSDa is still read, and the read is incomplete.
+    const failing = await canopyFrozenVaults.read(context({ ...c, view: async (fn, args, typeArgs, v) =>
+      fn.endsWith('::withdraw::get_withdrawal_map_view') && args[0] === MOVE0 ? Promise.reject(new Error('view failed')) : c.view(fn, args, typeArgs, v) }), OWNER, {});
+    expect(failing.complete).toBe(false);
+    expect(failing.positions.map(p => p.locator)).toEqual([SUSDA]);
+  });
+
+  it('reads the wallet for a staking token even when the indexer shows no store yet', async () => {
+    // All 7 shares were just withdrawn from staking into the wallet; the indexer has not caught up.
+    const c = chain({ [SUSDA]: { wallet: '7', staked: '0' } });
+    const r = await canopyFrozenVaults.read(context({ ...c, gql: (async () => ({ current_fungible_asset_balances: [] })) as typeof c.gql }), OWNER, {});
+    expect(r.positions.map(p => [p.locator, p.grossClaim[0].raw])).toEqual([[SUSDA, '14']]);
+  });
+
+  it('shows shares in a secondary store the owner holds, uncounted', async () => {
+    const c = chain({ [SUSDA]: { wallet: '7' } });
+    const store = addr('7e');
+    const r = await canopyFrozenVaults.read(context({ ...c,
+      gql: (async (q: string, v?: Record<string, unknown>) => q.includes('user_transactions') ? c.gql(q, v)
+        : { current_fungible_asset_balances: [{ asset_type: share(SUSDA), storage_id: addr('6'), is_primary: true }, { asset_type: share(SUSDA), storage_id: store, is_primary: false }] }) as typeof c.gql,
+      view: async (fn, args, typeArgs, v) => fn === '0x1::object::owner' ? [OWNER] : fn === '0x1::fungible_asset::balance' ? ['3'] : c.view(fn, args, typeArgs, v) }), OWNER, {});
+    expect(r.positions.map(p => [p.locator, p.grossClaim[0].raw, p.status, p.blockers[0]?.code, p.expectedPayout])).toEqual([
+      [SUSDA, '14', 'recoverable', undefined, [{ asset: `movement:${addr('a')}`, raw: '14' }]], [`${SUSDA}/store/${store}`, '6', 'unknown', 'secondary_store', []]]);
+  });
+
+  it('leaves out a vault that is open to deposits', async () => {
+    expect((await canopyFrozenVaults.read(context(chain({ [SUSDA]: { wallet: '7', open: true } })), OWNER)).positions).toEqual([]);
   });
 });

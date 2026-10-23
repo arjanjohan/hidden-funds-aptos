@@ -66,8 +66,8 @@ export const PROTOCOLS: ProtocolEntry[] = [
     reason: 'Repository archived 2025-09-08 and no trading since: coins left idle in market accounts.', sources: ['econia-idle-accounts'], defillama: 'econia', dead: '2025-09-08' },
   { id: 'movement-native-staking', name: 'Movement native staking', chains: [...M], category: 'Staking', status: 'implemented', checkedAt: '2026-10-20',
     reason: 'Unstaked MOVE whose lockup ended, and stake left with validators that left the set.', sources: ['movement-native-delegation', 'movement-inactive-validator'] },
-  { id: 'canopy', name: 'Canopy', chains: [...M], category: 'Yield Aggregator', status: 'implemented', checkedAt: '2026-10-20',
-    reason: 'Staking rewards from reward periods that ended, never claimed.', sources: ['canopy-ended-rewards'], defillama: 'canopy' },
+  { id: 'canopy', name: 'Canopy', chains: [...M], category: 'Yield Aggregator', status: 'implemented', checkedAt: '2026-10-21',
+    reason: 'Staking rewards from reward periods that ended, never claimed; and shares left in vaults Canopy closed to deposits (2026-06 and 2026-10).', sources: ['canopy-ended-rewards', 'canopy-frozen-vaults'], defillama: 'canopy' },
 
   // Dormant
   { id: 'aave-aptos', name: 'Aave (Aptos)', chains: [...A], category: 'Lending', status: 'dormant', checkedAt: '2026-10-20',
