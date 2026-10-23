@@ -1,6 +1,7 @@
 // Amnis withdrawal NFTs (amAPT → APT) whose lockup ended but were never redeemed.
 import { iso, positionIds } from '../accounting.ts';
-import { gqlAll, mapLimit, normalizeAddress } from '../chain.ts';
+import { mapLimit, normalizeAddress } from '../chain.ts';
+import { ownedIn } from '../owned.ts';
 import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
 import { APT } from './delegation.ts';
 
@@ -11,16 +12,12 @@ const SOURCE = 'amnis-withdrawals';
 
 export type TokensHint = { tokens: string[] };
 
-const TOKENS_QUERY = `query($o:String!,$c:String!,$after:String!){ current_token_ownerships_v2(where:{owner_address:{_eq:$o}, amount:{_gt:"0"},
-  current_token_data:{collection_id:{_eq:$c}}, token_data_id:{_gt:$after}}, order_by:{token_data_id:asc}, limit:100){ token_data_id } }`;
-
 async function read(ctx: ReadContext, ownerInput: string, hint?: TokensHint): Promise<ReadResult> {
   const owner = normalizeAddress(ownerInput);
   const version = ctx.ledger.version;
   const errors: string[] = [];
   let failed = 0;
-  const tokens: string[] = hint?.tokens ??
-    (await gqlAll(ctx.chain, TOKENS_QUERY, { o: owner, c: AMNIS_WITHDRAWAL_COLLECTION }, 'current_token_ownerships_v2', 'token_data_id')).map((t: any) => t.token_data_id);
+  const tokens: string[] = hint?.tokens ?? await ownedIn(ctx, owner, AMNIS_WITHDRAWAL_COLLECTION);
   const found = await mapLimit(tokens.map(normalizeAddress), 4, async (token): Promise<Position | null> => {
     try {
       const [core, withdrawal] = await Promise.all([

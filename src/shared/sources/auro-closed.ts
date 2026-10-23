@@ -3,7 +3,8 @@
 // the end of April; auro.finance no longer resolves. Closed under the closed-frontend rule (decided 2026-10-21), aged
 // from 2026-04-30. A position with debt does not count (R4). Positions are NFTs in Auro's CDP collection.
 import { iso, positionIds } from '../accounting.ts';
-import { gqlAll, mapLimit, normalizeAddress, once } from '../chain.ts';
+import { mapLimit, normalizeAddress, once } from '../chain.ts';
+import { ownedIn } from '../owned.ts';
 import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
 
 export const AURO = '0x50a340a19e6ada1be07192c042786ca6a9651d5c845acc8727e8c6416a56a32c';
@@ -44,16 +45,13 @@ function pool(ctx: ReadContext, address: string): Promise<Pool> {
   });
 }
 
-const TOKENS_QUERY = `query($o:String!,$c:String!,$after:String!){ current_token_ownerships_v2(where:{owner_address:{_eq:$o}, amount:{_gt:"0"},
-  current_token_data:{collection_id:{_eq:$c}}, token_data_id:{_gt:$after}}, order_by:{token_data_id:asc}, limit:100){ token_data_id } }`;
-
 async function read(ctx: ReadContext, ownerInput: string, hint?: AuroHint): Promise<ReadResult> {
   const owner = normalizeAddress(ownerInput);
   const version = ctx.ledger.version;
   const errors: string[] = [];
   let failed = 0;
   const tokens: string[] = hint?.tokens ??
-    (await gqlAll(ctx.chain, TOKENS_QUERY, { o: owner, c: AURO_COLLECTION }, 'current_token_ownerships_v2', 'token_data_id')).map((t: any) => t.token_data_id);
+    await ownedIn(ctx, owner, AURO_COLLECTION);
   const found = await mapLimit(tokens.map(normalizeAddress), 4, async (token): Promise<Position[]> => {
     try {
       const [core, position] = await Promise.all([

@@ -4,7 +4,8 @@
 // wallet or staked in Canopy's rewards pools (multi_rewards); both count. Withdrawal works through Canopy's router,
 // except where the vault or its strategy aborts (simulated 2026-10-21, below): those positions are blocked.
 import { iso, positionIds } from '../accounting.ts';
-import { gqlAll, mapLimit, normalizeAddress, once, transactionTime } from '../chain.ts';
+import { mapLimit, normalizeAddress, once, transactionTime } from '../chain.ts';
+import { assetId, ownedBalances } from '../owned.ts';
 import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_VIEWS } from './canopy-rewards.ts';
 
@@ -139,9 +140,6 @@ const frozen = (ctx: ReadContext, vault: string) => once(ctx, `canopy-frozen:${v
   return v.is_paused === true || v.deposit_limit?.vec?.[0] === '0';
 });
 
-const SHARES_QUERY = `query($o:String!,$a:[String!]!,$after:String!){ current_fungible_asset_balances(where:{owner_address:{_eq:$o},
-  asset_type:{_in:$a}, amount:{_gt:"0"}, storage_id:{_gt:$after}}, order_by:{storage_id:asc}, limit:100){ asset_type storage_id is_primary } }`;
-
 async function read(ctx: ReadContext, ownerInput: string, hint?: CanopyFrozenHint): Promise<ReadResult> {
   const owner = normalizeAddress(ownerInput);
   const version = ctx.ledger.version;
@@ -152,7 +150,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: CanopyFrozenHin
     const stakedTokens = new Set((rows as any[]).map(r => normalizeAddress(r.pool_staking_token.inner)).filter(t => vaults.has(t)));
     // Shares in the wallet: from the indexer, checked on chain below. Looked up again also with a hint, so shares received
     // after the enumeration's scan are read too (their age stays unknown until a scan has seen them).
-    const held = await gqlAll(ctx.chain, SHARES_QUERY, { o: owner, a: [...vaults.keys()] }, 'current_fungible_asset_balances', 'storage_id');
+    const held = (await ownedBalances(ctx, owner)).filter(r => vaults.has(assetId(r.asset_type)));
     const inWallet = new Set(held.map((r: any) => normalizeAddress(r.asset_type)));
     // A stake or withdrawal's time, looked up only when it came after the vault's freeze (rare).
     const stakedAt = (v: string) => once(ctx, `canopy-tx:${v}`, () => transactionTime(ctx.chain, v));
