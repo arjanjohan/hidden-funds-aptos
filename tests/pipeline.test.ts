@@ -516,28 +516,41 @@ describe('canopy frozen enumerator', () => {
       view: () => [{ vaults: [{ shares_address: addr('51'), vault_address: addr('52') }] }],
       resource: () => ({ user_staked_balances: { handle: addr('99') } }),
       gql: (query, vars) => query.includes('processor_status')
-        ? { processor_status: [{ last_success_version: vars.p === 'events_processor' ? '250000000' : '260000000', last_transaction_timestamp: '2026-10-21T00:00:00' }] }
+        ? { processor_status: [{ last_success_version: vars.p === 'events_processor' ? '250000000' : vars.p === 'default_processor' ? '240000000' : '260000000', last_transaction_timestamp: '2026-10-21T00:00:00' }] }
         : query.includes('current_table_items')
         // The staking table, walked in 16 key ranges: both stakers sit in the first.
         ? { current_table_items: vars.a === '0x0' ? [{ key: addr(1), last_transaction_version: '7' }, { key: addr(2), last_transaction_version: '9' }] : [] }
         : query.includes('events')
-        // Owner 2 staked shares 51, then withdrew shares 53; owner 3 has left (neither staking nor holding).
+        // Owner 2 staked shares 51, then withdrew shares 53; owner 3 staked but the table does not list it yet.
         ? { events: vars.v === '156180000' ? [{ transaction_version: '200000000', event_index: 0, data: { user: addr(2), staking_token: { inner: addr('51') } } },
           { transaction_version: '200000005', event_index: 1, data: { user: addr(2), staking_token: { inner: addr('53') } } },
           { transaction_version: '200000006', event_index: 0, data: { user: addr(3), staking_token: { inner: addr('51') } } }] : [] }
         : { current_fungible_asset_balances: [
-          { owner_address: addr(1), asset_type: addr('51'), storage_id: addr('a1'), last_transaction_timestamp: '2026-10-01T00:00:00' },
-          { owner_address: CANOPY_REWARDS_STATE, asset_type: addr('51'), storage_id: addr('a2'), last_transaction_timestamp: '2026-10-01T00:00:00' }] },
+          { owner_address: addr(1), asset_type: addr('51'), storage_id: addr('a1'), is_primary: true, last_transaction_timestamp: '2026-10-01T00:00:00' },
+          // A later change in owner 1's secondary store does not date its wallet shares.
+          { owner_address: addr(1), asset_type: addr('51'), storage_id: addr('a3'), is_primary: false, last_transaction_timestamp: '2026-10-05T00:00:00' },
+          { owner_address: CANOPY_REWARDS_STATE, asset_type: addr('51'), storage_id: addr('a2'), is_primary: false, last_transaction_timestamp: '2026-10-01T00:00:00' }] },
     });
     expect((await canopyFrozenEnumerator.run(c, undefined)).candidates).toEqual([
-      // Every hint carries the lower of the two processors' watermarks.
-      { owner: addr(1), hint: { at: { [addr('51')]: '2026-10-01T00:00:00.000Z' }, w: '250000000' } },
-      { owner: addr(2), hint: { v: { [addr('51')]: '200000000', [addr('53')]: '200000005' }, w: '250000000' } },
+      // Every hint carries the lowest of the three processors' watermarks.
+      { owner: addr(1), hint: { at: { [addr('51')]: '2026-10-01T00:00:00.000Z' }, w: '240000000' } },
+      { owner: addr(2), hint: { v: { [addr('51')]: '200000000', [addr('53')]: '200000005' }, w: '240000000' } },
+      { owner: addr(3), hint: { v: { [addr('51')]: '200000006' }, w: '240000000' } },
     ]);
   });
 });
 
 describe('houston enumerator', () => {
+  it('checks what the pool pays against its reserves, leaving out coins stored in the positions', async () => {
+    const PAIR = '<0x1::aptos_coin::AptosCoin, 0x2::c::D>';
+    const c = fakeChain({ resource: () => ({ fee_tier: { data: [{ key: '0', value: { reserve_x: { value: '100' }, reserve_y: { value: '50' } } }] } }) });
+    const p = (kind: string, asset: string, raw: string) => ({ locator: `${PAIR}#1`, positionKind: kind, asset, grossClaim: [{ asset, raw }] } as unknown as Position);
+    const APT_FA = '0x000000000000000000000000000000000000000000000000000000000000000a';
+    const positions = [p('principal', APT_FA, '100'), p('principal', '0x2::c::D', '50'), p('fees', '0x2::c::D', '1000')];
+    expect((await houstonClosedEnumerator.sanity!(c, { version: '1', timestampSecs: 0 }, positions)).ok).toBe(true);
+    expect((await houstonClosedEnumerator.sanity!(c, { version: '1', timestampSecs: 0 }, [...positions, p('principal', '0x2::c::D', '1')])).ok).toBe(false);
+  });
+
   it('lists everyone who added liquidity, and dates the pairs a liquidity call after the closure changed', async () => {
     const PAIR = '<0x1::aptos_coin::AptosCoin, 0x2::c::D>', OTHER = '<0x3::e::F, 0x1::aptos_coin::AptosCoin>';
     const W = '0x7ab72b249ec24f76fe66b6de19dcee1e3d3361db5c2cccfaa48ea8659060a1bd::position::PositionWallet';

@@ -55,6 +55,29 @@ const assetOfReserve = (ctx: ReadContext, type: string) => once(ctx, `aries-asse
   return normalizeAddress(info.metadata.inner ?? info.metadata);
 });
 
+/** The first version after the wind-down's end of day (the block at 2026-08-01 00:00:00 UTC, read from the archive). */
+const ARIES_CLOSED_VERSION = '6554002069';
+const LATE_TXS_QUERY = `query($o:String!,$v:bigint!,$before:bigint!){ user_transactions(where:{sender:{_eq:$o}, version:{_gte:$v, _lt:$before}},
+  order_by:{version:desc}, limit:100){ version entry_function_id_str } }`;
+const DEPOSITS = new Set(['deposit', 'deposit_fa'].map(f => `${ARIES}::controller::${f}`));
+/** Owners with more transactions since the wind-down than this many pages are not searched: their age is unknown. */
+const LATE_PAGES = 10;
+
+/** Whether the owner deposited into Aries after the wind-down (Aries still takes deposits): its deposits are then not all
+ *  from before it, so their ages are unknown. Its transactions since then, newest first (filtering by function
+ *  times out; by sender and version it does not). */
+async function depositedLate(ctx: ReadContext, owner: string): Promise<boolean> {
+  let before = String(BigInt(ctx.ledger.version) + 1n);
+  for (let page = 0; page < LATE_PAGES; page++) {
+    const rows: { version: string; entry_function_id_str: string | null }[] =
+      (await ctx.chain.gql(LATE_TXS_QUERY, { o: owner, v: ARIES_CLOSED_VERSION, before })).user_transactions;
+    if (rows.some(r => r.entry_function_id_str && DEPOSITS.has(r.entry_function_id_str))) return true;
+    if (rows.length < 100) return false;
+    before = String(rows[rows.length - 1].version);
+  }
+  return true;
+}
+
 const reserveState = (ctx: ReadContext, type: string) => once(ctx, `aries-reserve:${type}:${ctx.ledger.version}`, async () => {
   const [s] = await ctx.chain.view(`${ARIES}::reserve::reserve_state`, [], [type], ctx.ledger.version);
   return { cash: BigInt(s.total_cash_available), redeem: !!s.reserve_config.allow_redeem };
@@ -132,6 +155,9 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
         }
       }
     }
+    // Aged from the wind-down, unless the owner deposited after it (also when the lookup fails: unknown, not wrong).
+    if (positions.length && await depositedLate(ctx, owner).catch(() => true))
+      for (const p of positions) Object.assign(p, { claimableSince: undefined, ageBasis: 'unknown' });
   } catch (err) {
     return { positions, complete: false, errors: [...errors, String(err).slice(0, 300)], ledgerVersion: version };
   }
