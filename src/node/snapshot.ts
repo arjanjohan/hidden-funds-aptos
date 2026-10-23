@@ -4,7 +4,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { ageDays, HEADLINE_AGE_DAYS, headlineAge, sourceTotals, usd, type PriceBook } from '../shared/accounting.ts';
-import { readClassified } from '../shared/owners.ts';
+import { OWNER_RULES, readClassified } from '../shared/owners.ts';
 import { mapLimit } from '../shared/chain.ts';
 import { SOURCES } from '../shared/sources/index.ts';
 import type { ChainReader, Ledger, Position, ReadContext, SourceDef } from '../shared/types.ts';
@@ -84,6 +84,11 @@ export async function runSource(def: SourceDef<any>, en: Enumerator, state: Stat
     if (state.cursor(`rules:${def.id}`) !== rules) {
       if (state.cursor(`rules:${def.id}`) !== undefined || state.candidateCount(def.id) > 0) state.markAllChanged(def.id, runStart);
       state.setCursor(`rules:${def.id}`, rules);
+    }
+    // So does a changed owner rule, for every owner with stored positions.
+    if (state.cursor(`owner-rules:${def.id}`) !== String(OWNER_RULES)) {
+      state.markNonzeroChanged(def.id, runStart);
+      state.setCursor(`owner-rules:${def.id}`, String(OWNER_RULES));
     }
     ledger = await chain.ledger();
     const ctx: ReadContext = { chain, ledger, memo: state.memo(), scratch: new Map(), market };

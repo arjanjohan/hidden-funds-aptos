@@ -200,6 +200,7 @@ describe('owner kind', () => {
     const chain = fakeChain({ account: () => ({ authentication_key: obj, sequence_number: '0' }), resource: () => ({ owner: addr('b2') }) });
     const memo = memoryMemo();
     await memo.set(`owner-kind:${obj}`, 'user');
+    await memo.set(`owner-kind:v1:${obj}`, 'user');
     expect(await ownerKind(context(chain, undefined, memo), obj)).toBe('object');
   });
 

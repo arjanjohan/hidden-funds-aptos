@@ -1,3 +1,4 @@
+import { OWNER_RULES } from '../src/shared/owners.ts';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -323,6 +324,22 @@ describe('source version', () => {
     expect(reads).toBe(1);                              // monthly: not due again
     await runSource({ ...def, version: 2 }, enumerator([owner]), state, chain(), { hit: false });
     expect(reads).toBe(2);                              // new rules: due at once
+  });
+
+  it('re-reads every owner with positions, and only those, when the owner rule changes', async () => {
+    const state = new State(':memory:');
+    const [held, empty] = [addr(1), addr(2)];
+    const reads: string[] = [];
+    const read = async (o: string) => { reads.push(o); return { positions: o === held ? [position(o)] : [], complete: true, errors: [], ledgerVersion: '1' }; };
+    const def = { ...source(read), refresh: { nonZero: 'monthly' as const, zero: 'monthly' as const } };
+    await runSource(def, enumerator([held, empty]), state, chain(), { hit: false });
+    await runSource(def, enumerator([held, empty]), state, chain(), { hit: false });
+    expect(reads.sort()).toEqual([held, empty].sort());  // monthly: each read once
+    // A state written under the previous owner rule.
+    state.setCursor(`owner-rules:${def.id}`, String(OWNER_RULES - 1));
+    await runSource(def, enumerator([held, empty]), state, chain(), { hit: false });
+    expect(reads.filter(o => o === held)).toHaveLength(2);
+    expect(reads.filter(o => o === empty)).toHaveLength(1);
   });
 });
 

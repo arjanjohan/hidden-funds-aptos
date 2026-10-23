@@ -117,6 +117,12 @@ export class State {
     this.db.prepare('update candidates set changed_at = ?, dirty = 1 where source = ?').run(now, source);
   }
 
+  /** Mark every candidate of a source with stored positions changed (used when a rule that applies to positions, not
+   *  to finding them, changes: owners without positions have nothing stale). */
+  markNonzeroChanged(source: string, now: string) {
+    this.db.prepare('update candidates set changed_at = ?, dirty = 1 where source = ? and last_nonzero = 1').run(now, source);
+  }
+
   /** After a full scan: an owner with positions that the scan no longer returns has changed (it exited, claimed or
    *  moved its holding), so it is due now rather than at its next monthly re-read. */
   markGone(source: string, enumerated: Set<string>, now: string) {
