@@ -226,6 +226,22 @@ describe('state changes', () => {
     expect(state.due(def(), Date.parse('2026-10-03T00:00:00Z'), new Set()).map(d => d.owner)).toEqual([addr(1)]);
   });
 
+  it('re-reads an owner whose age was unknown when the scan watermark advances', () => {
+    const state = new State(':memory:');
+    const position = (ageBasis: string) => ({ id: `t:${addr(1)}:x:principal`, ageBasis } as unknown as Position);
+    const monthly = { ...def(), refresh: { nonZero: 'monthly', zero: 'monthly' } } as SourceDef;
+    state.upsertCandidates('t', [{ owner: addr(1), hint: { lps: { a: 'x' }, w: '10' } }], '2026-10-01T00:00:00Z');
+    state.recordRead('t', addr(1), [position('unknown')], true, '2026-10-01T00:00:01Z');
+    state.upsertCandidates('t', [{ owner: addr(1), hint: { lps: { a: 'x' }, w: '10' } }], '2026-10-02T00:00:00Z');
+    expect(state.due(monthly, Date.parse('2026-10-02T00:00:00Z'), new Set())).toEqual([]);
+    state.upsertCandidates('t', [{ owner: addr(1), hint: { lps: { a: 'x' }, w: '20' } }], '2026-10-03T00:00:00Z');
+    expect(state.due(monthly, Date.parse('2026-10-03T00:00:00Z'), new Set()).map(d => d.owner)).toEqual([addr(1)]);
+    // Dated now: the next watermark is not a change.
+    state.recordRead('t', addr(1), [position('protocol_closure')], true, '2026-10-03T00:00:01Z');
+    state.upsertCandidates('t', [{ owner: addr(1), hint: { lps: { a: 'x' }, w: '30' } }], '2026-10-04T00:00:00Z');
+    expect(state.due(monthly, Date.parse('2026-10-04T00:00:00Z'), new Set())).toEqual([]);
+  });
+
   it('merges an incremental hint into the stored one and reads with it', () => {
     const state = new State(':memory:');
     state.upsertCandidates('t', [{ owner: addr(1), hint: { versions: { a: 1 } } }, { owner: addr(2), hint: { versions: { a: 5 } } }], '2026-10-01T00:00:00Z', true);
