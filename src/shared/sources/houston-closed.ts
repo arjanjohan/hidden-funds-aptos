@@ -125,11 +125,16 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: HoustonHint): P
             (bx * (10_000n - SLIPPAGE_BPS) / 10_000n).toString(), (by * (10_000n - SLIPPAGE_BPS) / 10_000n).toString(), NO_DEADLINE],
           prerequisites: [], expectedOutputs: outputs };
         const locator = `${pair}#${p.id}`;
-        // One position per side, so a priced side still counts when the other coin has no price. One removal pays both,
-        // so only the first side carries the step: shown twice, it would tell the owner to remove the same range twice.
+        // One position per side, so a priced side still counts when the other coin has no price: `principal` is what the
+        // pool pays (burn and owed fees), `fees` the coins stored in the position itself. One removal pays all of them,
+        // so only the first carries the step: shown twice, it would tell the owner to remove the same range twice.
+        const parts: [Position['positionKind'], Amount][] = [
+          ['principal', { asset: x, raw: fromPoolX.toString() }], ['principal', { asset: y, raw: fromPoolY.toString() }],
+          ['fees', { asset: x, raw: p.tokens_stored_x.value }], ['fees', { asset: y, raw: p.tokens_stored_y.value }],
+        ];
         let first = true;
-        for (const o of outputs) if (o.raw !== '0') positions.push({
-          ...positionIds(SOURCE, owner, locator, 'principal', o.asset), source: SOURCE, owner, locator, positionKind: 'principal', asset: o.asset,
+        for (const [kind, o] of parts) if (o.raw !== '0') positions.push({
+          ...positionIds(SOURCE, owner, locator, kind, o.asset), source: SOURCE, owner, locator, positionKind: kind, asset: o.asset,
           claimableSince: since, ageBasis: since ? 'protocol_closure' : 'unknown',
           provenance: { reader: `${WALLET}${pair}`, ledgerVersion: version },
           grossClaim: [o], expectedPayout: short ? [] : [o], payoutBasis: 'derived',

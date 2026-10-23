@@ -539,6 +539,16 @@ describe('canopy frozen enumerator', () => {
 });
 
 describe('houston enumerator', () => {
+  it('checks what the pool pays against its reserves, leaving out coins stored in the positions', async () => {
+    const PAIR = '<0x1::aptos_coin::AptosCoin, 0x2::c::D>';
+    const c = fakeChain({ resource: () => ({ fee_tier: { data: [{ key: '0', value: { reserve_x: { value: '100' }, reserve_y: { value: '50' } } }] } }) });
+    const p = (kind: string, asset: string, raw: string) => ({ locator: `${PAIR}#1`, positionKind: kind, asset, grossClaim: [{ asset, raw }] } as unknown as Position);
+    const APT_FA = '0x000000000000000000000000000000000000000000000000000000000000000a';
+    const positions = [p('principal', APT_FA, '100'), p('principal', '0x2::c::D', '50'), p('fees', '0x2::c::D', '1000')];
+    expect((await houstonClosedEnumerator.sanity!(c, { version: '1', timestampSecs: 0 }, positions)).ok).toBe(true);
+    expect((await houstonClosedEnumerator.sanity!(c, { version: '1', timestampSecs: 0 }, [...positions, p('principal', '0x2::c::D', '1')])).ok).toBe(false);
+  });
+
   it('lists everyone who added liquidity, and dates the pairs a liquidity call after the closure changed', async () => {
     const PAIR = '<0x1::aptos_coin::AptosCoin, 0x2::c::D>', OTHER = '<0x3::e::F, 0x1::aptos_coin::AptosCoin>';
     const W = '0x7ab72b249ec24f76fe66b6de19dcee1e3d3361db5c2cccfaa48ea8659060a1bd::position::PositionWallet';

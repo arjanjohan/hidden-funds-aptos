@@ -1054,9 +1054,10 @@ async function houstonWallets(chain: ChainReader, owner: string, version: string
   return new Map(all.filter(r => r.type.startsWith(`${HOUSTON_WALLET}<`)).map(r => [r.type.slice(HOUSTON_WALLET.length), JSON.stringify(r.data)]));
 }
 const houstonSenders = entrySenders('houston-closed-lp', HOUSTON_ADDS, async (chain, ledger, positions) => {
-  // What the positions would pay, per pair and side, cannot exceed that pair's reserves (all fee tiers).
+  // What the pool would pay the positions (principal: burn and owed fees; stored coins are the positions' own), per pair
+  // and side, cannot exceed that pair's reserves (all fee tiers).
   const owed = new Map<string, bigint>();
-  for (const p of positions) {
+  for (const p of positions.filter(p => p.positionKind === 'principal')) {
     const key = `${p.locator.slice(0, p.locator.lastIndexOf('#'))}|${p.asset}`;
     owed.set(key, (owed.get(key) ?? 0n) + BigInt(p.grossClaim[0].raw));
   }

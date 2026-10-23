@@ -1313,7 +1313,9 @@ describe('houston closed lp', () => {
     const [, y] = burnAmounts(10n ** 12n, -1200n, 2400n, 300n, sqrtPriceAt(300n));
     // The reserves cover the burn exactly; the position also stores 1,000 of Y.
     const r = await houstonClosedLp.read(context(chain([position({ storedY: '1000' })], String(y))), OWNER, { w: '100' });
-    expect(r.positions.map(p => [p.status, p.expectedPayout[0]?.raw])).toEqual([['recoverable', expect.any(String)], ['recoverable', String(y + 1000n)]]);
+    expect(r.positions.map(p => [p.positionKind, p.status, p.expectedPayout[0]?.raw, p.steps.length])).toEqual([
+      ['principal', 'recoverable', expect.any(String), 1], ['principal', 'recoverable', String(y), 0], ['fees', 'recoverable', '1000', 0]]);
+    expect(new Set(r.positions.map(p => p.id)).size).toBe(3);
   });
 
   it('leaves the age unknown without a hint (the check page has no history to date a pair)', async () => {
