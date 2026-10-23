@@ -48,22 +48,22 @@ export class State {
 
   /** Insert new candidates and record which ones changed: new, re-enumerated by an incremental (activity) scan, or
    *  with a different hint. A changed candidate is due regardless of its refresh window. Never deletes candidates.
-   *  An incremental scan's hint is a delta: it is deep-merged into the stored hint. */
+   *  An incremental scan's hint is a delta: it is deep-merged into the stored hint. A hint's `w` (the version the
+   *  enumeration's scans reached, which advances every run) is stored but is not a change. */
   upsertCandidates(source: string, candidates: { owner: string; hint?: unknown }[], now: string, incremental = false) {
     const stmt = this.db.prepare(`insert into candidates (source, owner, hint, first_seen, changed_at, dirty) values (?, ?, ?, ?, ?, 1)
       on conflict(source, owner) do update set
-        dirty = case when ? or candidates.hint is not excluded.hint then 1 else candidates.dirty end,
-        changed_at = case when ? or candidates.hint is not excluded.hint then excluded.changed_at else candidates.changed_at end,
+        dirty = case when ? then 1 else candidates.dirty end,
+        changed_at = case when ? then excluded.changed_at else candidates.changed_at end,
         hint = excluded.hint`);
     const stored = this.db.prepare('select hint from candidates where source = ? and owner = ?');
     this.db.exec('begin');
     for (const c of candidates) {
-      let hint = c.hint;
-      if (incremental && hint !== undefined) {
-        const prev = (stored.get(source, c.owner) as { hint: string | null } | undefined)?.hint;
-        if (prev) hint = deepMerge(JSON.parse(prev), hint);
-      }
-      stmt.run(source, c.owner, hint === undefined ? null : JSON.stringify(hint), now, now, incremental ? 1 : 0, incremental ? 1 : 0);
+      const prev = (stored.get(source, c.owner) as { hint: string | null } | undefined)?.hint ?? null;
+      const hint = incremental && c.hint !== undefined && prev ? deepMerge(JSON.parse(prev), c.hint) : c.hint;
+      const text = hint === undefined ? null : JSON.stringify(hint);
+      const changed = incremental || withoutWatermark(prev) !== withoutWatermark(text);
+      stmt.run(source, c.owner, text, now, now, changed ? 1 : 0, changed ? 1 : 0);
     }
     this.db.exec('commit');
   }
@@ -146,6 +146,15 @@ export class State {
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** A stored hint without its scan watermark `w`, for change detection. */
+function withoutWatermark(text: string | null): string | null {
+  if (text === null) return null;
+  const hint = JSON.parse(text);
+  if (!isRecord(hint) || !('w' in hint)) return text;
+  const { w: _w, ...rest } = hint;
+  return JSON.stringify(rest);
+}
 
 function deepMerge(a: unknown, b: unknown): unknown {
   if (!isRecord(a) || !isRecord(b)) return b;
