@@ -144,7 +144,8 @@ function AddressResult({ row, prices }: { row: Row; prices: PriceBook }) {
 function PositionRow({ p, prices }: { p: Position; prices: PriceBook }) {
   const source = SOURCES.find(s => s.id === p.source)!;
   const value = toUsd(p.expectedPayout, prices);
-  const amount = p.expectedPayout.map(a => `${units(a.raw, ASSETS[a.asset]?.decimals ?? 0)} ${ASSETS[a.asset]?.symbol ?? short(a.asset)}`).join(' + ');
+  // An asset without a registered display identity is shown in raw units: its decimals are not known here.
+  const amount = p.expectedPayout.map(a => ASSETS[a.asset] ? `${units(a.raw, ASSETS[a.asset].decimals)} ${ASSETS[a.asset].symbol}` : `${a.raw} raw units of ${short(a.asset)}`).join(' + ');
   return (
     <div style={{ borderTop: '1px solid var(--line)', marginTop: 12, paddingTop: 12 }}>
       <div><b style={{ display: 'inline', fontSize: 16 }}>{amount}</b>{value !== null && <span className="muted"> ≈ {usd(value)}</span>} · {STATUS[p.status]}</div>
