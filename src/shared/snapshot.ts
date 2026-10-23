@@ -22,6 +22,8 @@ export interface SnapshotSource {
   id: string; chain: string; title: string; summary: string; category: string; inclusionRule: string;
   protocolStatus: SourceDef['protocolStatus']; howTo: string[]; officialUrl?: string; headlineAgeBases: string[];
   run: SourceRun;
+  /** The owner rule (`OWNER_RULES`) the positions were classified under. */
+  ownerRules?: number;
   lastSuccessAt?: string;
   totals: SourceTotals;
   /** Recoverable positions by expected payout (USD) band: < 1, 1–10, …, ≥ 10k. */
