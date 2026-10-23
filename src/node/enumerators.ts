@@ -1037,8 +1037,10 @@ export const earniumClosedEnumerator: Enumerator = {
 // HoustonSwap: everyone who added liquidity, ever (positions sit in the owner's own account, one PositionWallet per
 // pair; a position can only move between accounts through another contract, and none is known). A liquidity call after
 // the closure day began dates the pairs it changed for its sender, from the call's time: the sender's position wallets
-// just before and at the call, compared. A full scan every run (~25 pages): every hint carries this run's watermark,
-// against which the read checks that nothing changed after the scans.
+// just before and at the call, compared. Calls are scanned once, from the cursor, so that comparison reads history the
+// fullnode still keeps (~11 days; runs are weekly); the dates found are kept in the cursor. A call whose history is
+// pruned anyway dates every pair its sender holds. The senders are a full scan every run (~25 pages): every hint carries
+// this run's watermark, against which the read checks that nothing changed after the scans.
 const HOUSTON_CHANGES_FROM = 7_715_000_000;   // 2026-10-22, before the closure's end of day
 const HOUSTON_ADDS: EntryFunction[] = [{ contract: HOUSTON, module: 'liquidity_manager', name: 'add_liquidity' }];
 const HOUSTON_CALLS_QUERY = `query($a:bigint!,$w:bigint!){ user_transactions(where:{entry_function_contract_address:{_eq:"${HOUSTON}"},
@@ -1070,27 +1072,38 @@ const houstonSenders = entrySenders('houston-closed-lp', HOUSTON_ADDS, async (ch
 export const houstonClosedEnumerator: Enumerator = {
   ...houstonSenders,
   scope: `${houstonSenders.scope}; plus liquidity calls from version ${HOUSTON_CHANGES_FROM}, with the pairs they changed`,
-  async run(chain) {
+  async run(chain, cursor) {
+    let stored: { v?: string; moved?: Record<string, Record<string, string>> } = {};
+    try { stored = cursor ? JSON.parse(cursor) : {}; } catch { /* unreadable cursor: rescan */ }
+    if (typeof stored !== 'object' || stored === null) stored = {};
     // Taken before the scans, so everything they read is at least this recent.
     const indexed = (await processorWatermark(chain, 'user_transaction_processor')).version;
     const adders = await senders(chain, HOUSTON_ADDS, undefined);
     let pages = adders.pages;
-    const moved = new Map<string, Record<string, string>>();
-    let after = String(HOUSTON_CHANGES_FROM);
+    const moved = new Map<string, Record<string, string>>(Object.entries(stored.moved && typeof stored.moved === 'object' ? stored.moved : {}));
+    let after = typeof stored.v === 'string' ? stored.v : String(HOUSTON_CHANGES_FROM);
     for (;;) {
       const page = (await chain.gql(HOUSTON_CALLS_QUERY, { a: after, w: indexed })).user_transactions;
       pages++;
       for (const t of page) {
         const sender = normalizeAddress(t.sender), at = new Date(t.timestamp + 'Z').toISOString(), v = BigInt(t.version);
-        const [before, now] = await Promise.all([houstonWallets(chain, sender, String(v - 1n)), houstonWallets(chain, sender, String(v))]);
-        for (const pair of new Set([...before.keys(), ...now.keys()])) if (before.get(pair) !== now.get(pair)) moved.set(sender, { ...moved.get(sender), [pair]: at });
+        let changed: string[];
+        try {
+          const [before, now] = await Promise.all([houstonWallets(chain, sender, String(v - 1n)), houstonWallets(chain, sender, String(v))]);
+          changed = [...new Set([...before.keys(), ...now.keys()])].filter(pair => before.get(pair) !== now.get(pair));
+        } catch (err) {
+          if (!/HTTP 410|pruned/i.test(String(err))) throw err;
+          changed = [...(await houstonWallets(chain, sender, String(indexed))).keys()];
+        }
+        for (const pair of changed) moved.set(sender, { ...moved.get(sender), [pair]: at });
       }
-      if (page.length) after = String(page[page.length - 1].version);
       if (page.length < PAGE) break;
+      after = String(page[page.length - 1].version);
     }
-    // Every candidate carries a hint: a read without one is the check page's, which ages from the closure.
+    // Every candidate carries a hint: a read without one is the check page's, which has no history to date it.
     const owners = new Set([...adders.candidates.map(c => c.owner), ...moved.keys()]);
-    return { candidates: [...owners].map(owner => ({ owner, hint: { ...(moved.has(owner) ? { moved: moved.get(owner) } : {}), w: String(indexed) } })), pages };
+    return { candidates: [...owners].map(owner => ({ owner, hint: { ...(moved.has(owner) ? { moved: moved.get(owner) } : {}), w: String(indexed) } })),
+      cursor: JSON.stringify({ v: String(indexed), moved: Object.fromEntries(moved) }), pages };
   },
 };
 
