@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import { freshPrices, usd as toUsd, type PriceBook } from '../../shared/accounting.ts';
 import { createReader, mapLimit, NETWORKS, normalizeAddress, withOwnResources } from '../../shared/chain.ts';
-import { ASSETS } from '../../shared/assets.ts';
+import { ASSETS, assetDisplay, type AssetDisplay } from '../../shared/assets.ts';
 import { tableProvider, type MarketTable } from '../../shared/market.ts';
 import { readClassified } from '../../shared/owners.ts';
 import { APT } from '../../shared/sources/delegation.ts';
@@ -74,6 +74,8 @@ export default function Check({ prices: published, markets }: { prices: PriceBoo
   const stalePrices = Object.keys(published).length - Object.keys(prices).length;
   const [text, setText] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
+  // Symbols and decimals read from the chain for payout assets the site does not list (null: not describable).
+  const [displays, setDisplays] = useState<Record<string, AssetDisplay | null>>({});
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -87,7 +89,7 @@ export default function Check({ prices: published, markets }: { prices: PriceBoo
 
   async function run() {
     if (running.current) return;
-    setError(''); setNotice(''); setRows([]);
+    setError(''); setNotice(''); setRows([]); setDisplays({});
     if (!addresses.length) return setError('Paste at least one Aptos address.');
     if (addresses.length > limit) return setError(key ? `Check at most ${limit} addresses at a time.`
       : `Without an API key, check at most ${limit} addresses at a time. Add your own key below to check up to ${MAX_WITH_KEY}.`);
@@ -113,6 +115,7 @@ export default function Check({ prices: published, markets }: { prices: PriceBoo
       }
       if (!contexts.size) throw new Error([...unreachable.values()].join('; '));
       const out: Row[] = [];
+      const found: Record<string, AssetDisplay | null> = {};
       for (const [i, address] of addresses.entries()) {
         setBusy(`Checking ${i + 1} of ${addresses.length}…`);
         // Each source reads some of the wallet's own resources: one read of all of them serves those.
@@ -125,6 +128,14 @@ export default function Check({ prices: published, markets }: { prices: PriceBoo
           try { return { sourceId: s.id, result: await readClassified(s, ctx, address) }; }
           catch (err) { return { sourceId: s.id, result: { positions: [], complete: false, errors: [String(err)], ledgerVersion: ctx.ledger.version } }; }
         });
+        // Unlisted payout assets: read once per check from their own chain; a failure leaves them in raw units.
+        const unlisted = [...new Set(results.flatMap(r => r.result.positions.flatMap(p => p.expectedPayout.map(a => a.asset))))]
+          .filter(a => !ASSETS[a] && !(a in found));
+        await Promise.all(unlisted.map(async a => {
+          const network = a.startsWith('movement:') ? 'movement' : 'aptos', ctx = contexts.get(network);
+          found[a] = ctx ? await assetDisplay(ctx.chain, a.replace(/^movement:/, ''), ctx.ledger.version).catch(() => null) : null;
+        }));
+        setDisplays({ ...found });
         out.push({ address, results });
         setRows([...out]);
         setNotice('');
@@ -152,7 +163,7 @@ export default function Check({ prices: published, markets }: { prices: PriceBoo
       {notice && <p className="muted" role="status">{notice}</p>}
       {error && <p style={{ color: 'var(--bad)' }}>{error}</p>}
       {rows.length > 0 && stalePrices > 0 && <p className="muted">{stalePrices} price{stalePrices === 1 ? ' is' : 's are'} older than 7 days and not shown; amounts are still exact.</p>}
-      {rows.map(row => <AddressResult key={row.address} row={row} prices={prices} />)}
+      {rows.map(row => <AddressResult key={row.address} row={row} prices={prices} displays={displays} />)}
       <ApiKey current={key} onChange={k => { storeKey(k); setKey(k); }} disabled={!!busy} />
     </div>
   );
@@ -198,14 +209,14 @@ function ApiKey({ current, onChange, disabled }: { current: string; onChange: (k
   );
 }
 
-function AddressResult({ row, prices }: { row: Row; prices: PriceBook }) {
+function AddressResult({ row, prices, displays }: { row: Row; prices: PriceBook; displays: Record<string, AssetDisplay | null> }) {
   const positions = row.results.flatMap(r => r.result.positions);
   const incomplete = row.results.filter(r => !r.result.complete);
   return (
     <section className="card" style={{ marginTop: 16 }}>
       <b style={{ fontSize: 16 }}><code>{short(row.address)}</code></b>
       {positions.length === 0 && <p className="muted">Nothing found in {row.results.length - incomplete.length} of {row.results.length} sources.</p>}
-      {positions.map(p => <PositionRow key={p.id} p={p} prices={prices} />)}
+      {positions.map(p => <PositionRow key={p.id} p={p} prices={prices} displays={displays} />)}
       {incomplete.map(r => (
         <p key={r.sourceId} style={{ color: 'var(--bad)' }}>
           {SOURCES.find(s => s.id === r.sourceId)?.title}: could not be read completely ({readable(r.result.errors[0] ?? '')}). Try again later.
@@ -215,11 +226,14 @@ function AddressResult({ row, prices }: { row: Row; prices: PriceBook }) {
   );
 }
 
-function PositionRow({ p, prices }: { p: Position; prices: PriceBook }) {
+function PositionRow({ p, prices, displays }: { p: Position; prices: PriceBook; displays: Record<string, AssetDisplay | null> }) {
   const source = SOURCES.find(s => s.id === p.source)!;
   const value = toUsd(p.expectedPayout, prices);
-  // An asset without a registered display identity is shown in raw units: its decimals are not known here.
-  const amount = p.expectedPayout.map(a => ASSETS[a.asset] ? `${units(a.raw, ASSETS[a.asset].decimals)} ${ASSETS[a.asset].symbol}` : `${a.raw} raw units of ${short(a.asset)}`).join(' + ');
+  // Listed assets, then what the chain says; an asset neither describes is shown in raw units.
+  const amount = p.expectedPayout.map(a => {
+    const d = ASSETS[a.asset] ?? displays[a.asset];
+    return d ? `${units(a.raw, d.decimals)} ${d.symbol}` : `${a.raw} raw units of ${short(a.asset)}`;
+  }).join(' + ');
   return (
     <div style={{ borderTop: '1px solid var(--line)', marginTop: 12, paddingTop: 12 }}>
       <div><b style={{ display: 'inline', fontSize: 16 }}>{amount}</b>{value !== null && <span className="muted"> ≈ {usd(value)}</span>} · {STATUS[p.status]}</div>
