@@ -1157,7 +1157,7 @@ describe('canopy frozen vaults', () => {
     },
     resource: (address, type) => type === `${CANOPY_VAULTS}::vault::Vault` ? { is_paused: false, deposit_limit: { vec: held[address]?.open ? [] : ['0'] } } : null,
     gql: query => query.includes('user_transactions') ? { user_transactions: [{ timestamp: '2026-10-20T05:00:00' }] }
-      : { current_fungible_asset_balances: Object.entries(held).filter(([, h]) => h.wallet).map(([v]) => ({ asset_type: share(v), storage_id: addr('6') })) },
+      : { current_fungible_asset_balances: Object.entries(held).filter(([, h]) => h.wallet).map(([v]) => ({ asset_type: share(v), storage_id: addr('6'), is_primary: true })) },
   });
 
   it('counts shares in the wallet and staked in a frozen vault as separate parts, unstaking first; blocked where withdrawing aborts', async () => {
@@ -1227,6 +1227,17 @@ describe('canopy frozen vaults', () => {
     const c = chain({ [SUSDA]: { wallet: '7', staked: '0' } });
     const r = await canopyFrozenVaults.read(context({ ...c, gql: (async () => ({ current_fungible_asset_balances: [] })) as typeof c.gql }), OWNER, {});
     expect(r.positions.map(p => [p.locator, p.grossClaim[0].raw])).toEqual([[SUSDA, '14']]);
+  });
+
+  it('shows shares in a secondary store the owner holds, uncounted', async () => {
+    const c = chain({ [SUSDA]: { wallet: '7' } });
+    const store = addr('7e');
+    const r = await canopyFrozenVaults.read(context({ ...c,
+      gql: (async (q: string, v?: Record<string, unknown>) => q.includes('user_transactions') ? c.gql(q, v)
+        : { current_fungible_asset_balances: [{ asset_type: share(SUSDA), storage_id: addr('6'), is_primary: true }, { asset_type: share(SUSDA), storage_id: store, is_primary: false }] }) as typeof c.gql,
+      view: async (fn, args, typeArgs, v) => fn === '0x1::object::owner' ? [OWNER] : fn === '0x1::fungible_asset::balance' ? ['3'] : c.view(fn, args, typeArgs, v) }), OWNER, {});
+    expect(r.positions.map(p => [p.locator, p.grossClaim[0].raw, p.status, p.blockers[0]?.code, p.expectedPayout])).toEqual([
+      [SUSDA, '14', 'recoverable', undefined, [{ asset: `movement:${addr('a')}`, raw: '14' }]], [`${SUSDA}/store/${store}`, '6', 'unknown', 'secondary_store', []]]);
   });
 
   it('leaves out a vault that is open to deposits', async () => {

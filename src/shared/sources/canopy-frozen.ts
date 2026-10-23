@@ -137,7 +137,7 @@ const frozen = (ctx: ReadContext, vault: string) => once(ctx, `canopy-frozen:${v
 });
 
 const SHARES_QUERY = `query($o:String!,$a:[String!]!,$after:String!){ current_fungible_asset_balances(where:{owner_address:{_eq:$o},
-  asset_type:{_in:$a}, amount:{_gt:"0"}, storage_id:{_gt:$after}}, order_by:{storage_id:asc}, limit:100){ asset_type storage_id } }`;
+  asset_type:{_in:$a}, amount:{_gt:"0"}, storage_id:{_gt:$after}}, order_by:{storage_id:asc}, limit:100){ asset_type storage_id is_primary } }`;
 
 async function read(ctx: ReadContext, ownerInput: string, hint?: CanopyFrozenHint): Promise<ReadResult> {
   const owner = normalizeAddress(ownerInput);
@@ -165,7 +165,17 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: CanopyFrozenHin
           ctx.chain.view('0x1::primary_fungible_store::balance', [owner, token], ['0x1::fungible_asset::Metadata'], version),
           stakedTokens.has(token) ? ctx.chain.view(`${CANOPY_REWARDS}::multi_rewards::get_user_staked_balance`, [owner, token], [], version) : ['0'],
         ]);
-        if (BigInt(wallet) + BigInt(staked) === 0n) return [];
+        // Shares in a secondary store the owner holds (none known, 2026-10-23: only the staking pool's own stores are
+        // secondary): shown, but withdrawing them takes a transfer into the primary store first, so not counted.
+        const secondary = (await Promise.all(held.filter((r: any) => !r.is_primary && normalizeAddress(r.asset_type) === token).map(async (r: any) => {
+          const store = normalizeAddress(r.storage_id);
+          const [[storeOwner], [balance]] = await Promise.all([
+            ctx.chain.view('0x1::object::owner', [store], ['0x1::fungible_asset::FungibleStore'], version),
+            ctx.chain.view('0x1::fungible_asset::balance', [store], ['0x1::fungible_asset::FungibleStore'], version),
+          ]);
+          return normalizeAddress(String(storeOwner)) === owner && BigInt(balance) > 0n ? [{ store, shares: String(balance) }] : [];
+        }))).flat();
+        if (BigInt(wallet) + BigInt(staked) === 0n && !secondary.length) return [];
         const info = FROZEN_VAULTS.get(vault.address);
         // Frozen, so no new deposits: aged from the freeze, or from the owner's own later change where it is known. The
         // wallet and the stake are separate positions with their own histories. A part that differs from its balance at
@@ -180,11 +190,12 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: CanopyFrozenHin
         const stakeChange = hint?.v?.[token];
         const restaked = BigInt(staked) > 0n && stakeChange && Number(stakeChange) > (info?.frozenVersion ?? Infinity) ? await stakedAt(stakeChange) : undefined;
         const latest = (...dates: (string | undefined)[]) => dates.filter((d): d is string => !!d).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a));
-        const parts = [
+        const parts: { shares: string; locator: string; unstake: boolean; since?: string; secondary?: boolean }[] = [
           ...(BigInt(wallet) > 0n ? [{ shares: String(wallet), locator: vault.address, unstake: false,
             since: info && hint && !changed('wallet', String(wallet)) ? latest(info.frozenAt, hint.at?.[token]) : undefined }] : []),
           ...(BigInt(staked) > 0n ? [{ shares: String(staked), locator: `${vault.address}/staked`, unstake: true,
             since: info && hint && !changed('staked', String(staked)) && restaked !== null ? latest(info.frozenAt, restaked !== undefined ? iso(restaked) : undefined) : undefined }] : []),
+          ...secondary.map(s => ({ shares: s.shares, locator: `${vault.address}/store/${s.store}`, unstake: false, secondary: true })),
         ];
         const check = info?.check;
         const blocked = check && check !== 'ok' && check !== 'packet' ? BLOCKED[check] : undefined;
@@ -197,6 +208,13 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: CanopyFrozenHin
           ]);
           const strategies = ((map as any).data as any[]).map(e => normalizeAddress(e.key.inner));
           const value = [{ asset: `movement:${vault.asset}`, raw: String(assets) }];
+          if (part.secondary) return {
+            ...positionIds(SOURCE, owner, part.locator, 'principal', value[0].asset), source: SOURCE, owner, locator: part.locator, positionKind: 'principal',
+            asset: value[0].asset, ageBasis: 'unknown', provenance: { reader: '0x1::fungible_asset::balance', ledgerVersion: version },
+            grossClaim: value, expectedPayout: [], payoutBasis: 'view', status: 'unknown',
+            blockers: [{ code: 'secondary_store', detail: 'Shares in a secondary store: move them into the wallet\'s primary store (fungible_asset::transfer), then withdraw.' }],
+            confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs), steps: [],
+          };
           return {
             ...positionIds(SOURCE, owner, part.locator, 'principal', value[0].asset), source: SOURCE, owner, locator: part.locator, positionKind: 'principal',
             asset: value[0].asset, claimableSince: part.since, ageBasis: part.since ? 'protocol_closure' : 'unknown',
