@@ -3,10 +3,17 @@ import Base from '../layouts/Base.astro';
 import { snapshot } from '../lib/data.ts';
 import { date } from '../lib/format.ts';
 import { REPO } from '../lib/site.ts';
-import { PROTOCOLS, type ProtocolStatus } from '../../shared/protocols.ts';
+import { PROTOCOLS, type ProtocolEntry, type ProtocolStatus } from '../../shared/protocols.ts';
+import { SOURCES } from '../../shared/sources/index.ts';
 
-const groups: [ProtocolStatus, string, string][] = [
+/** An implemented protocol whose sources are all check-only is read on the check page, never in the weekly totals. */
+type Group = ProtocolStatus | 'check_only';
+const checkOnly = new Set(SOURCES.filter(s => s.checkOnly).map(s => s.id));
+const groupOf = (p: ProtocolEntry): Group =>
+  p.status === 'implemented' && (p.sources ?? []).length > 0 && p.sources!.every(id => checkOnly.has(id)) ? 'check_only' : p.status;
+const groups: [Group, string, string][] = [
   ['implemented', 'Counted', 'We read these on chain every week.'],
+  ['check_only', 'Check page only', 'Read live when you check a wallet, but not in the weekly totals: too costly to enumerate, or found through a third party.'],
   ['dormant', 'Waiting for a trigger', 'Built, but counts nothing until the protocol does something (for example, freezes its markets).'],
   ['needs_decision', 'Needs a decision', 'Open questions about whether or how to count them.'],
   ['blocked', 'Blocked', 'Funds may be left behind, but cannot be read or recovered in a useful way.'],
@@ -17,10 +24,10 @@ const groups: [ProtocolStatus, string, string][] = [
 ];
 const published = new Set((snapshot?.sources ?? []).map(s => s.id));
 /** Entries per status for each chain filter, so the cards and sections follow the toggle. */
-const counts = (status: ProtocolStatus) => ({
-  all: PROTOCOLS.filter(p => p.status === status).length,
-  aptos: PROTOCOLS.filter(p => p.status === status && p.chains.includes('aptos')).length,
-  movement: PROTOCOLS.filter(p => p.status === status && p.chains.includes('movement')).length,
+const counts = (status: Group) => ({
+  all: PROTOCOLS.filter(p => groupOf(p) === status).length,
+  aptos: PROTOCOLS.filter(p => groupOf(p) === status && p.chains.includes('aptos')).length,
+  movement: PROTOCOLS.filter(p => groupOf(p) === status && p.chains.includes('movement')).length,
 });
 const chainName = { aptos: 'Aptos', movement: 'Movement' } as const;
 ---
@@ -46,7 +53,7 @@ const chainName = { aptos: 'Aptos', movement: 'Movement' } as const;
   </div>
 
   {groups.map(([status, label, blurb]) => {
-    const rows = PROTOCOLS.filter(p => p.status === status).sort((a, b) => a.name.localeCompare(b.name));
+    const rows = PROTOCOLS.filter(p => groupOf(p) === status).sort((a, b) => a.name.localeCompare(b.name));
     return rows.length > 0 && (
       <section id={status} data-all={counts(status).all} data-aptos={counts(status).aptos} data-movement={counts(status).movement}>
         <h2>{label}</h2>
