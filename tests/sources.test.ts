@@ -1107,9 +1107,17 @@ describe('earnium closed lp', () => {
     const locked = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '100', staked: '400', unlock: '1900000000' } })), OWNER);
     expect(raw(locked)).toEqual([[APT, '200', 'recoverable'], [KAPT, '300', 'recoverable'], [APT, undefined, 'blocked'], [KAPT, undefined, 'blocked']]);
     expect(locked.positions[2]).toMatchObject({ locator: `${POOL}/locked`, blockers: [{ code: 'locked' }], grossClaim: [{ raw: '800' }], ageBasis: 'unknown' });
+    // Unstaking comes first, once the lock ends.
+    expect(locked.positions[2].steps.map(s => [s.function.split('::').pop(), s.arguments[s.function.endsWith('::unstake') ? 1 : 3], s.prerequisites])).toEqual([
+      ['unstake', '400', [`after ${new Date(1_900_000_000_000).toISOString()}`]], ['remove_liquidity_entry', '400', []]]);
     // Locked forever on purpose (launch liquidity): it can never come out, so it is not left behind (R3).
     const forever = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '0', staked: '400', unlock: '18446744073709551615' } })), OWNER);
     expect(forever.positions).toEqual([]);
+  });
+
+  it('leaves the age unknown without a hint (the check page has no history to date a part)', async () => {
+    const r = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '100', staked: '400', unlock: '0' } })), OWNER);
+    expect(r.positions.map(p => [p.ageBasis, p.claimableSince, p.status])).toEqual(Array(4).fill(['unknown', undefined, 'recoverable']));
   });
 
   it('ages a stake that unlocked after the closure from its unlock', async () => {
