@@ -558,6 +558,17 @@ describe('houston enumerator', () => {
       { owner: addr(2), hint: { moved: { [PAIR]: '2026-10-22T10:00:00.000Z' }, w: '7715000500' } },
     ]);
     expect(r.incremental).toBeFalsy();
+    // Calls are scanned once: the next run starts at the watermark and keeps the dates in the cursor.
+    expect(JSON.parse(r.cursor!)).toEqual({ v: '7715000500', moved: { [addr(2)]: { [PAIR]: '2026-10-22T10:00:00.000Z' } } });
+    const next = await houstonClosedEnumerator.run(wallets, r.cursor);
+    expect(next.candidates[1]).toEqual({ owner: addr(2), hint: { moved: { [PAIR]: '2026-10-22T10:00:00.000Z' }, w: '7715000500' } });
+    // History the fullnode pruned: every pair the sender holds is dated from the call.
+    const pruned = { ...wallets, resources: async (address: string, version?: string) => {
+      if (version !== '7715000500') throw new Error('resources: HTTP 410 {"message":"Ledger version 7715000099 is pruned"}');
+      return wallets.resources(address, version);
+    } };
+    expect((await houstonClosedEnumerator.run(pruned, undefined)).candidates[1].hint).toEqual(
+      { moved: { [PAIR]: '2026-10-22T10:00:00.000Z', [OTHER]: '2026-10-22T10:00:00.000Z' }, w: '7715000500' });
   });
 });
 

@@ -97,9 +97,10 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: HoustonHint): P
       const tiers = await pool(ctx, pair);
       const [x, y] = pairOf(`P${pair}`).map(assetOf);
       const unscanned = then !== undefined && (then === null || JSON.stringify(then.get(pair) ?? null) !== JSON.stringify(list));
-      // The pools still take liquidity, so a pair the owner changed after the closure is aged from that change.
+      // The pools still take liquidity, so a pair the owner changed after the closure is aged from that change. Without a
+      // hint (the check page) there is no history to date it: unknown.
       const moved = hint?.moved?.[pair];
-      const since = hint && unscanned ? undefined : moved && Date.parse(moved) > Date.parse(HOUSTON_CLOSED_AT) ? moved : HOUSTON_CLOSED_AT;
+      const since = !hint || unscanned ? undefined : moved && Date.parse(moved) > Date.parse(HOUSTON_CLOSED_AT) ? moved : HOUSTON_CLOSED_AT;
       const positions: Position[] = [];
       for (const entry of list) {
         const p = entry.value ?? entry;
