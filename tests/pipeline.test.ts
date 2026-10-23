@@ -1,3 +1,4 @@
+import { OWNER_RULES } from '../src/shared/owners.ts';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,7 +11,7 @@ import { aaveFrozenEnumerator, animeswapClosedEnumerator, canopyFrozenEnumerator
 import { ANIMESWAP_POOLS } from '../src/shared/sources/animeswap-closed.ts';
 import { CANOPY_REWARDS_STATE } from '../src/shared/sources/canopy-rewards.ts';
 import { fetchPrices } from '../src/node/prices.ts';
-import { keepPrevious, runSource } from '../src/node/snapshot.ts';
+import { keepPrevious, reclassifiedUnder, runSource } from '../src/node/snapshot.ts';
 import { State } from '../src/node/state.ts';
 import { positionIds } from '../src/shared/accounting.ts';
 import { AAVE, AAVE_UNFROZEN_AT } from '../src/shared/sources/aave-frozen.ts';
@@ -107,9 +108,12 @@ describe('market evidence', () => {
     const now = Date.parse('2026-10-20T00:00:00Z') / 1000;
     const kofi = { ...source(async () => { throw new Error(); }), id: 'k', usesMarketQuotes: true } as SourceDef;
     const plain = { ...source(async () => { throw new Error(); }), id: 'p' } as SourceDef;
-    const prev = { run: { verification: { end: '2026-10-19T00:00:00Z' } } } as any;
+    const prev = { run: { verification: { end: '2026-10-19T00:00:00Z' } }, ownerRules: OWNER_RULES } as any;
     const quotes = (...at: string[]) => ({ kapt: Object.fromEntries(at.map((t, i) => [String(i), { verdict: 'usable' as const, quotedAt: t }])) });
     expect(keepPrevious(plain, prev, 'x', now)).toBe(true);
+    // Classified under an older owner rule (or before it was recorded): re-run, not copied.
+    expect(keepPrevious(plain, { ...prev, ownerRules: OWNER_RULES - 1 }, 'x', now)).toBe(false);
+    expect(keepPrevious(plain, { ...prev, ownerRules: undefined }, 'x', now)).toBe(false);
     expect(keepPrevious(kofi, prev, 'x', now, quotes('2026-10-18T00:00:00Z', '2026-10-17T00:00:00Z'))).toBe(true);
     // The run ended recently, but one quote it relied on is older than 7 days: decided by the quote, not the run.
     expect(keepPrevious(kofi, prev, 'x', now, quotes('2026-10-18T00:00:00Z', '2026-10-12T00:00:00Z'))).toBe(false);
@@ -126,12 +130,12 @@ describe('market evidence', () => {
 });
 
 describe('owner rule', () => {
-  it('keeps positions held by a resource account visible but unknown', async () => {
+  it('keeps positions held by a resource account visible, as contract-held', async () => {
     const state = new State(':memory:');
     await runSource(source(async o => ({ positions: [position(o)], complete: true, errors: [], ledgerVersion: '1' })),
       enumerator([addr(1)]), state, chain(freshWatermark, '0x' + '0'.repeat(64)), { hit: false });
     const [p] = state.positionsOf('t');
-    expect(p.status).toBe('unknown');
+    expect(p.status).toBe('contract_held');
     expect(p.blockers.map(b => b.code)).toEqual(['unsupported_owner']);
   });
 
@@ -323,6 +327,39 @@ describe('source version', () => {
     expect(reads).toBe(1);                              // monthly: not due again
     await runSource({ ...def, version: 2 }, enumerator([owner]), state, chain(), { hit: false });
     expect(reads).toBe(2);                              // new rules: due at once
+  });
+
+  it('re-reads every owner with positions, and only those, when the owner rule changes', async () => {
+    const state = new State(':memory:');
+    const [held, empty] = [addr(1), addr(2)];
+    const reads: string[] = [];
+    const read = async (o: string) => { reads.push(o); return { positions: o === held ? [position(o)] : [], complete: true, errors: [], ledgerVersion: '1' }; };
+    const def = { ...source(read), refresh: { nonZero: 'monthly' as const, zero: 'monthly' as const } };
+    await runSource(def, enumerator([held, empty]), state, chain(), { hit: false });
+    await runSource(def, enumerator([held, empty]), state, chain(), { hit: false });
+    expect(reads.sort()).toEqual([held, empty].sort());  // monthly: each read once
+    // A state written under the previous owner rule.
+    state.setCursor(`owner-rules:${def.id}`, String(OWNER_RULES - 1));
+    await runSource(def, enumerator([held, empty]), state, chain(), { hit: false });
+    expect(reads.filter(o => o === held)).toHaveLength(2);
+    expect(reads.filter(o => o === empty)).toHaveLength(1);
+  });
+
+  it('publishes the owner rule only once every owner with positions has been re-read under it', async () => {
+    const state = new State(':memory:');
+    const [a, b] = [addr(1), addr(2)];
+    const def = { ...source(async (o: string) => ({ positions: [position(o)], complete: true, errors: [], ledgerVersion: '1' })),
+      refresh: { nonZero: 'monthly' as const, zero: 'monthly' as const } };
+    await runSource(def, enumerator([a, b]), state, chain(), { hit: false });
+    expect(reclassifiedUnder(state, def.id)).toBe(OWNER_RULES);
+    // A new rule version: both owners pending until a run re-reads them; a run that does not (skipped) publishes none.
+    const fresh = new State(':memory:');
+    await runSource(def, enumerator([a, b]), fresh, chain(), { hit: false });
+    fresh.setCursor(`owner-rules:${def.id}`, String(OWNER_RULES - 1));
+    fresh.setCursor(`owner-rules-done:${def.id}`, String(OWNER_RULES - 1));
+    expect(reclassifiedUnder(fresh, def.id)).toBe(OWNER_RULES - 1);
+    await runSource(def, enumerator([a, b]), fresh, chain(), { hit: false });
+    expect(reclassifiedUnder(fresh, def.id)).toBe(OWNER_RULES);
   });
 });
 

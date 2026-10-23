@@ -59,12 +59,12 @@ Per position:
 |---|---|
 | `id` | `source:owner:locator:positionKind[:asset]` |
 | `parentId` | `source:owner:locator`, used for grouping |
-| `owner` | 32-byte address that can sign recovery. Objects resolve through the ObjectCore owner chain (cycle detection, depth ≤ 8). An owner with no signer path → `unknown` with blocker `unsupported_owner`. |
+| `owner` | 32-byte address that can sign recovery. Objects resolve through the ObjectCore owner chain (cycle detection, depth ≤ 8). An owner with no signer path → `contract_held` with blocker `unsupported_owner` (decided 2026-10-22). |
 | `positionKind` | `principal`, `fees`, `reward` or `request` |
 | `grossClaim[]` | What the contract records as owed, raw units per asset |
 | `expectedPayout[]` | What recovery pays now (reserve-limited, net of fees); `payoutBasis` is `view`, `derived` or `simulated` |
 | `recoverableUsd` | expectedPayout × price. `priceSource` and `priceAt` are stored; quotes older than 7 days are unpriced; unpriced value is counted separately, never as 0. Prices are CoinGecko quotes checked against the exact asset, except staked-APT receipts without a fresh quote (stAPT, sthAPT): those are valued at redemption, the on-chain exchange rate (less any unstake fee) × the APT quote, dated like the APT quote and labeled `derived`. |
-| `status` | Exactly one of `recoverable`, `team_gated` (needs an operator signature or packet), `blocked` (with `blockers[{code, detail}]`), `unknown` |
+| `status` | Exactly one of `recoverable`, `team_gated` (needs an operator signature or packet), `blocked` (with `blockers[{code, detail}]`), `contract_held` (held by a resource account or an object: counted apart, never in the headline), `unknown` |
 | `confidence` | `verified_view`, `derived_math` or `indexer_only`. `indexer_only` never enters totals. |
 
 **Dedupe:**

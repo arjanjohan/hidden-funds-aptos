@@ -195,6 +195,15 @@ describe('owner kind', () => {
     expect(chain.calls.length).toBe(before);
   });
 
+  it('files an object with an account resource as an object, also over an entry cached before ObjectCore came first', async () => {
+    const obj = addr('b5');
+    const chain = fakeChain({ account: () => ({ authentication_key: obj, sequence_number: '0' }), resource: () => ({ owner: addr('b2') }) });
+    const memo = memoryMemo();
+    await memo.set(`owner-kind:${obj}`, 'user');
+    await memo.set(`owner-kind:v1:${obj}`, 'user');
+    expect(await ownerKind(context(chain, undefined, memo), obj)).toBe('object');
+  });
+
   it('treats framework-reserved addresses as program-controlled without reading', async () => {
     const chain = fakeChain({});
     expect(await ownerKind(context(chain), addr(0))).toBe('resource_account');

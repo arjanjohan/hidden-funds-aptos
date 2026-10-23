@@ -1,7 +1,8 @@
 // Domain contract. Rules behind these fields: docs/left-behind.md.
 import type { MarketProvider } from './market.ts';
 
-export type Status = 'recoverable' | 'team_gated' | 'blocked' | 'unknown';
+/** `contract_held`: held by a resource account or an object, which no person signs for: shown apart, never in the headline. */
+export type Status = 'recoverable' | 'team_gated' | 'blocked' | 'contract_held' | 'unknown';
 export type AgeBasis = 'onchain_maturity' | 'protocol_closure' | 'position_interaction' | 'unknown';
 export type PositionKind = 'principal' | 'fees' | 'reward' | 'request';
 export type Confidence = 'verified_view' | 'derived_math' | 'indexer_only';

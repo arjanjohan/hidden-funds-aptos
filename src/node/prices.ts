@@ -3,6 +3,7 @@ import { PRICE_MAX_AGE_SECS, type PriceBook } from '../shared/accounting.ts';
 import { SUSDE, USDC, USDT } from '../shared/sources/aave-frozen.ts';
 import { AMNIS } from '../shared/sources/amnis-withdrawals.ts';
 import { AMAPT_COIN } from '../shared/sources/auro-closed.ts';
+import { RSETH } from '../shared/sources/canopy-frozen.ts';
 import { APT, MOVE } from '../shared/sources/delegation.ts';
 import { AMAPT_FA, MOD, STAPT, STHAPT, WH_USDC } from '../shared/sources/echelon-frozen.ts';
 import { KAPT, STKAPT } from '../shared/sources/kofi-receipts.ts';
@@ -34,6 +35,8 @@ const COINGECKO = [
   { asset: USDT, id: 'tether', decimals: 6 },
   { asset: USDC, id: 'usd-coin', decimals: 6 },
   { asset: SUSDE, id: 'ethena-staked-usde', decimals: 6 },
+  // Kelp's rsETH on Movement (Canopy's rsETH vaults); CoinGecko lists this exact address under its Movement platform.
+  { asset: `movement:${RSETH}`, id: 'kelp-dao-restaked-eth', decimals: 8 },
 ];
 
 export async function fetchPrices(nowSecs: number, aptos: ChainReader): Promise<{ prices: PriceBook; errors: string[] }> {
