@@ -77,6 +77,8 @@ export interface SourceDef<Hint = unknown> {
   version?: number;
   /** Age bases this source documents as valid for the headline. */
   headlineAgeBases: AgeBasis[];
+  /** Read on the check page only: the pipeline does not enumerate it, so it has no dashboard totals. */
+  checkOnly?: boolean;
   howTo: string[];
   officialUrl?: string;
   /** `hint` lets the pipeline pass enumeration results so the read can skip its own discovery query. */

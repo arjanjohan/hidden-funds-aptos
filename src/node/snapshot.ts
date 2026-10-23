@@ -148,7 +148,7 @@ async function main() {
   const panora = process.env.PANORA_API_KEY ? panoraProvider(process.env.PANORA_API_KEY, prices[APT]?.usd ?? null) : undefined;
 
   const sources: SnapshotSource[] = [];
-  for (const def of SOURCES) {
+  for (const def of SOURCES.filter(s => !s.checkOnly)) {
     const en = ENUMERATORS.find(e => e.sourceId === def.id);
     if (!en) throw new Error(`No enumerator for ${def.id}`);
     const prev = previous?.sources.find(s => s.id === def.id);
