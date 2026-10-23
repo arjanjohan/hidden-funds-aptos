@@ -1110,9 +1110,17 @@ describe('earnium closed lp', () => {
     const locked = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '100', staked: '400', unlock: '1900000000' } })), OWNER);
     expect(raw(locked)).toEqual([[APT, '200', 'recoverable'], [KAPT, '300', 'recoverable'], [APT, undefined, 'blocked'], [KAPT, undefined, 'blocked']]);
     expect(locked.positions[2]).toMatchObject({ locator: `${POOL}/locked`, blockers: [{ code: 'locked' }], grossClaim: [{ raw: '800' }], ageBasis: 'unknown' });
+    // Unstaking comes first, once the lock ends.
+    expect(locked.positions[2].steps.map(s => [s.function.split('::').pop(), s.arguments[s.function.endsWith('::unstake') ? 1 : 3], s.prerequisites])).toEqual([
+      ['unstake', '400', [`after ${new Date(1_900_000_000_000).toISOString()}`]], ['remove_liquidity_entry', '400', []]]);
     // Locked forever on purpose (launch liquidity): it can never come out, so it is not left behind (R3).
     const forever = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '0', staked: '400', unlock: '18446744073709551615' } })), OWNER);
     expect(forever.positions).toEqual([]);
+  });
+
+  it('leaves the age unknown without a hint (the check page has no history to date a part)', async () => {
+    const r = await earniumClosedLp.read(context(chain({ [POOL]: { wallet: '100', staked: '400', unlock: '0' } })), OWNER);
+    expect(r.positions.map(p => [p.ageBasis, p.claimableSince, p.status])).toEqual(Array(4).fill(['unknown', undefined, 'recoverable']));
   });
 
   it('ages a stake that unlocked after the closure from its unlock', async () => {
@@ -1200,6 +1208,17 @@ describe('canopy frozen vaults', () => {
     // A staker whose hint has no store time received wallet shares after the scan: they are read, with no age yet.
     const received = await canopyFrozenVaults.read(context(at90('0')), OWNER, { v: { [share(MOVE0)]: '5' }, w: '90' });
     expect(received.positions[0]).toMatchObject({ locator: SUSDA, grossClaim: [{ raw: '14' }], ageBasis: 'unknown' });
+  });
+
+  it('leaves the age unknown without a hint, and reads each vault on its own', async () => {
+    const c = chain({ [SUSDA]: { wallet: '7' }, [MOVE0]: { wallet: '5' } });
+    const r = await canopyFrozenVaults.read(context(c), OWNER);
+    expect(r.positions.map(p => [p.locator, p.ageBasis, p.claimableSince])).toEqual(expect.arrayContaining([[SUSDA, 'unknown', undefined], [MOVE0, 'unknown', undefined]]));
+    // MOVE-0's withdrawal map fails: sUSDa is still read, and the read is incomplete.
+    const failing = await canopyFrozenVaults.read(context({ ...c, view: async (fn, args, typeArgs, v) =>
+      fn.endsWith('::withdraw::get_withdrawal_map_view') && args[0] === MOVE0 ? Promise.reject(new Error('view failed')) : c.view(fn, args, typeArgs, v) }), OWNER, {});
+    expect(failing.complete).toBe(false);
+    expect(failing.positions.map(p => p.locator)).toEqual([SUSDA]);
   });
 
   it('leaves out a vault that is open to deposits', async () => {
