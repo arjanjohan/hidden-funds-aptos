@@ -213,7 +213,7 @@ export const PROTOCOLS: ProtocolEntry[] = [
   { id: 'seam-money', name: 'Seam Money', chains: [...A], category: 'Yield Aggregator', status: 'not_left_behind', checkedAt: '2026-10-23',
     reason: 'Its vaults never shipped on mainnet: the contracts (github.com/SeamMoney/seam-contracts, last pushed 2023-05) name no deployed address, and no mainnet transaction calls their modules (`SeamStaker`, `cpu`). seam.money does not answer (2026-10-22); the team moved on to other Aptos apps.' },
   { id: 'meeiro', name: 'Meeiro', chains: [...A], category: 'Launchpad', status: 'not_checked',
-    reason: 'Listed in the Aptos Foundation\'s 2024 project list; meeiro.xyz does not answer (2026-10-22, last archived 2025-03). Contract not located.' },
+    reason: 'Listed in the Aptos Foundation\'s 2024 project list; meeiro.xyz does not answer (2026-10-22, last archived 2025-03). Contract not located: the archived site (2022-08 to 2024-07) is a landing page whose scripts name no Aptos contract, and its token\'s package (`0xe9c1…60d9::mee_coin`) holds only the coin. MEE has no market; its largest holder (~41.5M of 50M) is a plain account.' },
   { id: 'aptopad', name: 'Aptopad', chains: [...A], category: 'Launchpad', status: 'not_left_behind', checkedAt: '2026-10-23',
     reason: 'Never launched on chain: its token (`0x4c11…::aptopadtoken::Aptopad`) has its whole supply in the deployer\'s account, and the package holds only the token module (no sale contract). aptopad.io redirects to an unrelated site (2026-10-22).' },
   { id: 'proton-sale', name: 'Proton Sale', chains: [...A], category: 'Launchpad', status: 'too_small', checkedAt: '2026-10-22',
