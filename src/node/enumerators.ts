@@ -708,9 +708,9 @@ export const canopyFrozenEnumerator: Enumerator = {
       shares.push(...(page as any).vaults.map((v: any) => normalizeAddress(v.shares_address)));
       if ((page as any).vaults.length < 100) break;
     }
-    // Share stores and stakes come from two processors: the lower watermark, taken before the scans, is a version
-    // everything they read is at least as recent as.
-    const w = String([await processorWatermark(chain, 'fungible_asset_processor'), await processorWatermark(chain, 'events_processor')]
+    // Share stores, the staking table and stakes come from three processors: the lowest watermark, taken before the
+    // scans, is a version everything they read is at least as recent as.
+    const w = String((await Promise.all(['fungible_asset_processor', 'default_processor', 'events_processor'].map(p => processorWatermark(chain, p))))
       .map(m => BigInt(m.version)).reduce((a, b) => (a < b ? a : b)));
     const hints = new Map<string, { at?: Record<string, string>; v?: Record<string, string> }>();
     let pages = 1;
@@ -741,9 +741,9 @@ export const canopyFrozenEnumerator: Enumerator = {
       const events = (await chain.gql(STAKE_EVENTS_QUERY, { t: ['StakeEvent', 'WithdrawEvent', 'EmergencyWithdrawEvent'].map(e => `${CANOPY_REWARDS}::multi_rewards::${e}`), v, i })).events;
       pages++;
       for (const e of events) {
-        const owner = normalizeAddress(e.data.user), token = normalizeAddress(e.data.staking_token.inner), h = hints.get(owner);
-        // Owners neither staking nor holding shares now have nothing to age.
-        if (h) hints.set(owner, { ...h, v: { ...h.v, [token]: String(e.transaction_version) } });
+        // A staker the table does not list yet (its processor trailing) is a candidate too: the read finds what it holds.
+        const owner = normalizeAddress(e.data.user), token = normalizeAddress(e.data.staking_token.inner), h = hints.get(owner) ?? {};
+        hints.set(owner, { ...h, v: { ...h.v, [token]: String(e.transaction_version) } });
       }
       if (events.length < PAGE) break;
       const last = events[events.length - 1];

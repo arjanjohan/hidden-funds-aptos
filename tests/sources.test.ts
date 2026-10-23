@@ -1219,6 +1219,13 @@ describe('canopy frozen vaults', () => {
     expect(failing.positions.map(p => p.locator)).toEqual([SUSDA]);
   });
 
+  it('reads the wallet for a staking token even when the indexer shows no store yet', async () => {
+    // All 7 shares were just withdrawn from staking into the wallet; the indexer has not caught up.
+    const c = chain({ [SUSDA]: { wallet: '7', staked: '0' } });
+    const r = await canopyFrozenVaults.read(context({ ...c, gql: (async () => ({ current_fungible_asset_balances: [] })) as typeof c.gql }), OWNER, {});
+    expect(r.positions.map(p => [p.locator, p.grossClaim[0].raw])).toEqual([[SUSDA, '14']]);
+  });
+
   it('leaves out a vault that is open to deposits', async () => {
     expect((await canopyFrozenVaults.read(context(chain({ [SUSDA]: { wallet: '7', open: true } })), OWNER)).positions).toEqual([]);
   });

@@ -159,8 +159,10 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: CanopyFrozenHin
       try {
         const vault = vaults.get(token)!;
         if (!(await frozen(ctx, vault.address))) return [];
+        // The wallet is read for every token, also one the indexer shows no store for: it may trail the chain (shares
+        // just withdrawn from staking into the wallet).
         const [[wallet], [staked]] = await Promise.all([
-          inWallet.has(token) ? ctx.chain.view('0x1::primary_fungible_store::balance', [owner, token], ['0x1::fungible_asset::Metadata'], version) : ['0'],
+          ctx.chain.view('0x1::primary_fungible_store::balance', [owner, token], ['0x1::fungible_asset::Metadata'], version),
           stakedTokens.has(token) ? ctx.chain.view(`${CANOPY_REWARDS}::multi_rewards::get_user_staked_balance`, [owner, token], [], version) : ['0'],
         ]);
         const shares = BigInt(wallet) + BigInt(staked);
@@ -176,7 +178,7 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: CanopyFrozenHin
         // withdrawal whose transaction is not indexed yet has no time: either way the age is unknown until a later run.
         // Without a hint (the check page) there is no history to date the shares: unknown too.
         const unscanned = !!hint?.w && Number(hint.w) < Number(version) && await Promise.all([
-          inWallet.has(token) ? ctx.chain.view('0x1::primary_fungible_store::balance', [owner, token], ['0x1::fungible_asset::Metadata'], hint.w) : ['0'],
+          ctx.chain.view('0x1::primary_fungible_store::balance', [owner, token], ['0x1::fungible_asset::Metadata'], hint.w),
           stakedTokens.has(token) ? ctx.chain.view(`${CANOPY_REWARDS}::multi_rewards::get_user_staked_balance`, [owner, token], [], hint.w) : ['0'],
         ]).then(([[walletThen], [stakedThen]]) => String(walletThen) !== String(wallet) || String(stakedThen) !== String(staked), () => true);
         const stakeChange = hint?.v?.[token];
