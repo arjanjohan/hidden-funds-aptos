@@ -1,4 +1,5 @@
 // Display identity for assets that sources pay out. Identity is the exact id, never a ticker.
+import type { ChainReader } from './types.ts';
 import { SUSDE, USDC, USDT } from './sources/aave-frozen.ts';
 import { ANIMESWAP_COINS } from './sources/animeswap-closed.ts';
 import { AMAPT_COIN } from './sources/auro-closed.ts';
@@ -39,3 +40,16 @@ export const ASSETS: Record<string, { symbol: string; decimals: number }> = {
   // Assets of Canopy's vaults (Movement).
   ...Object.fromEntries(CANOPY_ASSETS.map(c => [c.asset, { symbol: c.symbol, decimals: c.decimals }])),
 };
+
+export type AssetDisplay = { symbol: string; decimals: number };
+
+/** An asset's symbol and decimals as its chain records them, for an asset `ASSETS` does not list: a coin type through
+ *  `coin::symbol`/`decimals`, a fungible asset (its metadata address) through `fungible_asset::symbol`/`decimals`.
+ *  Null for an id the chain cannot describe (a token not on chain yet, such as an unattested Wormhole transfer). */
+export async function assetDisplay(chain: ChainReader, id: string, version?: string): Promise<AssetDisplay | null> {
+  const coin = id.includes('::');
+  if (!coin && !/^0x[0-9a-f]{1,64}$/i.test(id)) return null;
+  const [module, args, typeArgs] = coin ? ['0x1::coin', [], [id]] : ['0x1::fungible_asset', [id], ['0x1::fungible_asset::Metadata']];
+  const [[symbol], [decimals]] = await Promise.all([chain.view(`${module}::symbol`, args, typeArgs, version), chain.view(`${module}::decimals`, args, typeArgs, version)]);
+  return { symbol: String(symbol), decimals: Number(decimals) };
+}

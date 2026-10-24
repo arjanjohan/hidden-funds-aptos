@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ownerKind } from '../src/shared/owners.ts';
+import { assetDisplay } from '../src/shared/assets.ts';
 import { AAVE, aaveFrozenReserves, AAVE_UNFROZEN_AT, USDC } from '../src/shared/sources/aave-frozen.ts';
 import { canopyEndedRewards } from '../src/shared/sources/canopy-rewards.ts';
 import { CANOPY_VAULTS, canopyFrozenVaults, FROZEN_VAULTS } from '../src/shared/sources/canopy-frozen.ts';
@@ -174,6 +175,16 @@ describe('tortuga tickets', () => {
   it('reads nothing more for an account without tickets', async () => {
     const r = await tortugaTickets.read(context(fakeChain({ resource: () => null })), OWNER);
     expect(r).toMatchObject({ positions: [], complete: true });
+  });
+});
+
+describe('asset display', () => {
+  it('reads a coin type\'s and a fungible asset\'s symbol and decimals, and leaves other ids undescribed', async () => {
+    const chain = fakeChain({ view: (fn, args, typeArgs) => fn.endsWith('::symbol') ? [typeArgs[0] === '0x1::fungible_asset::Metadata' ? `FA ${args[0]}` : 'COIN'] : ['6'] });
+    expect(await assetDisplay(chain, '0x2::c::D')).toEqual({ symbol: 'COIN', decimals: 6 });
+    expect(await assetDisplay(chain, addr('e1'))).toEqual({ symbol: `FA ${addr('e1')}`, decimals: 6 });
+    expect(await assetDisplay(chain, 'wormhole:2:0xab')).toBeNull();
+    expect(chain.calls.filter(c => c.startsWith('view'))).toHaveLength(4);
   });
 });
 
