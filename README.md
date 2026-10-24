@@ -47,7 +47,7 @@ What counts, how it is aged and how totals are computed: [docs/left-behind.md](d
 | Path | What | Runs in |
 |---|---|---|
 | `src/shared` | Domain types, accounting, chain reader, per-source `read()` | browser + pipeline |
-| `src/node` | Enumerators, keyed client, SQLite state, snapshot CLI | pipeline only |
+| `src/node` | Enumerators, keyed client, SQLite state, snapshot CLI, wind-down watch | pipeline only |
 | `src/web` | Astro pages and the check component | browser |
 | `spikes` | Phase 0 measurement scripts | local only |
 
@@ -67,6 +67,8 @@ pnpm dev
 ## CI
 
 `.github/workflows/pipeline.yml`: weekly snapshot (Monday), commit `snapshot/latest.json`, build, deploy to Cloudflare Pages.
+
+`.github/workflows/watch.yml`: weekly wind-down watch (Monday, no key). Protocols the registry treats as live get one GitHub issue each (label `wind-down-watch`) when DefiLlama newly marks them dead, their Aptos/Movement TVL falls 80%+ in 30 days (from $10K or more), or their site's domain stops resolving. Closing an issue acknowledges the signals it was raised for; only a new kind of signal opens another. `pnpm watch --dry-run` prints the flags without touching issues.
 
 Repository secrets:
 
