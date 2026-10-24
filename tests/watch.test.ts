@@ -43,6 +43,8 @@ describe('wind-down watch', () => {
     const closedSite = { number: 8, title: issueTitle(e), state: 'closed' as const, body: issueBody(e, site, '2026-11-02') };
     expect(decide(e, [...tvl, ...site], [closedSite, closed])).toEqual({ action: 'acknowledged', issue: 8 });
     expect(decide(e, tvl, [])).toEqual({ action: 'create' });
+    // Updated with only the site down now, the issue still records the TVL drop it was raised for.
+    expect(markedCodes(issueBody(e, site, '2026-11-09', markedCodes(closed.body)))).toEqual(new Set(['site_down', 'tvl_drop']));
   });
 
   it('writes one issue per protocol, titled by name', () => {

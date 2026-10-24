@@ -55,8 +55,9 @@ export function assess(entry: ProtocolEntry, listing: Listing | undefined, serie
 }
 
 export const issueTitle = (entry: ProtocolEntry) => `Possible wind-down: ${entry.name}`;
-/** The signal codes an issue was raised for, kept in its body. */
-const marker = (signals: Signal[]) => `<!-- ${LABEL}: ${[...new Set(signals.map(s => s.code))].sort().join(',')} -->`;
+/** The signal codes an issue was raised for, kept in its body: every one it was ever raised for, so closing it
+ *  acknowledges them all even when only some show now. */
+const marker = (codes: Iterable<string>) => `<!-- ${LABEL}: ${[...new Set(codes)].sort().join(',')} -->`;
 export const markedCodes = (body: string | null | undefined) => new Set(body?.match(new RegExp(`<!-- ${LABEL}: ([a-z_,]*) -->`))?.[1].split(',').filter(Boolean) ?? []);
 
 export interface Issue { number: number; title: string; body?: string | null; state: 'open' | 'closed' }
@@ -70,7 +71,7 @@ export function decide(entry: ProtocolEntry, signals: Signal[], issues: Issue[])
   return closed.length && signals.every(s => acknowledged.has(s.code)) ? { action: 'acknowledged', issue: closed[0].number } : { action: 'create' };
 }
 
-export function issueBody(entry: ProtocolEntry, signals: Signal[], today: string): string {
+export function issueBody(entry: ProtocolEntry, signals: Signal[], today: string, raisedBefore: Iterable<string> = []): string {
   return [
     `The weekly wind-down watch (\`.github/workflows/watch.yml\`) flagged **${entry.name}** (registry \`${entry.id}\`, status \`${entry.status}\`, checked ${entry.checkedAt ?? 'never'}):`,
     '',
@@ -81,7 +82,7 @@ export function issueBody(entry: ProtocolEntry, signals: Signal[], today: string
     `Look for a notice (site, X, Discord, docs). If it is closing: update the registry entry, and size or add a source. If not: record why in the entry and close this issue. DefiLlama: https://defillama.com/protocol/${entry.defillama}`,
     '',
     `_Last flagged ${today}. Closing this acknowledges these signals: only a new kind of signal opens another issue._`,
-    marker(signals),
+    marker([...raisedBefore, ...signals.map(s => s.code)]),
   ].join('\n');
 }
 
@@ -127,9 +128,13 @@ async function main() {
   if (dryRun) return;
   const issues: Issue[] = await github(`/issues?state=all&labels=${LABEL}&per_page=100`);
   for (const { entry, signals } of flagged) {
-    const body = issueBody(entry, signals, today), d = decide(entry, signals, issues);
-    if (d.action === 'update') await github(`/issues/${d.issue}`, { method: 'PATCH', body: JSON.stringify({ body }) });
-    else if (d.action === 'create') await github('/issues', { method: 'POST', body: JSON.stringify({ title: issueTitle(entry), body, labels: [LABEL] }) });
+    const d = decide(entry, signals, issues);
+    if (d.action === 'update') {
+      const body = issueBody(entry, signals, today, markedCodes(issues.find(i => i.number === d.issue)?.body));
+      await github(`/issues/${d.issue}`, { method: 'PATCH', body: JSON.stringify({ body }) });
+    } else if (d.action === 'create') {
+      await github('/issues', { method: 'POST', body: JSON.stringify({ title: issueTitle(entry), body: issueBody(entry, signals, today), labels: [LABEL] }) });
+    }
     else console.log(`${entry.name}: acknowledged in #${d.issue}`);
   }
 }
