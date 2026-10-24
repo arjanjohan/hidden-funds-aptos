@@ -709,22 +709,23 @@ export const canopyFrozenEnumerator: Enumerator = {
       shares.push(...(page as any).vaults.map((v: any) => normalizeAddress(v.shares_address)));
       if ((page as any).vaults.length < 100) break;
     }
-    // Share stores and stakes come from two processors: the lower watermark, taken before the scans, is a version
-    // everything they read is at least as recent as.
-    const w = String([await processorWatermark(chain, 'fungible_asset_processor'), await processorWatermark(chain, 'events_processor')]
+    // Share stores, the staking table and stakes come from three processors: the lowest watermark, taken before the
+    // scans, is a version everything they read is at least as recent as.
+    const w = String((await Promise.all(['fungible_asset_processor', 'default_processor', 'events_processor'].map(p => processorWatermark(chain, p))))
       .map(m => BigInt(m.version)).reduce((a, b) => (a < b ? a : b)));
     const hints = new Map<string, { at?: Record<string, string>; v?: Record<string, string> }>();
     let pages = 1;
     let after = '';
     for (;;) {
       const rows = (await chain.gql(`query($a:[String!]!,$s:String!){ current_fungible_asset_balances(where:{asset_type:{_in:$a}, amount:{_gt:"0"},
-        storage_id:{_gt:$s}}, order_by:{storage_id:asc}, limit:${PAGE}){ owner_address asset_type storage_id last_transaction_timestamp } }`, { a: shares, s: after })).current_fungible_asset_balances;
+        storage_id:{_gt:$s}}, order_by:{storage_id:asc}, limit:${PAGE}){ owner_address asset_type storage_id is_primary last_transaction_timestamp } }`, { a: shares, s: after })).current_fungible_asset_balances;
       pages++;
       for (const r of rows) {
         const owner = normalizeAddress(r.owner_address), token = normalizeAddress(r.asset_type);
         if (owner === CANOPY_REWARDS_STATE) continue;
+        // Only the primary store dates the wallet's shares; a secondary store's owner is a candidate without a date.
         const at = new Date(r.last_transaction_timestamp + 'Z').toISOString(), prev = hints.get(owner) ?? {};
-        if (!prev.at?.[token] || at > prev.at[token]) hints.set(owner, { ...prev, at: { ...prev.at, [token]: at } });
+        hints.set(owner, r.is_primary && (!prev.at?.[token] || at > prev.at[token]) ? { ...prev, at: { ...prev.at, [token]: at } } : prev);
       }
       if (rows.length < PAGE) break;
       after = rows[rows.length - 1].storage_id;
@@ -742,9 +743,9 @@ export const canopyFrozenEnumerator: Enumerator = {
       const events = (await chain.gql(STAKE_EVENTS_QUERY, { t: ['StakeEvent', 'WithdrawEvent', 'EmergencyWithdrawEvent'].map(e => `${CANOPY_REWARDS}::multi_rewards::${e}`), v, i })).events;
       pages++;
       for (const e of events) {
-        const owner = normalizeAddress(e.data.user), token = normalizeAddress(e.data.staking_token.inner), h = hints.get(owner);
-        // Owners neither staking nor holding shares now have nothing to age.
-        if (h) hints.set(owner, { ...h, v: { ...h.v, [token]: String(e.transaction_version) } });
+        // A staker the table does not list yet (its processor trailing) is a candidate too: the read finds what it holds.
+        const owner = normalizeAddress(e.data.user), token = normalizeAddress(e.data.staking_token.inner), h = hints.get(owner) ?? {};
+        hints.set(owner, { ...h, v: { ...h.v, [token]: String(e.transaction_version) } });
       }
       if (events.length < PAGE) break;
       const last = events[events.length - 1];
@@ -1053,9 +1054,10 @@ async function houstonWallets(chain: ChainReader, owner: string, version: string
   return new Map(all.filter(r => r.type.startsWith(`${HOUSTON_WALLET}<`)).map(r => [r.type.slice(HOUSTON_WALLET.length), JSON.stringify(r.data)]));
 }
 const houstonSenders = entrySenders('houston-closed-lp', HOUSTON_ADDS, async (chain, ledger, positions) => {
-  // What the positions would pay, per pair and side, cannot exceed that pair's reserves (all fee tiers).
+  // What the pool would pay the positions (principal: burn and owed fees; stored coins are the positions' own), per pair
+  // and side, cannot exceed that pair's reserves (all fee tiers).
   const owed = new Map<string, bigint>();
-  for (const p of positions) {
+  for (const p of positions.filter(p => p.positionKind === 'principal')) {
     const key = `${p.locator.slice(0, p.locator.lastIndexOf('#'))}|${p.asset}`;
     owed.set(key, (owed.get(key) ?? 0n) + BigInt(p.grossClaim[0].raw));
   }
