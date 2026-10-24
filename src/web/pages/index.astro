@@ -16,6 +16,8 @@ function meta(s: SnapshotSource): string {
   if (t.headline.usd > 0) return `${usd(t.headline.usd)} · ${count(t.headline.owners)} wallets`;
   if (b.team_gated.positions) return `${count(b.team_gated.positions)} positions need the team`;
   if (b.recoverable.usd > 0) return `${usd(b.recoverable.usd)} claimable, under 90 days`;
+  const blocked = t.faceByStatus?.blocked;
+  if (blocked && blocked.usd > 0) return `${usd(blocked.usd)} owed, blocked for now`;
   const n = b.recoverable.positions + b.blocked.positions;
   return n ? `${count(n)} positions without a price` : 'none found right now';
 }

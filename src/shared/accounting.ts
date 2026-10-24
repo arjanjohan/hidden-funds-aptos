@@ -70,9 +70,19 @@ export function applyOwnerKind(positions: Position[], kind: OwnerKind): Position
   return positions.map(p => ({ ...p, status: 'contract_held', blockers: [...p.blockers, { code: 'unsupported_owner', detail }] }));
 }
 
+/** A borrower's supply or collateral in a protocol that has closed: shown on the check page so its owner sees it, but
+ *  never in a total, since a borrower's supply can be its own borrowed funds supplied again and what it gets back is
+ *  supply less debt (decided 2026-10-24, R4). */
+export const HAS_DEBT = 'has_debt';
+export const debtBlocker = (detail: string) => ({ code: HAS_DEBT, detail });
+const counted = (p: Position) => p.confidence !== 'indexer_only' && !p.blockers.some(b => b.code === HAS_DEBT);
+
 export interface SourceTotals {
   face: Bucket;                                   // gross claim, every status
   byStatus: Record<Status, Bucket>;               // expected payout
+  /** Gross claim by status: what blocked, team-gated or unknown positions are owed, which their expected payout (often
+   *  none) does not show. Absent from snapshots before 2026-10-24. */
+  faceByStatus?: Record<Status, Bucket>;
   /** Recoverable expected payout aged ≥ N days (cumulative), headline-eligible bases only. */
   aged: Record<string, Bucket>;
   /** Recoverable expected payout aged ≥ N days on estimated (non-eligible) bases; never in the headline. */
@@ -87,9 +97,10 @@ export interface SourceTotals {
 
 export function sourceTotals(source: Pick<SourceDef, 'headlineAgeBases'>, all: Position[], prices: PriceBook, nowSecs: number): SourceTotals {
   assertUniqueIds(all);
-  // Only positions verified on chain (or derived from verified state) count; indexer-only rows are reported apart.
-  const positions = all.filter(p => p.confidence !== 'indexer_only');
-  const payout = (p: Position) => usd(p.expectedPayout, prices);
+  // Only positions verified on chain (or derived from verified state) count; indexer-only rows are reported apart, and
+  // borrowers' supply is never counted.
+  const positions = all.filter(counted);
+  const payout = (p: Position) => usd(p.expectedPayout, prices), gross = (p: Position) => usd(p.grossClaim, prices);
   const recoverable = positions.filter(p => p.status === 'recoverable');
   const agedOn = (eligible: boolean, days: number) => recoverable.filter(p => {
     const age = ageDays(p, nowSecs);
@@ -98,8 +109,9 @@ export function sourceTotals(source: Pick<SourceDef, 'headlineAgeBases'>, all: P
   const statuses: Status[] = ['recoverable', 'team_gated', 'blocked', 'contract_held', 'unknown'];
   const bases: AgeBasis[] = ['onchain_maturity', 'protocol_closure', 'position_interaction', 'unknown'];
   return {
-    face: bucket(positions, p => usd(p.grossClaim, prices)),
+    face: bucket(positions, gross),
     byStatus: Object.fromEntries(statuses.map(s => [s, bucket(positions.filter(p => p.status === s), payout)])) as Record<Status, Bucket>,
+    faceByStatus: Object.fromEntries(statuses.map(s => [s, bucket(positions.filter(p => p.status === s), gross)])) as Record<Status, Bucket>,
     aged: Object.fromEntries(AGE_BUCKETS.map(d => [`ge${d}`, bucket(agedOn(true, d), payout)])),
     agedEstimated: Object.fromEntries(AGE_BUCKETS.map(d => [`ge${d}`, bucket(agedOn(false, d), payout)])),
     byAgeBasis: Object.fromEntries(bases.map(b => [b, bucket(recoverable.filter(p => p.ageBasis === b), payout)])) as Record<AgeBasis, Bucket>,

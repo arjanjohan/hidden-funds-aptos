@@ -4,7 +4,7 @@
 // for most reserves, and a withdrawal aborts when the reserve lacks the cash or when the profile still supplies another
 // reserve whose oracle price is stale (nobody updates them). Check-only (decided 2026-10-22): re-reading all ~455K
 // profiles each run would cost ~285K reads, so the pipeline does not enumerate it and it has no dashboard totals.
-import { iso, positionIds } from '../accounting.ts';
+import { debtBlocker, iso, positionIds } from '../accounting.ts';
 import { normalizeAddress, once } from '../chain.ts';
 import type { Amount, Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
 import { assetOf } from './animeswap-closed.ts';
@@ -121,13 +121,13 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
       if (name === null) { errors.push(`unrecognised Aries profile key ${row.key}`); continue; }
       const profile = await ctx.chain.resource(row.value.account, `${ARIES}::profile::Profile`, version);
       if (!profile) { errors.push(`Aries profile ${name} missing`); continue; }
-      // R4: a profile with any debt is left out (its deposits are collateral).
-      let debt = false;
+      // R4: a profile with any debt is a borrower's: its deposits are collateral, shown with the debt, never counted.
+      const loans: string[] = [];
       for (const type of await walk(ctx, profile.borrowed_reserves, 'Loan')) {
         const [share] = await ctx.chain.view(`${ARIES}::profile::profile_loan`, [owner, name], [type], version);
-        if (BigInt(share) > 0n) { debt = true; break; }
+        if (BigInt(share) > 0n) loans.push(type.split('::').pop()!);
       }
-      if (debt) continue;
+      const debt = loans.length ? debtBlocker(`This Aries profile also borrows (${loans.join(', ')}): repay the debt to withdraw this.`) : null;
       // Each reserve is read on its own: one that fails leaves the others readable.
       const supplied: { type: string; quote: bigint | null }[] = [];
       // Reserves whose deposit could not be read: still supplied as far as the oracle check below knows.
@@ -147,8 +147,8 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
         if (quote === 0n) continue;
         try {
           const [{ asset, fa }, state] = await Promise.all([assetOfReserve(ctx, type), reserveState(ctx, type)]);
-          // The reserve's own blockers first: they decide without reading any other reserve's oracle.
-          const local = quote === null ? { code: 'reserve_accounting_negative', detail: 'Aries cannot quote this deposit: the reserve records more than its loans plus cash, so the quote (and a withdrawal) aborts.' }
+          // Debt first, then the reserve's own blockers: they decide without reading any other reserve's oracle.
+          const local = debt ? debt : quote === null ? { code: 'reserve_accounting_negative', detail: 'Aries cannot quote this deposit: the reserve records more than its loans plus cash, so the quote (and a withdrawal) aborts.' }
             : !state.redeem ? { code: 'paused', detail: 'Redemption is disabled for this reserve.' }
             : state.cash < quote ? { code: 'reserves_removed', detail: 'Aries\'s admin moved this reserve\'s cash out (2026-06-26 to 08-17); it holds less than this deposit\'s quote.' }
             : null;
@@ -166,8 +166,8 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
             grossClaim: value, expectedPayout: blocker ? [] : value, payoutBasis: 'view',
             status: blocker ? 'blocked' : 'recoverable', blockers: blocker ? [blocker] : [],
             confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs),
-            // u64 max withdraws everything the profile supplies to the reserve.
-            steps: [{ function: `${ARIES}::controller::${fa ? 'withdraw_fa' : 'withdraw'}<${type}>`,
+            // u64 max withdraws everything the profile supplies to the reserve; a borrower repays first.
+            steps: debt ? [] : [{ function: `${ARIES}::controller::${fa ? 'withdraw_fa' : 'withdraw'}<${type}>`,
               arguments: [hex(name), U64_MAX, 'false'], prerequisites: [], expectedOutputs: blocker ? [] : value }],
           });
         } catch (err) {
@@ -191,7 +191,7 @@ export const ariesWoundDown: SourceDef = {
   title: 'Aries deposits left after its wind-down',
   summary: 'Aries Markets wound down in July 2026 and its admin moved most of the lending reserves\' cash out. Deposits are still recorded, but most can no longer be withdrawn.',
   category: 'closed_app',
-  inclusionRule: 'R2: Aries wound down in July 2026 (official notice at app.ariesmarkets.xyz). R4: profiles with any debt are left out. Check-only (decided 2026-10-22): no dashboard totals.',
+  inclusionRule: 'R2: Aries wound down in July 2026 (official notice at app.ariesmarkets.xyz). R4: profiles with any debt are shown (blocked by it) but never counted. Check-only (decided 2026-10-22): no dashboard totals.',
   protocolStatus: {
     state: 'closed',
     evidence: 'app.ariesmarkets.xyz serves only "Aries Markets was wound down in July 2026" (read 2026-10-07). The admin multisig moved reserve cash out in 26 transactions, 2026-06-26 to 08-17 (fungible_asset_activities).',

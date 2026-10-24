@@ -2,7 +2,7 @@
 // to withdraw everything before April 30, 2026 (Pyth deprecated its push feeds on Aptos) and shut the website down by
 // the end of April; auro.finance no longer resolves. Closed under the closed-frontend rule (decided 2026-10-21), aged
 // from 2026-04-30. A position with debt does not count (R4). Positions are NFTs in Auro's CDP collection.
-import { iso, positionIds } from '../accounting.ts';
+import { debtBlocker, iso, positionIds } from '../accounting.ts';
 import { mapLimit, normalizeAddress, once } from '../chain.ts';
 import { ownedIn } from '../owned.ts';
 import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
@@ -58,9 +58,10 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: AuroHint): Prom
         ctx.chain.resource(token, '0x1::object::ObjectCore', version),
         ctx.chain.resource(token, `${AURO}::lending_pool::UserPosition`, version),
       ]);
-      // A burned position or one that moved belongs to nobody's or its new owner's read; any debt excludes it (R4).
+      // A burned position or one that moved belongs to nobody's or its new owner's read. One with debt is a borrower's:
+      // its collateral is shown with the debt, never counted (R4).
       if (!core || !position || normalizeAddress(core.owner) !== owner) return [];
-      if (position.debt_shares.data.some((d: any) => BigInt(d.value) > 0n)) return [];
+      const inDebt = position.debt_shares.data.some((d: any) => BigInt(d.value) > 0n);
       // The contract still takes deposits and repayments: a position topped up after the shutdown is aged from that
       // deposit, and one repaid after it (it had debt, so it did not qualify) from its last change since. The check page
       // reads without the enumeration's history, so there the age is unknown.
@@ -96,6 +97,14 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: AuroHint): Prom
         // is unknown rather than guessed.
         const early = p.earlyFeeBps > 0n && p.lockSecs > 0 && ctx.ledger.timestampSecs < Number(position.last_deposited_times ?? 0) + p.lockSecs;
         const locator = `${token}/${normalizeAddress(d.key.inner)}`;
+        if (inDebt) return {
+          ...positionIds(SOURCE, owner, locator, 'principal', p.token), source: SOURCE, owner, locator, positionKind: 'principal', asset: p.token,
+          claimableSince: since, ageBasis: since ? 'protocol_closure' : 'unknown',
+          provenance: { reader: `${AURO}::lending_pool::UserPosition`, ledgerVersion: version },
+          grossClaim: gross, expectedPayout: [], payoutBasis: 'derived', status: 'blocked',
+          blockers: [debtBlocker('This Auro position also has debt: repay it to withdraw the collateral.')],
+          confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs), steps: [],
+        };
         return {
           ...positionIds(SOURCE, owner, locator, 'principal', p.token), source: SOURCE, owner, locator, positionKind: 'principal', asset: p.token,
           claimableSince: since, ageBasis: since ? 'protocol_closure' : 'unknown',
@@ -125,7 +134,7 @@ export const auroClosedPositions: SourceDef<AuroHint> = {
   title: 'Auro Finance collateral left after the shutdown',
   summary: 'Auro Finance shut its website down at the end of April 2026 and asked users to withdraw. Collateral left in debt-free Auro positions is still there.',
   category: 'closed_app',
-  inclusionRule: 'R2: website shut down by 2026-04-30 (team notice), closed under the closed-frontend rule (decided 2026-10-21). R4: positions with debt are left out.',
+  inclusionRule: 'R2: website shut down by 2026-04-30 (team notice), closed under the closed-frontend rule (decided 2026-10-21). R4: positions with debt are shown (blocked by it) but never counted.',
   protocolStatus: {
     state: 'closed',
     evidence: 'Team notice on X: "withdraw all funds before April 30 ... permanently shut down the website by the end of April" (Pyth deprecated its push feeds on Aptos on 2026-04-30). auro.finance and app.auro.finance no longer resolve (2026-10-21).',

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ownerKind } from '../src/shared/owners.ts';
+import { sourceTotals } from '../src/shared/accounting.ts';
 import { assetDisplay } from '../src/shared/assets.ts';
 import { AAVE, aaveFrozenReserves, AAVE_UNFROZEN_AT, USDC } from '../src/shared/sources/aave-frozen.ts';
 import { canopyEndedRewards } from '../src/shared/sources/canopy-rewards.ts';
@@ -701,9 +702,10 @@ describe('echelon frozen markets', () => {
     expect(r.positions[0].steps[0]).toMatchObject({ function: expect.stringMatching(/::scripts::withdraw_all_fa$/), arguments: [KAPT_MARKET.market] });
   });
 
-  it('leaves out every position of a supplier with any Echelon debt, even dust or interest only', async () => {
+  it('shows a supplier with any Echelon debt (even dust or interest only) blocked by it, never counted', async () => {
     for (const debt of [{ principal: '300000', interest_accumulated: '0' }, { principal: '0', interest_accumulated: '1' }]) {
-      expect(await read({ coins: '1500000', debt })).toMatchObject({ positions: [], complete: true });
+      const r = await read({ coins: '1500000', debt });
+      expect(r.positions.map(p => [p.status, p.blockers[0].code, p.grossClaim[0].raw, p.expectedPayout, p.steps])).toEqual([['blocked', 'has_debt', '1500000', [], []]]);
     }
     // A repaid liability entry (all zero) is no debt.
     expect((await read({ coins: '1500000', debt: { principal: '0', interest_accumulated: '0' } })).positions).toHaveLength(1);
@@ -797,8 +799,11 @@ describe('aave frozen reserves', () => {
     expect(c.calls.filter(x => x.startsWith('archiveResource'))).toEqual([]);
   });
 
-  it('leaves out a supplier with any Aave debt', async () => {
-    expect(await aaveFrozenReserves.read(context(chain({ debt: '1' }), LEDGER), OWNER)).toMatchObject({ positions: [], complete: true });
+  it('shows a supplier with any Aave debt, blocked by it and never counted', async () => {
+    const r = await aaveFrozenReserves.read(context(chain({ debt: '1' }), LEDGER), OWNER);
+    expect(r.complete).toBe(true);
+    expect(r.positions.length).toBeGreaterThan(0);
+    expect(r.positions.every(p => p.status === 'blocked' && p.blockers[0].code === 'has_debt' && p.expectedPayout.length === 0)).toBe(true);
   });
 
   it('counts the pro-rata share of a short reserve\'s cash and withdraws that amount; blocks a paused reserve', async () => {
@@ -960,8 +965,10 @@ describe('auro closed positions', () => {
     expect((await auroClosedPositions.read(context(c), OWNER, { tokens: [NFT], w: '100' })).positions[0].claimableSince).toBe(AURO_CLOSED_AT);
   });
 
-  it('leaves out positions with debt and position NFTs that moved', async () => {
-    expect((await auroClosedPositions.read(context(chain({ debt: true })), OWNER, { tokens: [NFT] })).positions).toEqual([]);
+  it('shows positions with debt as blocked, and leaves out position NFTs that moved', async () => {
+    // With debt: the collateral is shown, blocked by it, without steps and never counted.
+    expect((await auroClosedPositions.read(context(chain({ debt: true })), OWNER, { tokens: [NFT] })).positions
+      .map(p => [p.status, p.blockers[0].code, p.expectedPayout, p.steps])).toEqual([['blocked', 'has_debt', [], []]]);
     expect((await auroClosedPositions.read(context(chain({ owner: addr('e9') })), OWNER, { tokens: [NFT] })).positions).toEqual([]);
   });
 
@@ -1448,9 +1455,12 @@ describe('aries wound down', () => {
     } finally { vi.useRealTimers(); }
   });
 
-  it('leaves out a profile with debt', async () => {
-    expect((await ariesWoundDown.read(context(chain({ loans: [APT_INFO], loanShare: '5' })), OWNER)).positions).toEqual([]);
-    expect((await ariesWoundDown.read(context(chain({ loans: [APT_INFO], loanShare: '0' })), OWNER)).positions).toHaveLength(2);
+  it('shows a profile with debt blocked by it, without steps and never counted', async () => {
+    const r = await ariesWoundDown.read(context(chain({ loans: [APT_INFO], loanShare: '5' })), OWNER);
+    expect(r.positions.map(p => [p.asset, p.status, p.blockers[0].code, p.expectedPayout, p.steps])).toEqual([
+      [APT, 'blocked', 'has_debt', [], []], [USDC_FA, 'blocked', 'has_debt', [], []]]);
+    expect(r.positions[0].blockers[0].detail).toMatch(/borrows \(AptosCoin\)/);
+    expect((await ariesWoundDown.read(context(chain({ loans: [APT_INFO], loanShare: '0' })), OWNER)).positions.map(p => p.status)).toEqual(['recoverable', 'recoverable']);
   });
 });
 
@@ -1525,13 +1535,15 @@ describe('wormhole unredeemed', () => {
 
 describe('echo wound down', () => {
   const [APT_R, USDT_R] = [ECHO_RESERVES.find(r => r.symbol === 'APT')!, ECHO_RESERVES.find(r => r.symbol === 'lzUSDT')!];
-  type Opts = { debt?: string; aptCash?: string; held?: string[] };
+  type Opts = { debt?: string; aptCash?: string; held?: string[]; owesUsdt?: string };
   // OWNER supplies 1,000 APT units (the reserve: 100 cash for 10,000 owed) and 50 USDT units (cash 500 for 400 owed).
   const chain = (o: Opts = {}) => fakeChain({
-    gql: () => ({ current_fungible_asset_balances: (o.held ?? [APT_R.aToken, USDT_R.aToken]).map((a, i) => ({ asset_type: a, storage_id: addr(`f${i}`), is_primary: true, amount: '1' })) }),
+    gql: () => ({ current_fungible_asset_balances: [...(o.held ?? [APT_R.aToken, USDT_R.aToken]), ...(o.owesUsdt ? [USDT_R.debtToken] : [])]
+      .map((a, i) => ({ asset_type: a, storage_id: addr(`f${i}`), is_primary: true, amount: '1' })) }),
     view: (fn, args) => {
       if (fn.endsWith('::user_logic::get_user_account_data')) return ['5', o.debt ?? '0', '0', '0', '0', '0'];
-      if (fn.endsWith('::pool_data_provider::get_user_reserve_data')) return [args[0] === APT_R.underlying ? '1000' : '50', '0', '0', '0', true];
+      if (fn.endsWith('::pool_data_provider::get_user_reserve_data')) return args[0] === APT_R.underlying ? ['1000', '0', '0', '0', true]
+        : ['50', o.owesUsdt ?? '0', '0', '0', true];
       if (fn === '0x1::primary_fungible_store::balance') return [args[1] === APT_R.underlying ? (o.aptCash ?? '100') : '500'];
       if (fn.endsWith('::pool_data_provider::get_a_token_total_supply')) return [args[0] === APT_R.underlying ? '10000' : '400'];
       throw new Error(fn);
@@ -1551,8 +1563,16 @@ describe('echo wound down', () => {
     expect(r.positions[0].asset).toBe(APT);
   });
 
-  it('leaves out suppliers with debt, Echo\'s own wallets, and owners holding no aToken', async () => {
-    expect((await echoWoundDown.read(context(chain({ debt: '1' })), OWNER)).positions).toEqual([]);
+  it('shows a borrower\'s supply, blocked by its debt and never counted', async () => {
+    const r = await echoWoundDown.read(context(chain({ debt: '1', owesUsdt: '1234500' })), OWNER);
+    expect(r.positions.map(p => [p.locator, p.grossClaim[0].raw, p.status, p.blockers[0].code, p.expectedPayout, p.steps])).toEqual([
+      ['APT', '1000', 'blocked', 'has_debt', [], []], ['lzUSDT', '50', 'blocked', 'has_debt', [], []]]);
+    expect(r.positions[0].blockers[0].detail).toMatch(/owes 1\.2345 lzUSDT/);
+    const t = sourceTotals(echoWoundDown, r.positions, { [APT]: { usd: 1, decimals: 8, at: '2026-10-24T00:00:00Z', source: 'test' } }, 1_800_000_000);
+    expect([t.face.positions, t.byStatus.blocked.positions, t.faceByStatus!.blocked.positions]).toEqual([0, 0, 0]);
+  });
+
+  it('leaves out Echo\'s own wallets and owners holding no aToken', async () => {
     expect((await echoWoundDown.read(context(chain()), '0x3b9a45c9d5c73e27c48f85a26a3e9b3fcef44af44ddf9e0995bf17390b1d1bb8')).positions).toEqual([]);
     const c = chain({ held: [] });
     expect((await echoWoundDown.read(context(c), OWNER)).positions).toEqual([]);
