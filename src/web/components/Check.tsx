@@ -92,7 +92,7 @@ export default function Check({ prices: published, markets }: { prices: PriceBoo
     setError(''); setNotice(''); setRows([]); setDisplays({});
     if (!addresses.length) return setError('Paste at least one Aptos address.');
     if (addresses.length > limit) return setError(key ? `Check at most ${limit} addresses at a time.`
-      : `Without an API key, check at most ${limit} addresses at a time. Add your own key below to check up to ${MAX_WITH_KEY}.`);
+      : `Without an API key, check at most ${limit} addresses at a time. Add your own API key to check up to ${MAX_WITH_KEY}.`);
     // Busy before the first request: connecting can wait out a rate limit for minutes, and the button must stay off.
     running.current = true;
     setBusy('Connecting…');
@@ -159,12 +159,12 @@ export default function Check({ prices: published, markets }: { prices: PriceBoo
           try { localStorage.setItem(OPT_IN_KEY, e.target.checked ? '1' : '0'); } catch { /* not remembered */ }
         }} /> Also look up bridge transfers with {THIRD_PARTIES.join(' and ')}. This sends the addresses you check to them.
       </label></p>}
+      <ApiKey current={key} onChange={k => { storeKey(k); setKey(k); }} disabled={!!busy} />
       <p><button className="button" onClick={run} disabled={!!busy}>{busy || `Check ${addresses.length || ''} wallet${addresses.length === 1 ? '' : 's'}`}</button></p>
       {notice && <p className="muted" role="status">{notice}</p>}
       {error && <p style={{ color: 'var(--bad)' }}>{error}</p>}
       {rows.length > 0 && stalePrices > 0 && <p className="muted">{stalePrices} price{stalePrices === 1 ? ' is' : 's are'} older than 7 days and not shown; amounts are still exact.</p>}
       {rows.map(row => <AddressResult key={row.address} row={row} prices={prices} displays={displays} />)}
-      <ApiKey current={key} onChange={k => { storeKey(k); setKey(k); }} disabled={!!busy} />
     </div>
   );
 }
@@ -181,31 +181,27 @@ function ApiKey({ current, onChange, disabled }: { current: string; onChange: (k
     onChange(key); setDraft(''); setStatus('');
   }
   if (current) return (
-    <p className="muted" style={{ marginTop: 24 }}>
+    <p className="muted">
       Using your API key (…{current.slice(-4)}): up to {MAX_WITH_KEY} wallets at a time.{' '}
       <button className="link" onClick={() => onChange('')} disabled={disabled}>Remove key</button>
     </p>
   );
   return (
-    <details style={{ marginTop: 24 }}>
-      <summary>Check more than {MAX_ANONYMOUS} wallets</summary>
-      <p className="muted">
-        Without a key, the public Aptos API serves one browser about {MAX_ANONYMOUS} wallets per 5 minutes, so this page checks at
-        most {MAX_ANONYMOUS} at a time. With your own free API key you can check up to {MAX_WITH_KEY}.
-      </p>
-      <ol className="muted">
-        <li>Sign up at <a href="https://geomi.dev" target="_blank" rel="noopener">geomi.dev</a> (Aptos Labs' developer platform) and create an API key for Aptos mainnet.</li>
-        <li>If you limit the key to websites, add <code>{typeof location === 'undefined' ? '' : location.origin}</code>.</li>
-        <li>Paste it here.</li>
-      </ol>
-      <p>
-        <input value={draft} onChange={e => setDraft(e.target.value)} placeholder="API key" aria-label="Geomi API key" autoComplete="off"
+    <div className="api-key">
+      <p style={{ margin: 0 }}>
+        <input value={draft} onChange={e => setDraft(e.target.value)} placeholder="API key (optional)" aria-label="Geomi API key" autoComplete="off"
           style={{ font: '14px ui-monospace, monospace', padding: 8, borderRadius: 8, border: '1px solid var(--line)', background: 'var(--card)', color: 'var(--fg)', width: 'min(100%, 420px)' }} />{' '}
-        <button className="button" onClick={save} disabled={disabled || !draft.trim()}>Use key</button>
+        <button className="button ghost" onClick={save} disabled={disabled || !draft.trim()}>Use key</button>
       </p>
       {status && <p className="muted" role="status">{status}</p>}
-      <p className="muted">The key stays in this browser and is sent only to the Aptos Labs API, never to this site or to Movement.</p>
-    </details>
+      <p className="muted" style={{ fontSize: 14 }}>
+        Without a key, the public Aptos API serves one browser about {MAX_ANONYMOUS} wallets per 5 minutes, so you can check {MAX_ANONYMOUS} at
+        a time. With your own free key you can check up to {MAX_WITH_KEY}: create one for Aptos mainnet
+        at <a href="https://geomi.dev" target="_blank" rel="noopener">geomi.dev</a> (Aptos Labs' developer platform){typeof location === 'undefined' ? '' : <>; if
+        you limit it to websites, add <code>{location.origin}</code></>}. The key stays in this browser and is sent only to the Aptos Labs API,
+        never to this site or to Movement.
+      </p>
+    </div>
   );
 }
 

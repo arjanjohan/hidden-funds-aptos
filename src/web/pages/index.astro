@@ -8,7 +8,6 @@ import type { SnapshotSource } from '../../shared/snapshot.ts';
 
 const sources = [...(snapshot?.sources ?? [])].sort((a, b) =>
   b.totals.headline.usd - a.totals.headline.usd || b.totals.byStatus.recoverable.usd - a.totals.byStatus.recoverable.usd);
-const chains = new Set(sources.map(s => s.chain)).size;
 
 /** One line per source: its 90+ day value, or else what kind of positions it holds right now. */
 function meta(s: SnapshotSource): string {
@@ -44,12 +43,12 @@ const faq = [
     [['How we count', '/how-we-count'], ['Sources and evidence', '/sources']]],
 ] as [string, string, [string, string][]?][];
 ---
-<Base title="hidden funds · Find the crypto you left behind on Aptos and Movement">
+<Base title="Move Lost & Found · Find the crypto you left behind on Aptos and Movement">
   <section class="hero">
     <h1>Find the crypto you left behind on Aptos and Movement</h1>
     <p class="lead">
       Unstaked but never withdrawn. Unstake requests never claimed. Bridge transfers never collected. Stakes in pools that ended.
-      hidden funds reads the chain and shows what is still yours, and how to get it back.
+      Move Lost & Found reads the chain and shows what is still yours, and how to get it back.
     </p>
     <p class="actions"><a class="button" href="/check">Check your wallets</a><a class="button ghost" href="/dashboard">Explore the data</a></p>
   </section>
@@ -57,9 +56,9 @@ const faq = [
   {snapshot && (
     <section class="stats" aria-label="Totals">
       <div><b>{usd(snapshot.global.headlineUsd)}</b><span>left behind 90+ days</span></div>
-      <div><b>{count(snapshot.global.headlineOwners)}</b><span>wallets</span></div>
+      <div><b>{usd(snapshot.global.recoverableUsd)}</b><span>claimable now, any age</span></div>
+      <div><b>{count(snapshot.global.headlineOwners)}</b><span>wallets, 90+ days</span></div>
       <div><b>{sources.length}</b><span>sources</span></div>
-      <div><b>{chains}</b><span>chains</span></div>
     </section>
   )}
 

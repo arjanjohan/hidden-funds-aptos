@@ -38,6 +38,8 @@ export interface Snapshot {
   /** Market-test verdicts for receipt tokens (asset → value bucket → verdict). */
   markets?: MarketTable;
   sources: SnapshotSource[];
-  global: { headlineUsd: number; headlineOwners: number; headlineOwnersMin10: number; recoverableUsd: number; requests: number; requestCap: number };
+  global: { headlineUsd: number; headlineOwners: number; headlineOwnersMin10: number; recoverableUsd: number; requests: number; requestCap: number;
+    /** Headline wallets per chain, unique within it (absent before 2026-10-24). */
+    byChain?: Record<string, { headlineOwners: number; headlineOwnersMin10: number }> };
 }
 

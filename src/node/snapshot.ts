@@ -194,12 +194,17 @@ async function main() {
     console.error(`${def.id}: ${run.completeness} ${run.degradedReasons.join('; ')}`);
   }
 
-  // Global owners are unique across sources.
+  // Global owners are unique across sources, and per chain across its sources.
   const headlineOwners = new Map<string, number>();
+  const chainOwners = new Map<string, Map<string, number>>();
   for (const def of SOURCES) for (const p of state.positionsOf(def.id)) {
     const age = ageDays(p, now);
     if (p.status !== 'recoverable' || p.confidence === 'indexer_only' || !headlineAge(def, p) || age === null || age < HEADLINE_AGE_DAYS) continue;
-    headlineOwners.set(p.owner, (headlineOwners.get(p.owner) ?? 0) + (usd(p.expectedPayout, prices) ?? 0));
+    const value = usd(p.expectedPayout, prices) ?? 0;
+    headlineOwners.set(p.owner, (headlineOwners.get(p.owner) ?? 0) + value);
+    const chain = chainOwners.get(def.chain) ?? new Map<string, number>();
+    chain.set(p.owner, (chain.get(p.owner) ?? 0) + value);
+    chainOwners.set(def.chain, chain);
   }
   const snapshot: Snapshot = {
     schema: 1, generatedAt: new Date().toISOString(), prices, priceErrors, markets: freshMarkets({ ...previous?.markets, ...panora?.table }, now), sources,
@@ -208,6 +213,8 @@ async function main() {
       headlineOwners: headlineOwners.size,
       headlineOwnersMin10: [...headlineOwners.values()].filter(v => v >= 10).length,
       recoverableUsd: sources.reduce((s, x) => s + x.totals.byStatus.recoverable.usd, 0),
+      byChain: Object.fromEntries([...chainOwners].map(([chain, owners]) => [chain,
+        { headlineOwners: owners.size, headlineOwnersMin10: [...owners.values()].filter(v => v >= 10).length }])),
       requests: usage.requests, requestCap: CAP,
     },
   };

@@ -25,7 +25,7 @@ Measurement runs use a fresh local state (`pnpm snapshot --source <id> --state <
 | `merkle-vemkl` | collection owners (veMKL) | wound down; unlock works any time → recoverable | 1,340 locks (unpriced: ~496K MKL, 74K PreMKL, 15K esMKL) | 10/10 ok, payout = expected (PreMKL paid as MKL) |
 | `tortuga-tickets` | entry-function senders → per-user `TicketStore` | ended position (cooldown passed); reserve-queued tickets blocked | headline $12.2K, 818 owners; blocked $172 | recoverable 10/10 exact; blocked 4/4 abort `EFUND_NOT_AVAILABLE_YET` as predicted |
 
-Native delegation and Thala are documented in [phase0-report.md](https://github.com/arjanjohan/hidden-funds-aptos/blob/main/docs/phase0-report.md).
+Native delegation and Thala are documented in [phase0-report.md](https://github.com/arjanjohan/move-lost-and-found/blob/main/docs/phase0-report.md).
 
 **Owner rule (all sources):** after each read, the pipeline classifies the owner once and memoizes it.
 - An account with a zero authentication key is a **resource account**, controlled by a program.

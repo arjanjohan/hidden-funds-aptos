@@ -1,6 +1,6 @@
 name: preview
 
-# Deploys a pull request's site to <branch>.hidden-funds-aptos.pages.dev. A workflow_run always runs main's copy of this
+# Deploys a pull request's site to <branch>.move-lost-and-found.pages.dev. A workflow_run always runs main's copy of this
 # file with main's dependencies, so no code from the PR runs next to the Cloudflare secrets: the PR only contributes
 # the static files its pipeline run built (preview-build) and uploaded.
 on:
@@ -52,7 +52,7 @@ jobs:
       - id: deploy
         if: steps.current.outputs.ok == 'true'
         run: |
-          out=$(pnpm exec wrangler pages deploy preview --project-name hidden-funds-aptos --branch "$BRANCH")
+          out=$(pnpm exec wrangler pages deploy preview --project-name move-lost-and-found --branch "$BRANCH")
           echo "$out"
           url=$(echo "$out" | grep -o 'https://[^ ]*pages.dev' | tail -1)
           echo "url=$url" >> "$GITHUB_OUTPUT"

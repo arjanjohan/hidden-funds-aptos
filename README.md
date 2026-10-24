@@ -1,4 +1,4 @@
-# hidden funds · Aptos + Movement
+# Move Lost & Found · Aptos + Movement
 
 Finds funds people left behind on Aptos and Movement. Read-only: the site never connects a wallet or asks for a signature.
 
