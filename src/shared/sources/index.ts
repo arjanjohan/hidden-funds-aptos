@@ -12,6 +12,7 @@ import { echelonFrozenMarkets } from './echelon-frozen.ts';
 import { econiaIdleAccounts } from './econia-idle.ts';
 import { delegationInactiveValidator, movementInactiveValidator } from './delegation-inactive.ts';
 import { houstonClosedLp } from './houston-closed.ts';
+import { echoWoundDown } from './echo-wound-down.ts';
 import { kofiReceipts } from './kofi-receipts.ts';
 import { kofiWithdrawals } from './kofi-withdrawals.ts';
 import { layerzeroClaimable } from './layerzero-claimable.ts';
@@ -26,5 +27,5 @@ import { tortugaTickets } from './tortuga-tickets.ts';
 import { trufinUnlocks } from './trufin-unlocks.ts';
 import { wormholeUnredeemed } from './wormhole-unredeemed.ts';
 
-export const SOURCES: SourceDef<any>[] = [delegation, delegationInactiveValidator, thalaUnstake, kofiWithdrawals, tortugaTickets, amnisWithdrawals, thalaVethlExpired, thalaVestingMatured, trufinUnlocks, kofiReceipts, merkleMklp, merkleVemkl, layerzeroClaimable, pancakeSyrupEnded, pancakeFarmEndedRewards, topazBids, echelonFrozenMarkets, aaveFrozenReserves, econiaIdleAccounts, auroClosedPositions, animeswapClosedLp, earniumClosedLp, houstonClosedLp, ariesWoundDown, wormholeUnredeemed,
+export const SOURCES: SourceDef<any>[] = [delegation, delegationInactiveValidator, thalaUnstake, kofiWithdrawals, tortugaTickets, amnisWithdrawals, thalaVethlExpired, thalaVestingMatured, trufinUnlocks, kofiReceipts, merkleMklp, merkleVemkl, layerzeroClaimable, pancakeSyrupEnded, pancakeFarmEndedRewards, topazBids, echelonFrozenMarkets, aaveFrozenReserves, econiaIdleAccounts, auroClosedPositions, animeswapClosedLp, earniumClosedLp, houstonClosedLp, echoWoundDown, ariesWoundDown, wormholeUnredeemed,
   movementDelegation, movementInactiveValidator, canopyEndedRewards, canopyFrozenVaults];

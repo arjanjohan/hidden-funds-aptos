@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RequestCapReached } from '../src/node/client.ts';
 import { SOURCES } from '../src/shared/sources/index.ts';
 import { ENUMERATORS } from '../src/node/enumerators.ts';
+import { echoWoundDownEnumerator } from '../src/node/enumerators.ts';
 import { aaveFrozenEnumerator, animeswapClosedEnumerator, canopyFrozenEnumerator, earniumClosedEnumerator, houstonClosedEnumerator, auroClosedEnumerator, econiaIdleEnumerator, type Enumerator } from '../src/node/enumerators.ts';
 import { ANIMESWAP_POOLS } from '../src/shared/sources/animeswap-closed.ts';
 import { CANOPY_REWARDS_STATE } from '../src/shared/sources/canopy-rewards.ts';
@@ -625,5 +626,17 @@ describe('houston enumerator', () => {
 describe('check-only sources', () => {
   it('have no enumerator, and every other source has one', () => {
     for (const s of SOURCES) expect(ENUMERATORS.some(e => e.sourceId === s.id)).toBe(!s.checkOnly);
+  });
+});
+
+describe('echo enumerator', () => {
+  it('lists holders of about $1 or more per reserve, leaving out Echo\'s own wallets', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const c = fakeChain({ gql: (_q, vars) => { seen.push(vars); return { current_fungible_asset_balances: vars.a === '0x7f5170624083679dbb5a8119e3dec380d95fddfd0940a4fb7118c7d9db61d425'
+      ? [{ owner_address: addr(1), storage_id: addr('a1') }, { owner_address: '0x3b9a45c9d5c73e27c48f85a26a3e9b3fcef44af44ddf9e0995bf17390b1d1bb8', storage_id: addr('a2') }] : [] }; } });
+    const r = await echoWoundDownEnumerator.run(c, undefined);
+    expect(r.candidates).toEqual([{ owner: addr(1) }]);
+    expect(seen[0]).toMatchObject({ m: '100000000' });
+    expect(r.pages).toBe(9);
   });
 });
