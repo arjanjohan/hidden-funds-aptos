@@ -98,8 +98,8 @@ jobs:
       - run: pnpm build
       - run: pnpm test   # re-runs the boundary test against dist/
       - run: |
-          pnpm exec wrangler pages project create hidden-funds-aptos --production-branch main || true
-          pnpm exec wrangler pages deploy dist --project-name hidden-funds-aptos --branch main
+          pnpm exec wrangler pages project create move-lost-and-found --production-branch main || true
+          pnpm exec wrangler pages deploy dist --project-name move-lost-and-found --branch main
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

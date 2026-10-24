@@ -5,6 +5,7 @@ import { byProtocol, snapshot } from '../lib/data.ts';
 import { count, date, usd } from '../lib/format.ts';
 import { NETWORKS, type Network } from '../../shared/chain.ts';
 
+type Source = NonNullable<typeof snapshot>['sources'][number];
 const statuses = [
   ['recoverable', 'You can claim'],
   ['team_gated', 'Needs the team'],
@@ -14,22 +15,42 @@ const statuses = [
 // Snapshots from before a status existed have no bucket for it.
 const EMPTY = { usd: 0, positions: 0, unpriced: 0 };
 /** What can be claimed is its payout; the rest is what it is owed (often no payout yet), where the snapshot has it. */
-const bucketOf = (s: NonNullable<typeof snapshot>['sources'][number], key: (typeof statuses)[number][0]) =>
-  key === 'recoverable' ? s.totals.byStatus[key] : (s.totals.faceByStatus?.[key] ?? s.totals.byStatus[key]);
+const bucketOf = (s: Source, key: (typeof statuses)[number][0]) =>
+  (key === 'recoverable' ? s.totals.byStatus[key] : (s.totals.faceByStatus?.[key] ?? s.totals.byStatus[key])) ?? EMPTY;
+const sum = (sources: Source[], f: (s: Source) => number) => sources.reduce((t, s) => t + f(s), 0);
+// Every view filters everything below the toggle. Wallets are unique across a view's sources: the snapshot gives them
+// for both chains, and per chain from 2026-10-24.
 const views = [
-  { key: 'both', label: 'Both', sources: snapshot?.sources ?? [] },
-  { key: 'aptos', label: 'Aptos', sources: (snapshot?.sources ?? []).filter(s => s.chain === 'aptos') },
-  { key: 'movement', label: 'Movement', sources: (snapshot?.sources ?? []).filter(s => s.chain === 'movement') },
-];
+  { key: 'both', label: 'Both', where: 'Aptos and Movement', sources: snapshot?.sources ?? [],
+    owners: snapshot ? { headlineOwners: snapshot.global.headlineOwners, headlineOwnersMin10: snapshot.global.headlineOwnersMin10 } : undefined },
+  ...(['aptos', 'movement'] as const).map(chain => ({ key: chain, label: NETWORKS[chain].name, where: NETWORKS[chain].name,
+    sources: (snapshot?.sources ?? []).filter(s => s.chain === chain), owners: snapshot?.global.byChain?.[chain] })),
+].map(v => ({ ...v, headline: sum(v.sources, s => s.totals.headline.usd), claimable: sum(v.sources, s => s.totals.byStatus.recoverable.usd) }));
 ---
-<Base title="Dashboard · hidden funds" description="What is left behind on Aptos and Movement, per source and protocol, updated weekly.">
+<Base title="Dashboard · Move Lost & Found" description="What is left behind on Aptos and Movement, per source and protocol, updated weekly.">
   {snapshot ? (
     <>
-      <h1>{usd(snapshot.global.headlineUsd)} left behind on Aptos and Movement</h1>
-      <p class="muted">
-        Withdrawable for 90 days or more and never withdrawn, across {count(snapshot.global.headlineOwners)} wallets
-        ({count(snapshot.global.headlineOwnersMin10)} with $10 or more). Updated weekly; as of {date(snapshot.generatedAt)}.
-      </p>
+      {/* Each row of the headline (title, text, cards) holds every view's version in one grid cell, only the selected
+          one visible: a row keeps the height of its tallest version, so switching views moves nothing. */}
+      <div class="stack">
+        {views.map((v, i) => <h1 class:list={['pane', { active: i === 0 }]} data-view={v.key}>{usd(v.headline)} left behind on {v.where}</h1>)}
+      </div>
+      <div class="stack">
+        {views.map((v, i) => (
+          <p class:list={['pane', 'muted', { active: i === 0 }]} data-view={v.key}>
+            Withdrawable for 90 days or more and never withdrawn{v.owners ? `, across ${count(v.owners.headlineOwners)} wallets (${count(v.owners.headlineOwnersMin10)} with $10 or more)` : ''}.
+            Updated weekly; as of {date(snapshot.generatedAt)}.
+          </p>
+        ))}
+      </div>
+      <div class="stack">
+        {views.map((v, i) => (
+          <div class:list={['pane', 'cards', { active: i === 0 }]} data-view={v.key}>
+            <div class="card"><span class="muted">Left behind 90+ days</span><b>{usd(v.headline)}</b><span class="muted">claimable and untouched for 90 days or more: the headline</span></div>
+            <div class="card"><span class="muted">Claimable now, any age</span><b>{usd(v.claimable)}</b><span class="muted">includes {usd(Math.max(0, v.claimable - v.headline))} outside the headline: under 90 days, or of unknown or estimated age</span></div>
+          </div>
+        ))}
+      </div>
 
       <h2>By protocol</h2>
       <div class="toggle" role="group" aria-label="Chain">
@@ -38,44 +59,49 @@ const views = [
       {views.map((v, i) => (
         <div class="view" data-view={v.key} hidden={i !== 0}>
           <Donut slices={byProtocol(v.sources)} label={`Left behind 90+ days by protocol, ${v.label}`} />
+
+          <h2>Who can get it back</h2>
+          <div class="cards">
+            {statuses.map(([key, label]) => {
+              const unpriced = sum(v.sources, s => bucketOf(s, key).unpriced);
+              return (
+                <div class="card">
+                  <span class="muted">{label}</span>
+                  <b>{usd(sum(v.sources, s => bucketOf(s, key).usd))}</b>
+                  <span class="muted">{count(sum(v.sources, s => (s.totals.byStatus[key] ?? EMPTY).positions))} positions{unpriced ? `, ${count(unpriced)} without a price (not in this value)` : ''}</span>
+                </div>
+              );
+            })}
+          </div>
+          <p class="muted">"You can claim" is what can be withdrawn now, any age; the others are what is owed but cannot be taken out now.</p>
+
+          <h2>Sources</h2>
+          <div class="table">
+            <table>
+              <thead><tr><th>Source</th><th class="num">Left behind 90+ days</th><th class="num">Wallets</th><th class="num">Claimable now</th><th>Data</th></tr></thead>
+              <tbody>
+                {[...v.sources].sort((a, b) => b.totals.headline.usd - a.totals.headline.usd).map(s => (
+                  <tr>
+                    <td><a href={`/source/${s.id}`}>{s.title}</a><div class="muted">{NETWORKS[s.chain as Network]?.name ?? s.chain}</div></td>
+                    <td class="num">{usd(s.totals.headline.usd)}</td>
+                    <td class="num">{count(s.totals.headline.owners)}</td>
+                    <td class="num">{usd(s.totals.byStatus.recoverable.usd)}</td>
+                    <td>
+                      <span class={`badge ${s.run.completeness}`} title={s.run.degradedReasons.join('; ') || undefined}>{s.run.completeness}</span>
+                      <div class="muted">as of {date(s.run.verification.end ?? s.lastSuccessAt)}</div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p class="muted">
+            Data: <b>complete</b> means this week's run read every candidate of the source. <b>Degraded</b> means it did not finish
+            (for example, the run reached its request budget) or a check failed: the figures are the latest complete reads,
+            kept from earlier runs, and the source's page says why.
+          </p>
         </div>
       ))}
-
-      <h2>Who can get it back</h2>
-      <div class="cards">
-        {statuses.map(([key, label]) => (
-          <div class="card">
-            <span class="muted">{label}</span>
-            <b>{usd(snapshot.sources.reduce((s, x) => s + (bucketOf(x, key) ?? EMPTY).usd, 0))}</b>
-            <span class="muted">{count(snapshot.sources.reduce((s, x) => s + (x.totals.byStatus[key] ?? EMPTY).positions, 0))} positions{(() => {
-              const unpriced = snapshot.sources.reduce((s, x) => s + (bucketOf(x, key) ?? EMPTY).unpriced, 0);
-              return unpriced ? `, ${count(unpriced)} without a price (not in this value)` : '';
-            })()}</span>
-          </div>
-        ))}
-      </div>
-      <p class="muted">"You can claim" counts every withdrawable position, any age. The headline above counts only those aged 90+ days.</p>
-
-      <h2>Sources</h2>
-      <div class="table">
-        <table>
-          <thead><tr><th>Source</th><th class="num">Left behind 90+ days</th><th class="num">Wallets</th><th class="num">Claimable now</th><th>Data</th></tr></thead>
-          <tbody>
-            {[...snapshot.sources].sort((a, b) => b.totals.headline.usd - a.totals.headline.usd).map(s => (
-              <tr>
-                <td><a href={`/source/${s.id}`}>{s.title}</a><div class="muted">{NETWORKS[s.chain as Network]?.name ?? s.chain}</div></td>
-                <td class="num">{usd(s.totals.headline.usd)}</td>
-                <td class="num">{count(s.totals.headline.owners)}</td>
-                <td class="num">{usd(s.totals.byStatus.recoverable.usd)}</td>
-                <td>
-                  <span class={`badge ${s.run.completeness}`}>{s.run.completeness}</span>
-                  <div class="muted">as of {date(s.run.verification.end ?? s.lastSuccessAt)}</div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </>
   ) : (
     <>
@@ -89,14 +115,19 @@ const views = [
 <script>
   const buttons = document.querySelectorAll<HTMLButtonElement>('.toggle button');
   const panels = document.querySelectorAll<HTMLElement>('.view');
+  const panes = document.querySelectorAll<HTMLElement>('.stack .pane');
   for (const b of buttons) b.addEventListener('click', () => {
     for (const x of buttons) x.setAttribute('aria-pressed', String(x === b));
     for (const p of panels) p.hidden = p.dataset.view !== b.dataset.view;
+    for (const p of panes) p.classList.toggle('active', p.dataset.view === b.dataset.view);
   });
 </script>
 
 <style>
   .toggle { display: inline-flex; background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 3px; margin-bottom: 20px; }
+  .stack { display: grid; }
+  .stack > .pane { grid-area: 1 / 1; }
+  .stack > .pane:not(.active) { visibility: hidden; }
   .toggle button { font: inherit; font-size: 14px; border: 0; background: transparent; color: var(--muted); padding: 6px 14px; border-radius: 8px; cursor: pointer; }
   .toggle button[aria-pressed="true"] { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
 </style>
