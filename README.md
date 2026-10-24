@@ -68,7 +68,7 @@ pnpm dev
 
 `.github/workflows/pipeline.yml`: weekly snapshot (Monday), commit `snapshot/latest.json`, build, deploy to Cloudflare Pages.
 
-`.github/workflows/watch.yml`: weekly wind-down watch (Monday, no key). Protocols the registry treats as live get one GitHub issue each (label `wind-down-watch`) when DefiLlama newly marks them dead, their Aptos/Movement TVL falls 80%+ in 30 days (from $10K or more), or their site's domain stops resolving. `pnpm watch --dry-run` prints the flags without touching issues.
+`.github/workflows/watch.yml`: weekly wind-down watch (Monday, no key). Protocols the registry treats as live get one GitHub issue each (label `wind-down-watch`) when DefiLlama newly marks them dead, their Aptos/Movement TVL falls 80%+ in 30 days (from $10K or more), or their site's domain stops resolving. Closing an issue acknowledges the signals it was raised for; only a new kind of signal opens another. `pnpm watch --dry-run` prints the flags without touching issues.
 
 Repository secrets:
 

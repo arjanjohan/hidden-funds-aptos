@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assess, issueBody, issueTitle, tvlChange, watched, type TvlSeries } from '../src/node/watch.ts';
+import { assess, decide, issueBody, issueTitle, markedCodes, tvlChange, watched, type TvlSeries } from '../src/node/watch.ts';
 import type { ProtocolEntry } from '../src/shared/protocols.ts';
 
 const DAY = 86_400;
@@ -29,6 +29,17 @@ describe('wind-down watch', () => {
     expect(assess(entry({ dead: '2026-10-10' }), { slug: 'x', deadFrom: '2026-10-10' }, undefined, 'unchecked')).toEqual([]);
     expect(assess(entry(), { slug: 'x', url: 'https://app.x.fi/' }, undefined, 'missing')[0]).toMatchObject({ code: 'site_down', detail: expect.stringMatching(/app\.x\.fi/) });
     expect(assess(entry(), { slug: 'x', url: 'https://app.x.fi/' }, undefined, 'unchecked')).toEqual([]);
+  });
+
+  it('updates the open issue, respects a closed one that covers the signals, and opens one for a new kind of signal', () => {
+    const e = entry({ name: 'Goblin' });
+    const tvl = [{ code: 'tvl_drop' as const, detail: 'TVL fell.' }], site = [{ code: 'site_down' as const, detail: 'Gone.' }];
+    const closed = { number: 7, title: issueTitle(e), state: 'closed' as const, body: issueBody(e, tvl, '2026-10-26') };
+    expect(markedCodes(closed.body)).toEqual(new Set(['tvl_drop']));
+    expect(decide(e, tvl, [{ number: 9, title: issueTitle(e), state: 'open' }, closed])).toEqual({ action: 'update', issue: 9 });
+    expect(decide(e, tvl, [closed])).toEqual({ action: 'acknowledged', issue: 7 });
+    expect(decide(e, [...tvl, ...site], [closed])).toEqual({ action: 'create' });
+    expect(decide(e, tvl, [])).toEqual({ action: 'create' });
   });
 
   it('writes one issue per protocol, titled by name', () => {

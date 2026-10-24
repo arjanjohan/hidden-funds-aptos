@@ -2,7 +2,8 @@
 // a wind-down (Echo's was announced the day we last checked it) is noticed within a week. Signals are deterministic and
 // need no key: DefiLlama newly marking the protocol dead, its Aptos/Movement TVL falling 80% or more in 30 days, its
 // website's domain no longer resolving. Each flagged protocol gets one open GitHub issue (label wind-down-watch), opened
-// or brought up to date here; a person decides what it means and closes it.
+// or brought up to date here; a person decides what it means and closes it. A closed issue acknowledges the signals it
+// was raised for: they do not open another one, a new kind of signal does.
 //
 // Usage: node src/node/watch.ts [--dry-run]   (without GITHUB_TOKEN it is always a dry run)
 import { lookup } from 'node:dns/promises';
@@ -54,6 +55,19 @@ export function assess(entry: ProtocolEntry, listing: Listing | undefined, serie
 }
 
 export const issueTitle = (entry: ProtocolEntry) => `Possible wind-down: ${entry.name}`;
+/** The signal codes an issue was raised for, kept in its body. */
+const marker = (signals: Signal[]) => `<!-- ${LABEL}: ${[...new Set(signals.map(s => s.code))].sort().join(',')} -->`;
+export const markedCodes = (body: string | null | undefined) => new Set(body?.match(new RegExp(`<!-- ${LABEL}: ([a-z_,]*) -->`))?.[1].split(',').filter(Boolean) ?? []);
+
+export interface Issue { number: number; title: string; body?: string | null; state: 'open' | 'closed' }
+/** Update the open issue; skip when a closed one already covers every current signal (acknowledged); else open one. */
+export function decide(entry: ProtocolEntry, signals: Signal[], issues: Issue[]): { action: 'update' | 'create'; issue?: number } | { action: 'acknowledged'; issue: number } {
+  const mine = issues.filter(i => i.title === issueTitle(entry));
+  const open = mine.find(i => i.state === 'open');
+  if (open) return { action: 'update', issue: open.number };
+  const covered = mine.find(i => { const codes = markedCodes(i.body); return signals.every(s => codes.has(s.code)); });
+  return covered ? { action: 'acknowledged', issue: covered.number } : { action: 'create' };
+}
 
 export function issueBody(entry: ProtocolEntry, signals: Signal[], today: string): string {
   return [
@@ -65,7 +79,8 @@ export function issueBody(entry: ProtocolEntry, signals: Signal[], today: string
     '',
     `Look for a notice (site, X, Discord, docs). If it is closing: update the registry entry, and size or add a source. If not: record why in the entry and close this issue. DefiLlama: https://defillama.com/protocol/${entry.defillama}`,
     '',
-    `_Last flagged ${today}._`,
+    `_Last flagged ${today}. Closing this acknowledges these signals: only a new kind of signal opens another issue._`,
+    marker(signals),
   ].join('\n');
 }
 
@@ -109,11 +124,12 @@ async function main() {
   console.log(lines.join('\n'));
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
   if (dryRun) return;
-  const open: { number: number; title: string }[] = await github(`/issues?state=open&labels=${LABEL}&per_page=100`);
+  const issues: Issue[] = await github(`/issues?state=all&labels=${LABEL}&per_page=100`);
   for (const { entry, signals } of flagged) {
-    const body = issueBody(entry, signals, today), existing = open.find(i => i.title === issueTitle(entry));
-    if (existing) await github(`/issues/${existing.number}`, { method: 'PATCH', body: JSON.stringify({ body }) });
-    else await github('/issues', { method: 'POST', body: JSON.stringify({ title: issueTitle(entry), body, labels: [LABEL] }) });
+    const body = issueBody(entry, signals, today), d = decide(entry, signals, issues);
+    if (d.action === 'update') await github(`/issues/${d.issue}`, { method: 'PATCH', body: JSON.stringify({ body }) });
+    else if (d.action === 'create') await github('/issues', { method: 'POST', body: JSON.stringify({ title: issueTitle(entry), body, labels: [LABEL] }) });
+    else console.log(`${entry.name}: acknowledged in #${d.issue}`);
   }
 }
 
