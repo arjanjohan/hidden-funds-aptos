@@ -47,7 +47,7 @@ const views = [
         {views.map((v, i) => (
           <div class:list={['pane', 'cards', { active: i === 0 }]} data-view={v.key}>
             <div class="card"><span class="muted">Left behind 90+ days</span><b>{usd(v.headline)}</b><span class="muted">claimable and untouched for 90 days or more: the headline</span></div>
-            <div class="card"><span class="muted">Claimable now, any age</span><b>{usd(v.claimable)}</b><span class="muted">includes {usd(Math.max(0, v.claimable - v.headline))} claimable for less than 90 days</span></div>
+            <div class="card"><span class="muted">Claimable now, any age</span><b>{usd(v.claimable)}</b><span class="muted">includes {usd(Math.max(0, v.claimable - v.headline))} outside the headline: under 90 days, or of unknown or estimated age</span></div>
           </div>
         ))}
       </div>
