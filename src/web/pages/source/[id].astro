@@ -11,6 +11,8 @@ export function getStaticPaths() {
 
 const { source: s } = Astro.props as { source: SnapshotSource };
 const t = s.totals;
+// What positions that cannot be claimed now are owed (their expected payout is often none); payouts in older snapshots.
+const owed = t.faceByStatus ?? t.byStatus;
 const bands = s.sizeBands.map((b, i, all) => ({
   label: i === 0 ? `under ${usd(b.upTo!)}` : b.upTo === null ? `${usd(all[i - 1].upTo!)}+` : `${usd(all[i - 1].upTo!)} – ${usd(b.upTo)}`,
   positions: b.positions,
@@ -34,15 +36,15 @@ const basisLabel: Record<string, string> = {
   <div class="cards">
     <div class="card"><span class="muted">Left behind 90+ days</span><b>{usd(t.headline.usd)}</b><span class="muted">{count(t.headline.owners)} wallets · {count(t.headline.ownersMin10)} with $10+</span></div>
     <div class="card"><span class="muted">Claimable now, any age</span><b>{usd(t.byStatus.recoverable.usd)}</b><span class="muted">{count(t.byStatus.recoverable.positions)} positions</span></div>
-    <div class="card"><span class="muted">Blocked or needs the team</span><b>{usd(t.byStatus.blocked.usd + t.byStatus.team_gated.usd)}</b><span class="muted">{count(t.byStatus.blocked.positions + t.byStatus.team_gated.positions)} positions{t.byStatus.blocked.unpriced + t.byStatus.team_gated.unpriced ? `, ${count(t.byStatus.blocked.unpriced + t.byStatus.team_gated.unpriced)} without a price (not in this value)` : ''}</span></div>
+    <div class="card"><span class="muted">Blocked or needs the team</span><b>{usd(owed.blocked.usd + owed.team_gated.usd)}</b><span class="muted">owed to {count(owed.blocked.positions + owed.team_gated.positions)} positions{owed.blocked.unpriced + owed.team_gated.unpriced ? `, ${count(owed.blocked.unpriced + owed.team_gated.unpriced)} without a price (not in this value)` : ''}</span></div>
     {t.unverified?.positions > 0 && (
       <div class="card"><span class="muted">Small, not verified</span><b>{count(t.unverified.positions)}</b><span class="muted">positions below the verification threshold, from the indexer only; not in any total</span></div>
     )}
     {(t.byStatus.contract_held?.positions ?? 0) > 0 && (
-      <div class="card"><span class="muted">Held by a contract</span><b>{usd(t.byStatus.contract_held.usd)}</b><span class="muted">{count(t.byStatus.contract_held.positions)} positions held by a resource account or an object, which no person signs for; never in the headline</span></div>
+      <div class="card"><span class="muted">Held by a contract</span><b>{usd((owed.contract_held ?? t.byStatus.contract_held).usd)}</b><span class="muted">{count(t.byStatus.contract_held.positions)} positions held by a resource account or an object, which no person signs for; never in the headline</span></div>
     )}
     {t.byStatus.unknown.positions > 0 && (
-      <div class="card"><span class="muted">Not counted (unknown)</span><b>{usd(t.byStatus.unknown.usd)}</b><span class="muted">{count(t.byStatus.unknown.positions)} positions whose payout could not be confirmed (a check that could not run, or one the source cannot settle, such as a withdrawal never simulated){s.ownerRules ? '' : ', or held by a resource account or an object (classified before those were counted apart)'}</span></div>
+      <div class="card"><span class="muted">Not counted (unknown)</span><b>{usd(owed.unknown.usd)}</b><span class="muted">{count(t.byStatus.unknown.positions)} positions whose payout could not be confirmed (a check that could not run, or one the source cannot settle, such as a withdrawal never simulated){s.ownerRules ? '' : ', or held by a resource account or an object (classified before those were counted apart)'}</span></div>
     )}
   </div>
 

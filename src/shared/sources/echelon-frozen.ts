@@ -2,9 +2,10 @@
 // use as collateral. Lenders' supply sits there earning little or nothing and waits on a wind-down at Echelon's
 // discretion. Every frozen market counts (decision 2026-10-20, issue #10, option (b)), aged from its freeze. The bridged
 // ones (lzUSDC, lzUSDT, Wormhole USDC and WETH) were sunset as native USDC and USDT replaced them.
-// A supplier with any Echelon debt is a live borrower and none of its supply counts (R4, decided 2026-10-20): frozen
+// A supplier with any Echelon debt is a live borrower and none of its supply counts (R4, decided 2026-10-20; shown on the
+// check page, blocked by the debt, since 2026-10-24): frozen
 // markets can still be collateral in an efficiency mode (e.g. stAPT and sthAPT behind leveraged APT borrows).
-import { iso, positionIds } from '../accounting.ts';
+import { debtBlocker, iso, positionIds } from '../accounting.ts';
 import { mapLimit, normalizeAddress, once } from '../chain.ts';
 import type { Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
 import { THL } from './thala-thl.ts';
@@ -78,8 +79,8 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
   const version = ctx.ledger.version;
   try {
     const vault = await ctx.chain.resource(owner, `${ECHELON}::lending::Vault`, version);
-    const inDebt = (vault?.liabilities?.data ?? []).some((e: any) => BigInt(e.value.principal) + BigInt(e.value.interest_accumulated) > 0n);
-    if (inDebt) return { positions: [], complete: true, errors: [], ledgerVersion: version };
+    const owed: string[] = (vault?.liabilities?.data ?? []).filter((e: any) => BigInt(e.value.principal) + BigInt(e.value.interest_accumulated) > 0n)
+      .map((e: any) => normalizeAddress(e.key.inner));
     const shares = new Map<string, bigint>((vault?.collaterals?.data ?? []).map((e: any) => [normalizeAddress(e.key.inner), BigInt(e.value)]));
     const held = [...shares].filter(([, n]) => n > 0n).map(([market]) => market);
     const supplied = (await mapLimit(FROZEN_MARKETS.filter(m => held.includes(m.market)), 2, async m => {
@@ -89,6 +90,18 @@ async function read(ctx: ReadContext, ownerInput: string): Promise<ReadResult> {
       return BigInt(coins) > 0n ? { ...m, ...market, coins: BigInt(coins) } : null;
     })).filter(m => m !== null);
     if (!supplied.length) return { positions: [], complete: true, errors: [], ledgerVersion: version };
+    // A borrower's supply is collateral: shown with its debt, never counted (R4).
+    if (owed.length) {
+      const named = owed.map((m: string) => FROZEN_MARKETS.find(f => f.market === m)?.label ?? `market ${m.slice(0, 6)}…${m.slice(-4)}`);
+      const detail = `This account also borrows from Echelon (${named.join(', ')}): repay the debt to withdraw this.`;
+      return { positions: supplied.map((m): Position => ({
+        ...positionIds(SOURCE, owner, m.label, 'principal', m.asset), source: SOURCE, owner, locator: m.label, positionKind: 'principal', asset: m.asset,
+        claimableSince: m.frozenAt, ageBasis: 'protocol_closure',
+        provenance: { reader: `${ECHELON}::lending::account_coins`, ledgerVersion: version },
+        grossClaim: [{ asset: m.asset, raw: m.coins.toString() }], expectedPayout: [], payoutBasis: 'view', status: 'blocked', blockers: [debtBlocker(detail)],
+        confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs), steps: [],
+      })), complete: true, errors: [], ledgerVersion: version };
+    }
     const unpriced = (await mapLimit(held, 2, async market => ((await priced(ctx, market)) ? null : market))).filter(m => m !== null);
 
     const positions = supplied.flatMap((m): Position[] => {
@@ -140,7 +153,7 @@ export const echelonFrozenMarkets: SourceDef = {
   title: 'Echelon supply left in frozen markets',
   summary: 'Echelon froze some of its Aptos lending markets: no new borrowing. Supply you left there earns little or nothing and waits on Echelon winding the market down. Counted only for suppliers without Echelon debt.',
   category: 'closed_app',
-  inclusionRule: 'R2: Echelon froze the market (collateral factor 0, borrow cap 0), so the supply sits nearly idle until a wind-down; the freeze is the effective date (issue #10, option (b)). R4: suppliers with any Echelon debt are left out. Both decided 2026-10-20.',
+  inclusionRule: 'R2: Echelon froze the market (collateral factor 0, borrow cap 0), so the supply sits nearly idle until a wind-down; the freeze is the effective date (issue #10, option (b)). R4: suppliers with any Echelon debt are shown (blocked by it) but never counted. Both decided 2026-10-20.',
   protocolStatus: {
     state: 'deprecated',
     evidence: '21 of 30 markets frozen on chain (collateral factor 0, borrow cap 0); the freeze dates come from Echelon\'s admin transactions, 2025-05-03 to 2026-10-04. Aptos Foundation: Echelon "helped sunset bridge-wrapped assets".',

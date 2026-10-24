@@ -13,6 +13,9 @@ const statuses = [
 ] as const;
 // Snapshots from before a status existed have no bucket for it.
 const EMPTY = { usd: 0, positions: 0, unpriced: 0 };
+/** What can be claimed is its payout; the rest is what it is owed (often no payout yet), where the snapshot has it. */
+const bucketOf = (s: NonNullable<typeof snapshot>['sources'][number], key: (typeof statuses)[number][0]) =>
+  key === 'recoverable' ? s.totals.byStatus[key] : (s.totals.faceByStatus?.[key] ?? s.totals.byStatus[key]);
 const views = [
   { key: 'both', label: 'Both', sources: snapshot?.sources ?? [] },
   { key: 'aptos', label: 'Aptos', sources: (snapshot?.sources ?? []).filter(s => s.chain === 'aptos') },
@@ -43,9 +46,9 @@ const views = [
         {statuses.map(([key, label]) => (
           <div class="card">
             <span class="muted">{label}</span>
-            <b>{usd(snapshot.sources.reduce((s, x) => s + (x.totals.byStatus[key] ?? EMPTY).usd, 0))}</b>
+            <b>{usd(snapshot.sources.reduce((s, x) => s + (bucketOf(x, key) ?? EMPTY).usd, 0))}</b>
             <span class="muted">{count(snapshot.sources.reduce((s, x) => s + (x.totals.byStatus[key] ?? EMPTY).positions, 0))} positions{(() => {
-              const unpriced = snapshot.sources.reduce((s, x) => s + (x.totals.byStatus[key] ?? EMPTY).unpriced, 0);
+              const unpriced = snapshot.sources.reduce((s, x) => s + (bucketOf(x, key) ?? EMPTY).unpriced, 0);
               return unpriced ? `, ${count(unpriced)} without a price (not in this value)` : '';
             })()}</span>
           </div>

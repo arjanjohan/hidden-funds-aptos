@@ -129,7 +129,7 @@ export default function Check({ prices: published, markets }: { prices: PriceBoo
           catch (err) { return { sourceId: s.id, result: { positions: [], complete: false, errors: [String(err)], ledgerVersion: ctx.ledger.version } }; }
         });
         // Unlisted payout assets: read once per check from their own chain; a failure leaves them in raw units.
-        const unlisted = [...new Set(results.flatMap(r => r.result.positions.flatMap(p => p.expectedPayout.map(a => a.asset))))]
+        const unlisted = [...new Set(results.flatMap(r => r.result.positions.flatMap(p => [...p.expectedPayout, ...p.grossClaim].map(a => a.asset))))]
           .filter(a => !ASSETS[a] && !(a in found));
         await Promise.all(unlisted.map(async a => {
           const network = a.startsWith('movement:') ? 'movement' : 'aptos', ctx = contexts.get(network);
@@ -228,15 +228,18 @@ function AddressResult({ row, prices, displays }: { row: Row; prices: PriceBook;
 
 function PositionRow({ p, prices, displays }: { p: Position; prices: PriceBook; displays: Record<string, AssetDisplay | null> }) {
   const source = SOURCES.find(s => s.id === p.source)!;
-  const value = toUsd(p.expectedPayout, prices);
+  // What it pays now; when it pays nothing now (blocked, or waiting on the team), what it is owed.
+  const owedOnly = p.expectedPayout.length === 0;
+  const shown = owedOnly ? p.grossClaim : p.expectedPayout;
+  const value = toUsd(shown, prices);
   // Listed assets, then what the chain says; an asset neither describes is shown in raw units.
-  const amount = p.expectedPayout.map(a => {
+  const amount = shown.map(a => {
     const d = ASSETS[a.asset] ?? displays[a.asset];
     return d ? `${units(a.raw, d.decimals)} ${d.symbol}` : `${a.raw} raw units of ${short(a.asset)}`;
   }).join(' + ');
   return (
     <div style={{ borderTop: '1px solid var(--line)', marginTop: 12, paddingTop: 12 }}>
-      <div><b style={{ display: 'inline', fontSize: 16 }}>{amount}</b>{value !== null && <span className="muted"> ≈ {usd(value)}</span>} · {STATUS[p.status]}</div>
+      <div><b style={{ display: 'inline', fontSize: 16 }}>{amount}</b>{value !== null && <span className="muted"> ≈ {usd(value)}</span>}{owedOnly && amount && <span className="muted"> owed</span>} · {STATUS[p.status]}</div>
       <div>{source.title} <span className="muted">· {NETWORKS[source.chain].name}</span></div>
       <div className="muted">
         {p.ageBasis === 'unknown' ? 'Claimable since: unknown' : `Claimable since ${date(p.claimableSince)}${p.ageBasis === 'position_interaction' ? ' (estimate)' : ''}`}

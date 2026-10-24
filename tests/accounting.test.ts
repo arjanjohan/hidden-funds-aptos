@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ageDays, assertUniqueIds, freshPrices, positionIds, sourceTotals, usd, type PriceBook } from '../src/shared/accounting.ts';
+import { ageDays, assertUniqueIds, debtBlocker, freshPrices, positionIds, sourceTotals, usd, type PriceBook } from '../src/shared/accounting.ts';
 import { APT } from '../src/shared/sources/delegation.ts';
 import type { AgeBasis, Position, Status } from '../src/shared/types.ts';
 import { addr } from './fake-chain.ts';
@@ -77,6 +77,18 @@ describe('verification', () => {
     expect(t.byStatus.recoverable.positions).toBe(1);
     expect(t.face.positions).toBe(1);
     expect(t.unverified.positions).toBe(1);
+  });
+});
+
+describe('blocked and borrowers', () => {
+  it('values blocked positions at what they are owed, and keeps a borrower\'s supply out of every total', () => {
+    const blocked = { ...pos({ locator: 'b', apt: 3, days: 200, status: 'blocked' }), expectedPayout: [] };
+    const borrower = { ...pos({ locator: 'c', apt: 5, days: 200, status: 'blocked' }), expectedPayout: [], blockers: [debtBlocker('owes 1 APT')] };
+    const t = sourceTotals(source, [pos({ locator: 'a', days: 200 }), blocked, borrower], prices, NOW);
+    expect(t.byStatus.blocked).toMatchObject({ positions: 1, usd: 0 });
+    expect(t.faceByStatus!.blocked).toMatchObject({ positions: 1, usd: 6 });
+    expect(t.face).toMatchObject({ positions: 2, usd: 8 });
+    expect(t.headline.positions).toBe(1);
   });
 });
 

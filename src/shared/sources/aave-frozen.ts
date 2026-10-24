@@ -2,8 +2,8 @@
 // down the Aptos deployment by freezing every reserve. On 2026-10-20 none is frozen yet, so this source counts nothing
 // until one is (decided 2026-10-20): each run first reads the reserve flags. A frozen reserve takes no new supply or
 // borrows, but lenders can still withdraw. Same rules as Echelon's frozen markets: a supplier with any Aave debt counts
-// for nothing (R4), and each lender is counted for its pro-rata share of the reserve's cash.
-import { iso, positionIds } from '../accounting.ts';
+// for nothing (R4: shown, blocked by it), and each lender is counted for its pro-rata share of the reserve's cash.
+import { debtBlocker, iso, positionIds } from '../accounting.ts';
 import { mapLimit, normalizeAddress, once, transactionTime } from '../chain.ts';
 import type { ChainReader, Position, ReadContext, ReadResult, SourceDef } from '../types.ts';
 import { APT } from './delegation.ts';
@@ -101,12 +101,21 @@ async function read(ctx: ReadContext, ownerInput: string, hint?: AaveHint): Prom
   try {
     const frozen = (await aaveReserves(ctx)).filter(r => r.frozen);
     if (!frozen.length) return none;
-    // Total debt in the base currency: any debt makes the supplier a live borrower.
+    // Total debt in the base currency: any debt makes the supplier a live borrower, whose supply is shown with its
+    // debt, never counted.
     const [, debt] = await ctx.chain.view(`${AAVE}::user_logic::get_user_account_data`, [owner], [], version);
-    if (BigInt(debt) > 0n) return none;
+    const borrows = BigInt(debt) > 0n;
     const found = await mapLimit(frozen, 2, async (r): Promise<Position[]> => {
       const coins = BigInt((await ctx.chain.view(`${AAVE}::a_token_factory::balance_of`, [owner, r.aToken], [], version))[0]);
       if (coins === 0n) return [];
+      if (borrows) return [{
+        ...positionIds(SOURCE, owner, r.symbol, 'principal', r.payoutAsset), source: SOURCE, owner, locator: r.symbol, positionKind: 'principal',
+        asset: r.payoutAsset, claimableSince: hint?.f?.[r.asset] ?? await frozenSince(ctx, r), ageBasis: 'protocol_closure',
+        provenance: { reader: `${AAVE}::a_token_factory::balance_of`, ledgerVersion: version },
+        grossClaim: [{ asset: r.payoutAsset, raw: coins.toString() }], expectedPayout: [], payoutBasis: 'view', status: 'blocked',
+        blockers: [debtBlocker('This account also borrows from Aave: repay the debt to withdraw this.')],
+        confidence: 'verified_view', observedAt: iso(ctx.ledger.timestampSecs), steps: [],
+      }];
       // The cash is shared by all lenders, so each is counted for its pro-rata share of it when the reserve is short; a
       // share that rounds to nothing is not a position.
       const supply = await lentOut(ctx, r);
@@ -147,7 +156,7 @@ export const aaveFrozenReserves: SourceDef<AaveHint> = {
   title: 'Aave supply left in frozen reserves',
   summary: 'Aave is winding down its Aptos markets by freezing every reserve. Supply left in a frozen reserve waits on the wind-down. Nothing is frozen yet, so this counts nothing until it is. Counted only for suppliers without Aave debt.',
   category: 'closed_app',
-  inclusionRule: 'R2: Aave froze the reserve under its Aptos wind-down (ARFC, 2026-07-29); the freeze is the effective date. R4: suppliers with any Aave debt are left out. Decided 2026-10-20; counts nothing while no reserve is frozen.',
+  inclusionRule: 'R2: Aave froze the reserve under its Aptos wind-down (ARFC, 2026-07-29); the freeze is the effective date. R4: suppliers with any Aave debt are shown (blocked by it) but never counted. Decided 2026-10-20; counts nothing while no reserve is frozen.',
   protocolStatus: {
     state: 'deprecated',
     evidence: 'Aave governance ARFC (2026-07-29) winds down the Aptos deployment by freezing every reserve. On 2026-10-20 all 4 reserves (USDt, APT, sUSDe, USDC) are still live.',
