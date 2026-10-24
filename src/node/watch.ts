@@ -126,7 +126,13 @@ async function main() {
   console.log(lines.join('\n'));
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
   if (dryRun) return;
-  const issues: Issue[] = await github(`/issues?state=all&labels=${LABEL}&per_page=100`);
+  // Every page: an acknowledgement or an open issue on a later one must not be missed.
+  const issues: Issue[] = [];
+  for (let page = 1; ; page++) {
+    const batch: Issue[] = await github(`/issues?state=all&labels=${LABEL}&per_page=100&page=${page}`);
+    issues.push(...batch);
+    if (batch.length < 100) break;
+  }
   for (const { entry, signals } of flagged) {
     const d = decide(entry, signals, issues);
     if (d.action === 'update') {
