@@ -4,6 +4,7 @@ import { gqlAll, mapLimit, normalizeAddress } from '../shared/chain.ts';
 import { AMNIS, AMNIS_WITHDRAWAL_COLLECTION } from '../shared/sources/amnis-withdrawals.ts';
 import { ANIMESWAP, ANIMESWAP_POOLS, animeswapLps, assetOf as animeswapAsset, pairOf } from '../shared/sources/animeswap-closed.ts';
 import { EARNIUM } from '../shared/sources/earnium-closed.ts';
+import { ECHO, ECHO_OWN_WALLETS, ECHO_RESERVES } from '../shared/sources/echo-wound-down.ts';
 import { HOUSTON, HOUSTON_POOLS } from '../shared/sources/houston-closed.ts';
 import { AURO_CLOSED_AT, AURO_COLLECTION, AURO_ROUTER } from '../shared/sources/auro-closed.ts';
 import { CANOPY_REWARDS, CANOPY_REWARDS_STATE } from '../shared/sources/canopy-rewards.ts';
@@ -1109,6 +1110,46 @@ export const houstonClosedEnumerator: Enumerator = {
   },
 };
 
+// Echo lending: every holder of an Echo aToken (aTokens cannot be transferred, so holders are suppliers) of about $1 or
+// more, one scan per reserve, Echo's own wallets left out. Smaller holdings are dust: 47,870 of 48,460 APT holders hold
+// 587 APT of the reserve's 297,679 (2026-10-24); the check page still reads any address in full. No hint: the age is the
+// wind-down notice, and deposits stopped with it.
+export const echoWoundDownEnumerator: Enumerator = {
+  sourceId: 'echo-wound-down',
+  processor: 'fungible_asset_processor',
+  scope: `stores holding about $1 or more of any of the ${ECHO_RESERVES.length} ${ECHO} lending aTokens (current_fungible_asset_balances), except Echo's own wallets`,
+  async run(chain) {
+    const owners = new Set<string>();
+    let pages = 0;
+    for (const r of ECHO_RESERVES) {
+      let after = '';
+      for (;;) {
+        const rows = (await chain.gql(`query($a:String!,$m:numeric!,$s:String!){ current_fungible_asset_balances(where:{asset_type:{_eq:$a}, amount:{_gte:$m},
+          storage_id:{_gt:$s}}, order_by:{storage_id:asc}, limit:${PAGE}){ owner_address storage_id } }`, { a: r.aToken, m: r.minScaled.toString(), s: after })).current_fungible_asset_balances;
+        pages++;
+        for (const row of rows) {
+          const owner = normalizeAddress(row.owner_address);
+          if (!ECHO_OWN_WALLETS.has(owner)) owners.add(owner);
+        }
+        if (rows.length < PAGE) break;
+        after = rows[rows.length - 1].storage_id;
+      }
+    }
+    return { candidates: [...owners].map(owner => ({ owner })), pages };
+  },
+  async sanity(chain, ledger, positions) {
+    // What the positions are owed, per reserve, cannot exceed what all its lenders are owed (the aToken's supply).
+    let ok = true;
+    for (const r of ECHO_RESERVES) {
+      const owed = positions.filter(p => p.locator === r.symbol || p.locator === `${r.symbol}/lent-out`).reduce((t, p) => t + BigInt(p.grossClaim[0].raw), 0n);
+      if (owed === 0n) continue;
+      const [supply] = await chain.view(`${ECHO}::pool_data_provider::get_a_token_total_supply`, [r.underlying], [], ledger.version);
+      ok &&= owed <= BigInt(supply);
+    }
+    return { check: 'amounts found <= aToken supply, per reserve', ok, detail: `${ECHO_RESERVES.length} reserves` };
+  },
+};
+
 export const thalaVethlEnumerator = entrySenders('thala-vethl-expired',
   [{ contract: THALA_VE, module: 'scripts', name: 'lock' }, { contract: THALA_VEST, module: 'farming_vesting', name: 'convert_to_vethl' }],
   noContractTotal);
@@ -1120,4 +1161,4 @@ export const thalaVestingEnumerator = entrySenders('thala-vesting-matured',
 export const ENUMERATORS: Enumerator[] = [delegationEnumerator, thalaUnstakeEnumerator, kofiWithdrawalsEnumerator, tortugaTicketsEnumerator,
   amnisWithdrawalsEnumerator, thalaVethlEnumerator, thalaVestingEnumerator, inactiveValidatorEnumerator,
   trufinUnlocksEnumerator, movementDelegationEnumerator, movementInactiveValidatorEnumerator, kofiReceiptsEnumerator,
-  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator, auroClosedEnumerator, animeswapClosedEnumerator, earniumClosedEnumerator, houstonClosedEnumerator, canopyFrozenEnumerator];
+  merkleMklpEnumerator, merkleVemklEnumerator, layerzeroClaimableEnumerator, canopyEndedRewardsEnumerator, pancakeSyrupEnumerator, topazBidsEnumerator, pancakeFarmEnumerator, echelonFrozenEnumerator, aaveFrozenEnumerator, econiaIdleEnumerator, auroClosedEnumerator, animeswapClosedEnumerator, earniumClosedEnumerator, houstonClosedEnumerator, echoWoundDownEnumerator, canopyFrozenEnumerator];

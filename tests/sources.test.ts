@@ -8,6 +8,7 @@ import { APT, delegation, MOVE, movementDelegation } from '../src/shared/sources
 import { EARNIUM, EARNIUM_CLOSED_AT, earniumClosedLp } from '../src/shared/sources/earnium-closed.ts';
 import { ANIMESWAP, ANIMESWAP_CLOSED_AT, ANIMESWAP_POOLS, animeswapClosedLp, isqrt, pairOf } from '../src/shared/sources/animeswap-closed.ts';
 import { ARIES, ARIES_CLOSED_AT, ariesWoundDown, reserveType } from '../src/shared/sources/aries-wound-down.ts';
+import { ECHO, ECHO_CLOSED_AT, ECHO_RESERVES, echoWoundDown } from '../src/shared/sources/echo-wound-down.ts';
 import { AURO_CLOSED_AT, AURO_COLLECTION, AURO_DAO, AURO_ROUTER, auroClosedPositions } from '../src/shared/sources/auro-closed.ts';
 import { keccak256 } from '../src/shared/keccak.ts';
 import { portalTransfer, WH_CORE, WH_TOKEN_BRIDGE, wormholeUnredeemed } from '../src/shared/sources/wormhole-unredeemed.ts';
@@ -1519,5 +1520,44 @@ describe('wormhole unredeemed', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 503 })));
     const r = await wormholeUnredeemed.read(context(chain()), OWNER);
     expect(r).toMatchObject({ complete: false, positions: [] });
+  });
+});
+
+describe('echo wound down', () => {
+  const [APT_R, USDT_R] = [ECHO_RESERVES.find(r => r.symbol === 'APT')!, ECHO_RESERVES.find(r => r.symbol === 'lzUSDT')!];
+  type Opts = { debt?: string; aptCash?: string; held?: string[] };
+  // OWNER supplies 1,000 APT units (the reserve: 100 cash for 10,000 owed) and 50 USDT units (cash 500 for 400 owed).
+  const chain = (o: Opts = {}) => fakeChain({
+    gql: () => ({ current_fungible_asset_balances: (o.held ?? [APT_R.aToken, USDT_R.aToken]).map((a, i) => ({ asset_type: a, storage_id: addr(`f${i}`), is_primary: true, amount: '1' })) }),
+    view: (fn, args) => {
+      if (fn.endsWith('::user_logic::get_user_account_data')) return ['5', o.debt ?? '0', '0', '0', '0', '0'];
+      if (fn.endsWith('::pool_data_provider::get_user_reserve_data')) return [args[0] === APT_R.underlying ? '1000' : '50', '0', '0', '0', true];
+      if (fn === '0x1::primary_fungible_store::balance') return [args[1] === APT_R.underlying ? (o.aptCash ?? '100') : '500'];
+      if (fn.endsWith('::pool_data_provider::get_a_token_total_supply')) return [args[0] === APT_R.underlying ? '10000' : '400'];
+      throw new Error(fn);
+    },
+  });
+
+  it('counts a lender\'s pro-rata share of a short reserve as recoverable and the lent-out rest as blocked', async () => {
+    const r = await echoWoundDown.read(context(chain()), OWNER);
+    expect(r.complete).toBe(true);
+    expect(r.positions.map(p => [p.locator, p.grossClaim[0].raw, p.status, p.blockers[0]?.code, p.claimableSince])).toEqual([
+      ['APT', '10', 'recoverable', undefined, ECHO_CLOSED_AT], ['APT/lent-out', '990', 'blocked', 'insufficient_cash', ECHO_CLOSED_AT],
+      ['lzUSDT', '50', 'recoverable', undefined, ECHO_CLOSED_AT]]);
+    // Short: the pro-rata amount; covered: everything (u256 max).
+    expect(r.positions[0].steps[0]).toMatchObject({ function: `${ECHO}::router::withdraw_simple<0x1::aptos_coin::AptosCoin>`, arguments: [APT_R.underlying, '10', OWNER, 'false'] });
+    expect(r.positions[2].steps[0].arguments[1]).toBe((2n ** 256n - 1n).toString());
+    expect(r.positions[1].steps).toEqual([]);
+    expect(r.positions[0].asset).toBe(APT);
+  });
+
+  it('leaves out suppliers with debt, Echo\'s own wallets, and owners holding no aToken', async () => {
+    expect((await echoWoundDown.read(context(chain({ debt: '1' })), OWNER)).positions).toEqual([]);
+    expect((await echoWoundDown.read(context(chain()), '0x3b9a45c9d5c73e27c48f85a26a3e9b3fcef44af44ddf9e0995bf17390b1d1bb8')).positions).toEqual([]);
+    const c = chain({ held: [] });
+    expect((await echoWoundDown.read(context(c), OWNER)).positions).toEqual([]);
+    expect(c.calls.filter(x => x.startsWith('view'))).toEqual([]);
+    // No cash at all: the whole balance is blocked.
+    expect((await echoWoundDown.read(context(chain({ aptCash: '0', held: [APT_R.aToken] })), OWNER)).positions.map(p => [p.locator, p.status])).toEqual([['APT/lent-out', 'blocked']]);
   });
 });
