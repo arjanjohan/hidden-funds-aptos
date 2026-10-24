@@ -39,6 +39,9 @@ describe('wind-down watch', () => {
     expect(decide(e, tvl, [{ number: 9, title: issueTitle(e), state: 'open' }, closed])).toEqual({ action: 'update', issue: 9 });
     expect(decide(e, tvl, [closed])).toEqual({ action: 'acknowledged', issue: 7 });
     expect(decide(e, [...tvl, ...site], [closed])).toEqual({ action: 'create' });
+    // Acknowledged in two issues, one signal each: together they cover both.
+    const closedSite = { number: 8, title: issueTitle(e), state: 'closed' as const, body: issueBody(e, site, '2026-11-02') };
+    expect(decide(e, [...tvl, ...site], [closedSite, closed])).toEqual({ action: 'acknowledged', issue: 8 });
     expect(decide(e, tvl, [])).toEqual({ action: 'create' });
   });
 

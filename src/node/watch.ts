@@ -60,13 +60,14 @@ const marker = (signals: Signal[]) => `<!-- ${LABEL}: ${[...new Set(signals.map(
 export const markedCodes = (body: string | null | undefined) => new Set(body?.match(new RegExp(`<!-- ${LABEL}: ([a-z_,]*) -->`))?.[1].split(',').filter(Boolean) ?? []);
 
 export interface Issue { number: number; title: string; body?: string | null; state: 'open' | 'closed' }
-/** Update the open issue; skip when a closed one already covers every current signal (acknowledged); else open one. */
+/** Update the open issue; skip when the closed ones together acknowledge every current signal; else open one. */
 export function decide(entry: ProtocolEntry, signals: Signal[], issues: Issue[]): { action: 'update' | 'create'; issue?: number } | { action: 'acknowledged'; issue: number } {
   const mine = issues.filter(i => i.title === issueTitle(entry));
   const open = mine.find(i => i.state === 'open');
   if (open) return { action: 'update', issue: open.number };
-  const covered = mine.find(i => { const codes = markedCodes(i.body); return signals.every(s => codes.has(s.code)); });
-  return covered ? { action: 'acknowledged', issue: covered.number } : { action: 'create' };
+  const closed = mine.filter(i => i.state === 'closed');
+  const acknowledged = new Set(closed.flatMap(i => [...markedCodes(i.body)]));
+  return closed.length && signals.every(s => acknowledged.has(s.code)) ? { action: 'acknowledged', issue: closed[0].number } : { action: 'create' };
 }
 
 export function issueBody(entry: ProtocolEntry, signals: Signal[], today: string): string {
